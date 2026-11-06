@@ -2,6 +2,7 @@
     WorthIt / QuestWorth - UI/WorldMap.lua
     World Map Zone Worth Banner & Hover Breakdown.
     Displays zone suitability and leveling recommendations directly on the map.
+    Reactive updater detects map navigation, zooming, and sub-zone traversal in real time.
 ]]
 
 local addonName, addon = ...
@@ -11,6 +12,56 @@ local Utils = addon.Utils
 local L = addon.L
 
 local mapBanner = nil
+
+-- Resolve geographical leveling zone name even when zoomed into towns, areas, or sub-zones
+local function ResolveZoneName(mapID)
+    if not mapID or mapID <= 0 then return nil end
+    local mapInfo = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+    if not mapInfo or not mapInfo.name then return nil end
+
+    -- Check if mapInfo is a Continent or Cosmic/World view (Enum.UIMapType: Cosmic=0, World=1, Continent=2)
+    local mapType = mapInfo.mapType
+    if mapType and (mapType == 0 or mapType == 1 or mapType == 2) then
+        return nil, mapInfo
+    end
+
+    -- Ignore continent names by string check as well
+    local name = mapInfo.name
+    if name == "Eastern Kingdoms" or name == "Kalimdor" or name == "Azeroth" or name == "The Maelstrom" or name == "Outland" then
+        return nil, mapInfo
+    end
+
+    -- 1. Direct match in Data.Zones
+    if addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(name) then
+        return name, mapInfo
+    end
+
+    -- 2. Traverse parentMapID up to 4 levels if viewing a sub-zone, town, or micro area
+    local current = mapInfo
+    for depth = 1, 4 do
+        if current.parentMapID and current.parentMapID > 0 then
+            local parent = C_Map.GetMapInfo(current.parentMapID)
+            if parent and parent.name then
+                if addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(parent.name) then
+                    return parent.name, parent
+                end
+                current = parent
+            else
+                break
+            end
+        else
+            break
+        end
+    end
+
+    -- 3. Fallback: Check if we have active quests mapped for this zone name in Quest Log
+    local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(name)
+    if quests and #quests > 0 then
+        return name, mapInfo
+    end
+
+    return name, mapInfo
+end
 
 local function CreateWorldMapBanner()
     if mapBanner then return mapBanner end
@@ -22,10 +73,10 @@ local function CreateWorldMapBanner()
     frame:SetFrameStrata("HIGH")
     frame:SetFrameLevel(parent:GetFrameLevel() + 10)
 
-    -- Anchor top center of the map
+    -- Anchor top center of the map canvas
     frame:SetPoint("TOP", parent, "TOP", 0, -8)
 
-    -- Backdrop styling
+    -- Backdrop styling: sleek dark panel with subtle border
     frame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -39,7 +90,7 @@ local function CreateWorldMapBanner()
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
     frame.Text = text
 
-    -- Tooltip on hover
+    -- Rich hover tooltip with full zone breakdown
     frame:SetScript("OnEnter", function(self)
         if not self.data then return end
         local d = self.data
@@ -54,10 +105,11 @@ local function CreateWorldMapBanner()
         )
         GameTooltip:AddLine(" ")
 
-        -- Suitability / Status
+        -- Suitability / Level Bracket Status
+        local statusColor = (d.worth >= 0.70 and "|cff00ff00") or (d.worth >= 0.50 and "|cffffff00") or "|cffff3333"
         GameTooltip:AddDoubleLine(
             "|cff00ccffSuitability:|r",
-            string.format("|cff%s%s|r", colorHex, d.status),
+            string.format("%s%s|r", statusColor, d.status),
             0.9, 0.9, 0.9, 1, 1, 1
         )
 
@@ -69,7 +121,7 @@ local function CreateWorldMapBanner()
             0.9, 0.9, 0.9, 1, 1, 1
         )
 
-        -- Active Quests
+        -- Active Quests in Log vs General Zone
         if d.activeCount and d.activeCount > 0 then
             local qColorHex = Utils.GetScoreColorHex(d.activeWorth or 0.5)
             GameTooltip:AddDoubleLine(
@@ -93,7 +145,7 @@ local function CreateWorldMapBanner()
         else
             GameTooltip:AddDoubleLine(
                 "|cff00ccffActive Quests in Log:|r",
-                "|cff888888None|r",
+                "|cff8888880 Quests (Zone evaluation based on Level Bracket)|r",
                 0.9, 0.9, 0.9, 1, 1, 1
             )
         end
@@ -101,7 +153,7 @@ local function CreateWorldMapBanner()
         -- Recommendation
         if d.recommendation then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("|cff00ff00Recommendation:|r", 1, 1, 1)
+            GameTooltip:AddLine("|cff00ff00Leveling Advice:|r", 1, 1, 1)
             GameTooltip:AddLine(string.format("  |cffcccccc%s|r", d.recommendation), 0.9, 0.9, 0.9, true)
         end
 
@@ -139,13 +191,13 @@ function UI.UpdateWorldMapBanner()
         return
     end
 
-    local mapInfo = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
-    if not mapInfo or not mapInfo.name then
+    local zoneName, mapInfo = ResolveZoneName(mapID)
+    if not zoneName then
         if mapBanner then mapBanner:Hide() end
         return
     end
 
-    local res = addon.Engine and addon.Engine.CalculateWorldMapZoneWorth and addon.Engine.CalculateWorldMapZoneWorth(mapInfo.name)
+    local res = addon.Engine and addon.Engine.CalculateWorldMapZoneWorth and addon.Engine.CalculateWorldMapZoneWorth(zoneName)
     if not res then
         if mapBanner then mapBanner:Hide() end
         return
@@ -161,10 +213,10 @@ function UI.UpdateWorldMapBanner()
 
     local displayText
     if res.activeCount and res.activeCount > 0 then
-        displayText = string.format("%s |cffffffff%s|r |cff888888(%d-%d)|r  %s%s|r |cffaaaaaa(%d in Log)|r",
-            badge, res.zoneName, res.minLevel, res.maxLevel, statusColor, res.status, res.activeCount)
+        displayText = string.format("%s |cffffffff%s|r |cff888888(%d-%d)|r  %s%s|r  |cffffcc00[Log: %.0f%% (%d Qs)]|r",
+            badge, res.zoneName, res.minLevel, res.maxLevel, statusColor, res.status, (res.activeWorth or 0) * 100, res.activeCount)
     else
-        displayText = string.format("%s |cffffffff%s|r |cff888888(%d-%d)|r  %s%s|r",
+        displayText = string.format("%s |cffffffff%s|r |cff888888(%d-%d)|r  %s%s|r  |cff888888[0 Quests in Log]|r",
             badge, res.zoneName, res.minLevel, res.maxLevel, statusColor, res.status)
     end
 
@@ -172,27 +224,57 @@ function UI.UpdateWorldMapBanner()
 
     -- Dynamic width with comfortable padding
     local textWidth = banner.Text:GetStringWidth() or 220
-    banner:SetWidth(math.max(220, textWidth + 24))
+    banner:SetWidth(math.max(240, textWidth + 28))
 
     banner:Show()
+end
+
+-- Reactive frame that watches map navigation, zooming, and clicking in real time
+local mapWatcher = CreateFrame("Frame", "WorthIt_MapWatcherFrame")
+local _lastWatchedMapID = nil
+local _watchThrottle = 0
+
+local function OnMapWatchUpdate(self, elapsed)
+    _watchThrottle = _watchThrottle + elapsed
+    if _watchThrottle < 0.10 then return end
+    _watchThrottle = 0
+
+    if not (WorldMapFrame and WorldMapFrame:IsShown()) then
+        _lastWatchedMapID = nil
+        if mapBanner and mapBanner:IsShown() then mapBanner:Hide() end
+        return
+    end
+
+    local currentMapID = (WorldMapFrame.GetMapID and WorldMapFrame:GetMapID())
+    if currentMapID ~= _lastWatchedMapID then
+        _lastWatchedMapID = currentMapID
+        UI.UpdateWorldMapBanner()
+    end
 end
 
 function UI.InitializeWorldMap()
     if not WorldMapFrame then return end
 
+    -- Enable real-time watcher
+    mapWatcher:SetScript("OnUpdate", OnMapWatchUpdate)
+
+    -- Also hook explicit Blizzard events/methods as backup
     if WorldMapFrame.OnMapChanged then
         hooksecurefunc(WorldMapFrame, "OnMapChanged", function()
+            _lastWatchedMapID = nil
             UI.UpdateWorldMapBanner()
         end)
     end
 
     if WorldMapFrame.SetMapID then
         hooksecurefunc(WorldMapFrame, "SetMapID", function()
+            _lastWatchedMapID = nil
             UI.UpdateWorldMapBanner()
         end)
     end
 
     WorldMapFrame:HookScript("OnShow", function()
+        _lastWatchedMapID = nil
         UI.UpdateWorldMapBanner()
     end)
 end
