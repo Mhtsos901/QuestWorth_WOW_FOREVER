@@ -10,6 +10,7 @@ Desktop.ini
 *.bak
 *.tmp
 *.log
+*.bat
 
 # Test & Scratch files
 scratch/
