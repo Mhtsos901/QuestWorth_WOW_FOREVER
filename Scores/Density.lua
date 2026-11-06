@@ -49,6 +49,23 @@ local questZoneMap = {}
 local zoneClusterCounts = {}
 local lastScanTime = 0
 
+-- Persistent Zone-to-Quest mapping across collapsed Quest Log headers
+Scores.ZoneQuests = Scores.ZoneQuests or {}
+local ZoneQuests = Scores.ZoneQuests
+
+local function PruneZoneQuests()
+    local isOnQuest = (C_QuestLog and C_QuestLog.IsOnQuest) or IsOnQuest
+    if not isOnQuest then return end
+    for zoneName, quests in pairs(ZoneQuests) do
+        for qID in pairs(quests) do
+            local ok, onQuest = pcall(isOnQuest, qID)
+            if ok and onQuest == false then
+                quests[qID] = nil
+            end
+        end
+    end
+end
+
 local function ScanQuestLogClusters()
     -- Manual invalidation only (event-driven, see Scores.InvalidateDensityCache)
     -- Fallback: rescan at most once per 5 seconds if no explicit invalidation happened
@@ -56,6 +73,8 @@ local function ScanQuestLogClusters()
     if (now - lastScanTime) < 5.0 and next(questZoneMap) then
         return
     end
+
+    PruneZoneQuests()
 
     wipe(questZoneMap)
     wipe(zoneClusterCounts)
@@ -93,10 +112,46 @@ local function ScanQuestLogClusters()
                 zoneClusterCounts["ClassOrProf:" .. qID] = 1
             else
                 questZoneMap[qID] = currentHeader
-                zoneClusterCounts[currentHeader] = (zoneClusterCounts[currentHeader] or 0) + 1
+                ZoneQuests[currentHeader] = ZoneQuests[currentHeader] or {}
+                ZoneQuests[currentHeader][qID] = true
             end
         end
     end
+
+    -- Re-evaluate zoneClusterCounts and questZoneMap for any quests saved in ZoneQuests
+    -- so that collapsed headers in the UI never break Hub Density or omit quests
+    for zoneName, quests in pairs(ZoneQuests) do
+        local activeCount = 0
+        for qID in pairs(quests) do
+            activeCount = activeCount + 1
+            if not questZoneMap[qID] then
+                questZoneMap[qID] = zoneName
+            end
+        end
+        if activeCount > 0 then
+            zoneClusterCounts[zoneName] = activeCount
+        end
+    end
+end
+
+-- Export active quests list for a zone
+function Scores.GetQuestsForZone(zoneName)
+    if not zoneName or zoneName == "" then return {} end
+    ScanQuestLogClusters()
+    PruneZoneQuests()
+    local list = {}
+    if ZoneQuests[zoneName] then
+        for qID in pairs(ZoneQuests[zoneName]) do
+            list[#list + 1] = qID
+        end
+    end
+    return list
+end
+
+-- Check if header title is a non-geographical category (Class, Profession, Seasonal, etc.)
+function Scores.IsNonZoneHeader(headerTitle)
+    if not headerTitle then return true end
+    return NON_ZONE_HEADERS[headerTitle] == true
 end
 
 function Scores.CalculateDensity(questID)
@@ -170,4 +225,5 @@ end
 -- Called by Engine/Core on quest log changes (accept/remove/turn-in) for immediate refresh
 function Scores.InvalidateDensityCache()
     lastScanTime = 0
+    PruneZoneQuests()
 end

@@ -38,10 +38,8 @@ local function ProcessQuestButton(button, showTag)
     end
 
     -- Guard 2: Header filter (Zone headers like "Elwynn Forest", "Duskwood")
-    if button.isHeader or button.header then
-        if rawText ~= cleanText then
-            fontString:SetText(cleanText)
-        end
+    -- Do not strip header badges here; handled by ProcessHeaderButton
+    if button.isHeader or button.header or (button.info and button.info.isHeader) then
         return
     end
 
@@ -62,7 +60,6 @@ local function ProcessQuestButton(button, showTag)
         local ok, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
         if ok and info then
             if info.isHeader then
-                if rawText ~= cleanText then fontString:SetText(cleanText) end
                 return
             end
             if info.questID and info.questID > 0 then
@@ -78,7 +75,6 @@ local function ProcessQuestButton(button, showTag)
                 local ok, info = pcall(C_QuestLog.GetInfo, btnID)
                 if ok and info then
                     if info.isHeader then
-                        if rawText ~= cleanText then fontString:SetText(cleanText) end
                         return
                     end
                     if info.questID and info.questID > 0 then
@@ -89,7 +85,6 @@ local function ProcessQuestButton(button, showTag)
                 local ok, t, _, _, isH, _, _, _, id = pcall(GetQuestLogTitle, btnID)
                 if ok then
                     if isH then
-                        if rawText ~= cleanText then fontString:SetText(cleanText) end
                         return
                     end
                     if id and id > 0 then
@@ -161,6 +156,36 @@ local function ProcessQuestButton(button, showTag)
     end
 end
 
+-- Process and badge a Quest Log geographical zone header button
+local function ProcessHeaderButton(button, showTag)
+    if not button then return end
+    local fontString = button.ButtonText or button.Text or (button.GetFontString and button:GetFontString()) or button.normalText
+    if not (fontString and fontString.GetText and fontString.SetText) then return end
+
+    local rawText = fontString:GetText() or ""
+    if rawText == "" then return end
+    local cleanText = Utils.CleanQuestTitle(rawText)
+    cleanText = string.gsub(cleanText, "^%s*(.-)%s*$", "%1")
+    if cleanText == "" then return end
+
+    if showTag and addon.Engine and addon.Engine.CalculateZoneWorth then
+        local zoneWorth, count = addon.Engine.CalculateZoneWorth(cleanText)
+        if zoneWorth then
+            -- Pass isComplete = false so that zone header displays [100%] instead of [OK] even if zoneWorth == 1.0
+            local badge = Utils.FormatBadge(zoneWorth, false)
+            local targetText = badge .. " " .. cleanText
+            if rawText ~= targetText then
+                fontString:SetText(targetText)
+            end
+            return
+        end
+    end
+
+    if rawText ~= cleanText then
+        fontString:SetText(cleanText)
+    end
+end
+
 -- Function to clean objective frames so details never show a badge
 local function CleanObjectiveFrame(frame)
     if not (frame and frame:IsShown()) then return end
@@ -176,7 +201,7 @@ end
 
 -- Master function to update all visible quest entries in Quest Log
 function UI.UpdateQuestLog(force)
-    if not (addon.db and addon.db.enabled) then return end
+    if not addon.db then return end
     if InCombatLockdown and InCombatLockdown() then return end
     if addon.isUpdatingUI then return end
 
@@ -211,19 +236,46 @@ function UI.UpdateQuestLog(force)
             end
         end
 
+        local headerPool = QuestScrollFrame.headerFramePool or QuestScrollFrame.HeaderFramePool
+        if headerPool and headerPool.EnumerateActive then
+            for button in headerPool:EnumerateActive() do
+                ProcessHeaderButton(button, showTag)
+            end
+        end
+
         -- Modern Dragonflight ScrollBox frames
         if QuestScrollFrame.ScrollBox then
+            local function handleScrollFrame(button)
+                local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
+                if not isHeader and button.GetID then
+                    local btnID = button:GetID()
+                    if btnID and btnID > 0 then
+                        if C_QuestLog and C_QuestLog.GetInfo then
+                            local okInfo, info = pcall(C_QuestLog.GetInfo, btnID)
+                            if okInfo and info and info.isHeader then isHeader = true end
+                        elseif GetQuestLogTitle then
+                            local okTitle, _, _, _, isH = pcall(GetQuestLogTitle, btnID)
+                            if okTitle and isH then isHeader = true end
+                        end
+                    end
+                end
+
+                if isHeader then
+                    ProcessHeaderButton(button, showTag)
+                else
+                    ProcessQuestButton(button, showTag)
+                end
+            end
+
             if QuestScrollFrame.ScrollBox.ForEachFrame then
                 pcall(function()
-                    QuestScrollFrame.ScrollBox:ForEachFrame(function(button)
-                        ProcessQuestButton(button, showTag)
-                    end)
+                    QuestScrollFrame.ScrollBox:ForEachFrame(handleScrollFrame)
                 end)
             elseif QuestScrollFrame.ScrollBox.GetFrames then
                 local ok, frames = pcall(QuestScrollFrame.ScrollBox.GetFrames, QuestScrollFrame.ScrollBox)
                 if ok and frames then
                     for _, button in ipairs(frames) do
-                        ProcessQuestButton(button, showTag)
+                        handleScrollFrame(button)
                     end
                 end
             end
@@ -234,7 +286,25 @@ function UI.UpdateQuestLog(force)
             local ok, children = pcall(function() return { QuestScrollFrame.Contents:GetChildren() } end)
             if ok and children then
                 for _, button in ipairs(children) do
-                    ProcessQuestButton(button, showTag)
+                    local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
+                    if not isHeader and button.GetID then
+                        local btnID = button:GetID()
+                        if btnID and btnID > 0 then
+                            if C_QuestLog and C_QuestLog.GetInfo then
+                                local okInfo, info = pcall(C_QuestLog.GetInfo, btnID)
+                                if okInfo and info and info.isHeader then isHeader = true end
+                            elseif GetQuestLogTitle then
+                                local okTitle, _, _, _, isH = pcall(GetQuestLogTitle, btnID)
+                                if okTitle and isH then isHeader = true end
+                            end
+                        end
+                    end
+
+                    if isHeader then
+                        ProcessHeaderButton(button, showTag)
+                    else
+                        ProcessQuestButton(button, showTag)
+                    end
                 end
             end
         end
@@ -289,9 +359,7 @@ function UI.UpdateQuestLog(force)
                             end
                         end
                     elseif isHeader then
-                        if rawTitle ~= cleanTitle then
-                            fontString:SetText(cleanTitle)
-                        end
+                        ProcessHeaderButton(button, showTag)
                     end
                 end
             end
@@ -326,11 +394,7 @@ function UI.UpdateQuestLog(force)
                         end
                     end
                 elseif info and info.isHeader and button.normalText then
-                    local rawTitle = button.normalText:GetText() or ""
-                    local cleanTitle = Utils.CleanQuestTitle(rawTitle)
-                    if rawTitle ~= cleanTitle then
-                        button.normalText:SetText(cleanTitle)
-                    end
+                    ProcessHeaderButton(button, showTag)
                 end
             end
         end

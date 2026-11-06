@@ -73,6 +73,13 @@ $$\text{Worth} = (D \cdot w_D) + (R \cdot w_R) + (C \cdot w_C) + (F \cdot w_F) +
   - 3 quests: $0.85$.
   - 4+ quests: $1.00$ (dense hub synergy).
 
+### 🗺️ Zone Header Worth %
+Geographical Zone Headers in the Quest Log (e.g. `Westfall`, `Loch Modan`, `Redridge Mountains`) dynamically calculate a composite zone score:
+$$\text{Zone Worth} = (0.60 \cdot \text{avgWorth}) + (0.40 \cdot \text{maxWorth})$$
+- Displays a clean `[XX%]` badge next to each zone name.
+- Persistent zone-to-quest tracking preserves accurate cluster counts and zone scores even when headers are collapsed (`[+]`) in the Quest Log.
+- Allows players to instantly see if a zone is worth traveling to or has been depleted/outleveled.
+
 ---
 
 ## 🎨 Color Coding

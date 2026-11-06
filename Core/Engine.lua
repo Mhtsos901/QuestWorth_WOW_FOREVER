@@ -303,6 +303,42 @@ function Engine.CalculateWorth(questID)
     return totalWorth, breakdown
 end
 
+-- Calculate composite Worth for an entire geographical zone
+function Engine.CalculateZoneWorth(zoneName)
+    if not zoneName or zoneName == "" then return nil end
+    if addon.Scores and addon.Scores.IsNonZoneHeader and addon.Scores.IsNonZoneHeader(zoneName) then
+        return nil
+    end
+
+    local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(zoneName)
+    if not quests or #quests == 0 then
+        return nil
+    end
+
+    local sumWorth = 0
+    local maxWorth = 0
+    local count = 0
+
+    for _, qID in ipairs(quests) do
+        local w = Engine.CalculateWorth(qID)
+        if w then
+            sumWorth = sumWorth + w
+            if w > maxWorth then
+                maxWorth = w
+            end
+            count = count + 1
+        end
+    end
+
+    if count == 0 then return nil end
+
+    local avgWorth = sumWorth / count
+    local zoneWorth = (0.60 * avgWorth) + (0.40 * maxWorth)
+    zoneWorth = math.max(0.0, math.min(1.0, zoneWorth))
+
+    return zoneWorth, count
+end
+
 -- Format and print full debug breakdown for a quest
 function Engine.PrintBreakdown(questID)
     local info = Utils.GetQuestBasicInfo(questID)
