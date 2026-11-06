@@ -1,0 +1,26 @@
+## Interface: 16001
+## AllowLoadGameType: Camelot
+## Title: |cff00ccffWorthIt|r |cffffffff(QuestWorth)|r
+## Notes: Calculates a weighted worth score (0-100%) for quests based on Difficulty, Reward, Chain, Class Fit, and Hub Density.
+## Notes-elGR: Υπολογισμός σταθμισμένης αξίας (0-100%) για κάθε quest βάσει δυσκολίας, ανταμοιβής, αλυσίδας, κλάσης και πυκνότητας περιοχής.
+## Author: Senior WoW Addon Dev
+## Version: 2.0.0
+## SavedVariables: WorthItDB, QuestWorthDB
+
+Localization.lua
+Core/Utils.lua
+Core/Database.lua
+Data/ClassStats.lua
+Data/ArmorTypes.lua
+Data/Chains.lua
+Scores/Difficulty.lua
+Scores/Reward.lua
+Scores/Chain.lua
+Scores/ClassFit.lua
+Scores/Density.lua
+Core/Engine.lua
+UI/Tooltip.lua
+UI/QuestLog.lua
+UI/QuestOffer.lua
+UI/Config.lua
+Core.lua
