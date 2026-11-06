@@ -55,11 +55,43 @@ addon.Data.Zones = {
     ["Silithus"]            = { min = 55, max = 60, faction = "Contested", continent = 1 },
     ["Winterspring"]        = { min = 53, max = 60, faction = "Contested", continent = 1 },
     ["Moonglade"]           = { min = 1,  max = 60, faction = "Neutral",   continent = 1 },
+
+    -- =========================================================================
+    -- MAJOR CITIES
+    -- =========================================================================
+    ["Stormwind City"]      = { min = 1,  max = 60, faction = "Alliance",  continent = 2 },
+    ["Ironforge"]           = { min = 1,  max = 60, faction = "Alliance",  continent = 2 },
+    ["Darnassus"]           = { min = 1,  max = 60, faction = "Alliance",  continent = 1 },
+    ["Orgrimmar"]           = { min = 1,  max = 60, faction = "Horde",     continent = 1 },
+    ["Thunder Bluff"]       = { min = 1,  max = 60, faction = "Horde",     continent = 1 },
+    ["Undercity"]           = { min = 1,  max = 60, faction = "Horde",     continent = 2 },
 }
 
--- Helper function to lookup zone info by name
+-- Helper function to lookup zone info by name (supports flexible casing and aliases)
 function addon.Data.GetZoneInfo(zoneName)
     if not zoneName then return nil end
     local clean = string.gsub(zoneName, "^%s*(.-)%s*$", "%1")
-    return addon.Data.Zones[clean]
+    if addon.Data.Zones[clean] then
+        return addon.Data.Zones[clean]
+    end
+
+    -- Case-insensitive lookup
+    local lower = string.lower(clean)
+    for name, info in pairs(addon.Data.Zones) do
+        if string.lower(name) == lower then
+            return info
+        end
+    end
+
+    -- Flexible "The " prefix handling (e.g. "The Barrens" <-> "Barrens")
+    local noThe = string.gsub(lower, "^the%s+", "")
+    for name, info in pairs(addon.Data.Zones) do
+        local nameLower = string.lower(name)
+        local nameNoThe = string.gsub(nameLower, "^the%s+", "")
+        if nameNoThe == noThe then
+            return info
+        end
+    end
+
+    return nil
 end

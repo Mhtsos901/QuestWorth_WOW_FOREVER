@@ -353,17 +353,21 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         return nil
     end
 
-    local minLevel = zoneInfo and zoneInfo.min or 1
-    local maxLevel = zoneInfo and zoneInfo.max or 60
+    local minLevel = zoneInfo and zoneInfo.min or nil
+    local maxLevel = zoneInfo and zoneInfo.max or nil
     local faction = zoneInfo and zoneInfo.faction or "Contested"
 
     local bracketScore = 0.50
     local status = "Neutral Zone"
     local recommendation = "Standard questing zone."
 
-    -- Faction territory check
-    if faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction then
-        if minLevel <= 10 then
+    if not zoneInfo then
+        bracketScore = activeWorth or 0.50
+        status = (activeCount and activeCount > 0) and string.format("%d Quests in Log", activeCount) or "Zone"
+        recommendation = "Zone has active quests in your Quest Log."
+    elseif faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction then
+        -- Faction territory check
+        if minLevel and minLevel <= 10 then
             bracketScore = 0.05
             status = "Hostile Territory"
             recommendation = "Enemy starting zone (no friendly quest hubs)."
@@ -374,15 +378,15 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         end
     else
         -- Level bracket suitability evaluation
-        if playerLevel < (minLevel - 3) then
+        if minLevel and playerLevel < (minLevel - 3) then
             bracketScore = 0.20
             status = "Too High Level"
             recommendation = string.format("Difficult enemies. Recommended to return at level %d+.", minLevel)
-        elseif playerLevel < minLevel then
+        elseif minLevel and playerLevel < minLevel then
             bracketScore = 0.60
             status = string.format("Upcoming Zone (%d+)", minLevel)
             recommendation = string.format("Challenging. Unlocks optimal leveling soon at level %d.", minLevel)
-        elseif playerLevel >= minLevel and playerLevel <= maxLevel then
+        elseif minLevel and maxLevel and playerLevel >= minLevel and playerLevel <= maxLevel then
             if playerLevel <= (minLevel + 3) then
                 bracketScore = 1.00
                 status = "Peak Leveling Bracket"
@@ -396,7 +400,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
                 status = "Late Bracket"
                 recommendation = "Finishing bracket. Good for completing remaining quest chains."
             end
-        elseif playerLevel <= (maxLevel + 3) then
+        elseif maxLevel and playerLevel <= (maxLevel + 3) then
             bracketScore = 0.40
             status = "Low Level"
             recommendation = "Declining XP rewards. Mobs are mostly green."
@@ -408,8 +412,10 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     end
 
     local finalWorth
-    if activeWorth and activeCount and activeCount > 0 then
+    if zoneInfo and activeWorth and activeCount and activeCount > 0 then
         finalWorth = (0.50 * activeWorth) + (0.50 * bracketScore)
+    elseif activeWorth and activeCount and activeCount > 0 then
+        finalWorth = activeWorth
     else
         finalWorth = bracketScore
     end

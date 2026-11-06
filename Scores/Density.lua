@@ -139,9 +139,35 @@ function Scores.GetQuestsForZone(zoneName)
     if not zoneName or zoneName == "" then return {} end
     ScanQuestLogClusters()
     PruneZoneQuests()
+
+    local clean = string.gsub(zoneName, "^%s*(.-)%s*$", "%1")
     local list = {}
-    if ZoneQuests[zoneName] then
-        for qID in pairs(ZoneQuests[zoneName]) do
+
+    -- 1. Direct match
+    local quests = ZoneQuests[clean]
+
+    -- 2. Strip trailing count like "Westfall (3)"
+    if not quests then
+        local noCount = string.gsub(clean, "%s*%(%d+/?%d*%)%s*$", "")
+        quests = ZoneQuests[noCount]
+    end
+
+    -- 3. Case-insensitive and "The " flexible match
+    if not quests then
+        local lower = string.lower(clean)
+        local noThe = string.gsub(lower, "^the%s+", "")
+        for zName, qMap in pairs(ZoneQuests) do
+            local zLower = string.lower(zName)
+            local zNoThe = string.gsub(zLower, "^the%s+", "")
+            if zLower == lower or zNoThe == noThe then
+                quests = qMap
+                break
+            end
+        end
+    end
+
+    if quests then
+        for qID in pairs(quests) do
             list[#list + 1] = qID
         end
     end

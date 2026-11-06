@@ -43,6 +43,13 @@ local function ProcessQuestButton(button, showTag)
         return
     end
 
+    local cleanTrimmed = string.gsub(cleanText, "^%s*(.-)%s*$", "%1")
+    local cleanZoneName = string.gsub(cleanTrimmed, "%s*%(%d+/?%d*%)%s*$", "")
+    if (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(cleanZoneName))
+       or (addon.Scores and addon.Scores.IsNonZoneHeader and addon.Scores.IsNonZoneHeader(cleanZoneName)) then
+        return
+    end
+
     -- 1. Try to resolve questID directly from button properties
     local qID = button.questID
     if not qID or qID <= 0 then
@@ -169,7 +176,11 @@ local function ProcessHeaderButton(button, showTag)
     if cleanText == "" then return end
 
     if showTag and addon.Engine and addon.Engine.CalculateZoneWorth then
-        local zoneWorth, count = addon.Engine.CalculateZoneWorth(cleanText)
+        local cleanZoneName = string.gsub(cleanText, "%s*%(%d+/?%d*%)%s*$", "")
+        local zoneWorth, count = addon.Engine.CalculateZoneWorth(cleanZoneName)
+        if not zoneWorth and cleanZoneName ~= cleanText then
+            zoneWorth, count = addon.Engine.CalculateZoneWorth(cleanText)
+        end
         if zoneWorth then
             -- Pass isComplete = false so that zone header displays [100%] instead of [OK] even if zoneWorth == 1.0
             local badge = Utils.FormatBadge(zoneWorth, false)

@@ -98,8 +98,9 @@ local function CreateWorldMapBanner()
         GameTooltip:ClearLines()
 
         local colorHex = Utils.GetScoreColorHex(d.worth)
+        local levelText = (d.minLevel and d.maxLevel) and string.format(" |cff888888(Level %d - %d)|r", d.minLevel, d.maxLevel) or ""
         GameTooltip:AddDoubleLine(
-            string.format("|cffffffff%s|r |cff888888(Level %d - %d)|r", d.zoneName, d.minLevel, d.maxLevel),
+            string.format("|cffffffff%s|r%s", d.zoneName, levelText),
             string.format("|cff%sZone Worth: %.0f%%|r", colorHex, d.worth * 100),
             1, 1, 1, 1, 1, 1
         )
@@ -211,13 +212,18 @@ function UI.UpdateWorldMapBanner()
     local badge = Utils.FormatBadge(res.worth, false)
     local statusColor = (res.worth >= 0.70 and "|cff00ff00") or (res.worth >= 0.50 and "|cffffff00") or "|cffff3333"
 
+    local levelStr = ""
+    if res.minLevel and res.maxLevel and res.minLevel > 0 and res.maxLevel > 0 then
+        levelStr = string.format(" |cff888888(%d-%d)|r", res.minLevel, res.maxLevel)
+    end
+
     local displayText
     if res.activeCount and res.activeCount > 0 then
-        displayText = string.format("%s |cffffffff%s|r |cff888888(%d-%d)|r  %s%s|r  |cffffcc00[Log: %.0f%% (%d Qs)]|r",
-            badge, res.zoneName, res.minLevel, res.maxLevel, statusColor, res.status, (res.activeWorth or 0) * 100, res.activeCount)
+        displayText = string.format("%s |cffffffff%s|r%s  %s%s|r  |cffffcc00[Log: %.0f%% (%d Qs)]|r",
+            badge, res.zoneName, levelStr, statusColor, res.status, (res.activeWorth or 0) * 100, res.activeCount)
     else
-        displayText = string.format("%s |cffffffff%s|r |cff888888(%d-%d)|r  %s%s|r  |cff888888[0 Quests in Log]|r",
-            badge, res.zoneName, res.minLevel, res.maxLevel, statusColor, res.status)
+        displayText = string.format("%s |cffffffff%s|r%s  %s%s|r  |cff888888[0 Quests in Log]|r",
+            badge, res.zoneName, levelStr, statusColor, res.status)
     end
 
     banner.Text:SetText(displayText)
@@ -255,8 +261,23 @@ end
 function UI.InitializeWorldMap()
     if not WorldMapFrame then return end
 
-    -- Enable real-time watcher
+    -- Start hidden: only runs OnUpdate while WorldMapFrame is actively visible
+    mapWatcher:Hide()
     mapWatcher:SetScript("OnUpdate", OnMapWatchUpdate)
+
+    WorldMapFrame:HookScript("OnShow", function()
+        _lastWatchedMapID = nil
+        mapWatcher:Show()
+        UI.UpdateWorldMapBanner()
+    end)
+
+    WorldMapFrame:HookScript("OnHide", function()
+        _lastWatchedMapID = nil
+        mapWatcher:Hide()
+        if mapBanner and mapBanner:IsShown() then
+            mapBanner:Hide()
+        end
+    end)
 
     -- Also hook explicit Blizzard events/methods as backup
     if WorldMapFrame.OnMapChanged then
@@ -272,9 +293,4 @@ function UI.InitializeWorldMap()
             UI.UpdateWorldMapBanner()
         end)
     end
-
-    WorldMapFrame:HookScript("OnShow", function()
-        _lastWatchedMapID = nil
-        UI.UpdateWorldMapBanner()
-    end)
 end
