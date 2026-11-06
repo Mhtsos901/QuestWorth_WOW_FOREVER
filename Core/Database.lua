@@ -14,6 +14,7 @@ local DEFAULT_SETTINGS = {
     showBreakdown = true,
     showInQuestLog = true,
     showInTracker = true,
+    showInWorldMap = true,
     weights = {
         difficulty = 0.00,
         reward = 0.40,

@@ -13,6 +13,7 @@ Core/Database.lua
 Data/ClassStats.lua
 Data/ArmorTypes.lua
 Data/Chains.lua
+Data/Zones.lua
 Scores/Difficulty.lua
 Scores/Reward.lua
 Scores/Chain.lua
@@ -21,6 +22,7 @@ Scores/Density.lua
 Core/Engine.lua
 UI/Tooltip.lua
 UI/QuestLog.lua
+UI/WorldMap.lua
 UI/QuestOffer.lua
 UI/Config.lua
 Core.lua

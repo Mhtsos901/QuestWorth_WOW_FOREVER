@@ -146,7 +146,16 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbTracker, "BOTTOMLEFT", 0, -8,
+    local cbWorldMap = CreateCheckbox(panel, "Show Zone Worth Banner on World Map", "TOPLEFT", cbTracker, "BOTTOMLEFT", 0, -8,
+        function() return addon.db and addon.db.showInWorldMap end,
+        function(v)
+            addon.db.showInWorldMap = v
+            if addon.UI and addon.UI.UpdateWorldMapBanner then
+                addon.UI.UpdateWorldMapBanner()
+            end
+        end)
+
+    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -8,
         function() return addon.db and addon.db.debug end,
         function(v) addon.db.debug = v end)
 
@@ -181,6 +190,7 @@ local function CreateOptionsPanel()
         cbBreakdown:SetChecked(addon.db.showBreakdown)
         cbQuestLog:SetChecked(addon.db.showInQuestLog)
         cbTracker:SetChecked(addon.db.showInTracker)
+        cbWorldMap:SetChecked(addon.db.showInWorldMap ~= false)
         cbDebug:SetChecked(addon.db.debug)
         sD:SyncValue()
         sR:SyncValue()
@@ -311,6 +321,12 @@ local function HandleSlashCmd(msg)
             addon.UI.UpdateObjectiveTracker(true)
         end
         addon.Print(string.format(L["TRACKER_TAG_TOGGLED"], addon.db.showInTracker and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
+    elseif cmd == "map" or cmd == "worldmap" then
+        addon.db.showInWorldMap = not addon.db.showInWorldMap
+        if addon.UI and addon.UI.UpdateWorldMapBanner then
+            addon.UI.UpdateWorldMapBanner()
+        end
+        addon.Print("World Map Zone Banner: %s", addon.db.showInWorldMap and "|cff00ff00ON|r" or "|cffff0000OFF|r")
     elseif cmd == "test" or cmd == "diag" then
         addon.Engine.RunDiagnostics()
     elseif cmd == "reset" then

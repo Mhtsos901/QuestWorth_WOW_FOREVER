@@ -30,6 +30,9 @@ local function RefreshAllUI()
         if addon.UI.UpdateObjectiveTracker then
             addon.UI.UpdateObjectiveTracker()
         end
+        if addon.UI.UpdateWorldMapBanner then
+            addon.UI.UpdateWorldMapBanner()
+        end
     end
 end
 
@@ -60,6 +63,9 @@ local function OnEvent(self, event, ...)
             if addon.UI.InitializeQuestOffer then
                 addon.UI.InitializeQuestOffer()
             end
+            if addon.UI.InitializeWorldMap then
+                addon.UI.InitializeWorldMap()
+            end
             ScanCurrentZoneQuestLines()
             addon.Print(L["ADDON_LOADED"])
         elseif loadedAddon == "Blizzard_ObjectiveTracker" or
@@ -76,6 +82,9 @@ local function OnEvent(self, event, ...)
             if addon.UI and addon.UI.InitializeQuestLog then
                 addon.UI.InitializeQuestLog()
             end
+            if addon.UI and addon.UI.InitializeWorldMap then
+                addon.UI.InitializeWorldMap()
+            end
             DelayedRefresh(0.1)
         end
 
@@ -83,6 +92,9 @@ local function OnEvent(self, event, ...)
         ScanCurrentZoneQuestLines()
         if addon.UI and addon.UI.InitializeQuestLog then
             addon.UI.InitializeQuestLog()
+        end
+        if addon.UI and addon.UI.InitializeWorldMap then
+            addon.UI.InitializeWorldMap()
         end
         if addon.Engine and addon.Engine.InvalidateCache then
             addon.Engine.InvalidateCache()
