@@ -163,7 +163,7 @@ local function ProcessQuestButton(button, showTag)
     end
 end
 
--- Process and badge a Quest Log geographical zone header button
+-- Process a Quest Log geographical zone header button (keep clean without worth % badge)
 local function ProcessHeaderButton(button, showTag)
     if not button then return end
     local fontString = button.ButtonText or button.Text or (button.GetFontString and button:GetFontString()) or button.normalText
@@ -175,23 +175,7 @@ local function ProcessHeaderButton(button, showTag)
     cleanText = string.gsub(cleanText, "^%s*(.-)%s*$", "%1")
     if cleanText == "" then return end
 
-    if showTag and addon.Engine and addon.Engine.CalculateZoneWorth then
-        local cleanZoneName = string.gsub(cleanText, "%s*%(%d+/?%d*%)%s*$", "")
-        local zoneWorth, count = addon.Engine.CalculateZoneWorth(cleanZoneName)
-        if not zoneWorth and cleanZoneName ~= cleanText then
-            zoneWorth, count = addon.Engine.CalculateZoneWorth(cleanText)
-        end
-        if zoneWorth then
-            -- Pass isComplete = false so that zone header displays [100%] instead of [OK] even if zoneWorth == 1.0
-            local badge = Utils.FormatBadge(zoneWorth, false)
-            local targetText = badge .. " " .. cleanText
-            if rawText ~= targetText then
-                fontString:SetText(targetText)
-            end
-            return
-        end
-    end
-
+    -- Clean any badge on zone headers so headers remain pristine (e.g. "Westfall", "Redridge Mountains")
     if rawText ~= cleanText then
         fontString:SetText(cleanText)
     end

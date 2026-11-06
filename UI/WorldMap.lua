@@ -67,14 +67,18 @@ local function CreateWorldMapBanner()
     if mapBanner then return mapBanner end
     if not WorldMapFrame then return nil end
 
-    local parent = (WorldMapFrame.ScrollContainer) or WorldMapFrame
-    local frame = CreateFrame("Button", "WorthItWorldMapBanner", parent, "BackdropTemplate")
-    frame:SetHeight(26)
+    local scrollContainer = (WorldMapFrame.ScrollContainer) or WorldMapFrame
+    local frame = CreateFrame("Button", "WorthItWorldMapBanner", WorldMapFrame, "BackdropTemplate")
+    frame:SetHeight(24)
     frame:SetFrameStrata("HIGH")
-    frame:SetFrameLevel(parent:GetFrameLevel() + 10)
+    frame:SetFrameLevel(WorldMapFrame:GetFrameLevel() + 25)
 
-    -- Anchor top center of the map canvas
-    frame:SetPoint("TOP", parent, "TOP", 0, -8)
+    -- Anchor directly above the map canvas so it never obstructs zone titles (e.g. Westfall (10-20) / Fishing)
+    if WorldMapFrame.ScrollContainer then
+        frame:SetPoint("BOTTOM", WorldMapFrame.ScrollContainer, "TOP", 0, 4)
+    else
+        frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
+    end
 
     -- Backdrop styling: sleek dark panel with subtle border
     frame:SetBackdrop({
@@ -83,7 +87,7 @@ local function CreateWorldMapBanner()
         tile = true, tileSize = 16, edgeSize = 12,
         insets = { left = 3, right = 3, top = 3, bottom = 3 }
     })
-    frame:SetBackdropColor(0.05, 0.05, 0.08, 0.88)
+    frame:SetBackdropColor(0.05, 0.05, 0.08, 0.92)
     frame:SetBackdropBorderColor(0.35, 0.35, 0.40, 0.90)
 
     local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
