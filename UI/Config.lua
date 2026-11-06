@@ -155,7 +155,16 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -8,
+    local cbZoneAdvisor = CreateCheckbox(panel, "Show Zone Advisor Sidebar on World Map", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -8,
+        function() return addon.db and addon.db.showZoneAdvisor end,
+        function(v)
+            addon.db.showZoneAdvisor = v
+            if addon.UI and addon.UI.ToggleZoneAdvisor then
+                addon.UI.ToggleZoneAdvisor(v)
+            end
+        end)
+
+    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -8,
         function() return addon.db and addon.db.debug end,
         function(v) addon.db.debug = v end)
 
@@ -327,6 +336,12 @@ local function HandleSlashCmd(msg)
             addon.UI.UpdateWorldMapBanner()
         end
         addon.Print("World Map Zone Banner: %s", addon.db.showInWorldMap and "|cff00ff00ON|r" or "|cffff0000OFF|r")
+    elseif cmd == "advisor" or cmd == "zones" then
+        addon.db.showZoneAdvisor = not addon.db.showZoneAdvisor
+        if addon.UI and addon.UI.ToggleZoneAdvisor then
+            addon.UI.ToggleZoneAdvisor(addon.db.showZoneAdvisor)
+        end
+        addon.Print("Zone Advisor Sidebar: %s", addon.db.showZoneAdvisor and "|cff00ff00ON|r" or "|cffff0000OFF|r")
     elseif cmd == "test" or cmd == "diag" then
         addon.Engine.RunDiagnostics()
     elseif cmd == "reset" then
