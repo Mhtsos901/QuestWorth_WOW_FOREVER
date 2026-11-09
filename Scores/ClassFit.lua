@@ -115,8 +115,11 @@ end
 
 -- Detect Active Class, Spec and Talent Archetype
 local function GetPlayerSpecInfo()
-    local _, playerClass = UnitClass("player")
-    playerClass = playerClass or "WARRIOR"
+    local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
+    if not playerClass then
+        local _, c = UnitClass("player")
+        playerClass = c or "WARRIOR"
+    end
 
     local specIndex = nil
 
@@ -470,7 +473,7 @@ end
 
 function Scores.CalculateClassFit(questID)
     local playerClass, specIndex, statWeights = GetPlayerSpecInfo()
-    local playerLevel = UnitLevel("player") or 1
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
 
     local itemLinks = {}
 

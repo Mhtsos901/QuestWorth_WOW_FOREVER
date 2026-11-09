@@ -87,7 +87,7 @@ local function GetQuestVendorPrices(questID)
 end
 
 function Scores.CalculateReward(questID)
-    local playerLevel = UnitLevel("player") or 1
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local maxLevel = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (GetMaxPlayerLevel and GetMaxPlayerLevel()) or 60
     local isMaxLevel = (playerLevel >= maxLevel)
 

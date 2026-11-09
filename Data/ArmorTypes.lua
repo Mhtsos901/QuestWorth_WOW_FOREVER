@@ -147,7 +147,7 @@ Data.ClassWeaponProficiency = {
 
 -- Dynamic resolver for preferred armor type based on current player level
 function Data.GetPreferredArmorType(playerClass, playerLevel)
-    playerLevel = playerLevel or UnitLevel("player") or 1
+    playerLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
 
     if playerClass == "WARRIOR" or playerClass == "PALADIN" or playerClass == "DEATHKNIGHT" then
         return (playerLevel >= 40) and 4 or 3 -- Plate at 40+, Mail before 40

@@ -8,6 +8,71 @@ local addonName, addon = ...
 addon.Utils = {}
 local Utils = addon.Utils
 
+-- =========================================================================
+-- Dynamic Player Profile Manager (100% Dynamic for ANY Level 1-60, Class, Race, Faction)
+-- Loaded early in Core/Utils.lua so all Data, Score, and Engine modules can safely access it.
+-- =========================================================================
+addon.Player = addon.Player or {}
+local Player = addon.Player
+
+function Player.Update()
+    local okLvl, lvl = pcall(UnitLevel, "player")
+    if okLvl and lvl and lvl > 0 then
+        Player.level = lvl
+    else
+        Player.level = Player.level or 1
+    end
+
+    local okClass, locClass, engClass = pcall(UnitClass, "player")
+    if okClass and (engClass or locClass) then
+        Player.class = engClass or locClass
+    else
+        Player.class = Player.class or "WARRIOR"
+    end
+
+    local okRace, locRace, engRace = pcall(UnitRace, "player")
+    if okRace and (engRace or locRace) then
+        Player.race = engRace or locRace
+    else
+        Player.race = Player.race or "Human"
+    end
+
+    local okFaction, faction = pcall(UnitFactionGroup, "player")
+    if okFaction and faction then
+        Player.faction = faction
+    else
+        Player.faction = Player.faction or "Alliance"
+    end
+
+    local maxLvl = (GetMaxPlayerLevel and GetMaxPlayerLevel()) or (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or 60
+    Player.maxLevel = maxLvl
+    Player.isMaxLevel = (Player.level >= maxLvl)
+    return Player
+end
+
+function Player.GetLevel()
+    if not Player.level or Player.level <= 0 then Player.Update() end
+    return Player.level or 1
+end
+
+function Player.GetClass()
+    if not Player.class then Player.Update() end
+    return Player.class or "WARRIOR"
+end
+
+function Player.GetRace()
+    if not Player.race then Player.Update() end
+    return Player.race or "Human"
+end
+
+function Player.GetFaction()
+    if not Player.faction then Player.Update() end
+    return Player.faction or "Alliance"
+end
+
+-- Initialize player profile immediately upon loading Core/Utils.lua
+Player.Update()
+
 -- Safe call wrapper
 function Utils.SafeCall(func, ...)
     if type(func) ~= "function" then

@@ -14,68 +14,9 @@ local Engine = addon.Engine
 local Utils = addon.Utils
 local L = addon.L
 
--- =========================================================================
--- Dynamic Player Profile Manager (100% Dynamic for ANY Level 1-60, Class, Race, Faction)
--- =========================================================================
+-- Reference dynamic Player Profile Manager (initialized in Core/Utils.lua)
 addon.Player = addon.Player or {}
 local Player = addon.Player
-
-function Player.Update()
-    local okLvl, lvl = pcall(UnitLevel, "player")
-    if okLvl and lvl and lvl > 0 then
-        Player.level = lvl
-    else
-        Player.level = Player.level or 1
-    end
-
-    local okClass, locClass, engClass = pcall(UnitClass, "player")
-    if okClass and (engClass or locClass) then
-        Player.class = engClass or locClass
-    else
-        Player.class = Player.class or "WARRIOR"
-    end
-
-    local okRace, locRace, engRace = pcall(UnitRace, "player")
-    if okRace and (engRace or locRace) then
-        Player.race = engRace or locRace
-    else
-        Player.race = Player.race or "Human"
-    end
-
-    local okFaction, faction = pcall(UnitFactionGroup, "player")
-    if okFaction and faction then
-        Player.faction = faction
-    else
-        Player.faction = Player.faction or "Alliance"
-    end
-
-    local maxLvl = (GetMaxPlayerLevel and GetMaxPlayerLevel()) or (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or 60
-    Player.maxLevel = maxLvl
-    Player.isMaxLevel = (Player.level >= maxLvl)
-    return Player
-end
-
-function Player.GetLevel()
-    if not Player.level or Player.level <= 0 then Player.Update() end
-    return Player.level or 1
-end
-
-function Player.GetClass()
-    if not Player.class then Player.Update() end
-    return Player.class or "WARRIOR"
-end
-
-function Player.GetRace()
-    if not Player.race then Player.Update() end
-    return Player.race or "Human"
-end
-
-function Player.GetFaction()
-    if not Player.faction then Player.Update() end
-    return Player.faction or "Alliance"
-end
-
--- Early initialization
 Player.Update()
 
 -- In-memory cache for computed scores
@@ -691,6 +632,9 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     local minLevel = zoneInfo and zoneInfo.min or nil
     local maxLevel = zoneInfo and zoneInfo.max or nil
     local effectiveMin = Engine.GetEffectiveMinLevel(zoneInfo, playerFaction) or minLevel
+    if effectiveMin and maxLevel and effectiveMin > maxLevel then
+        effectiveMin = maxLevel
+    end
     local faction = zoneInfo and zoneInfo.faction or "Contested"
     local isCity = zoneInfo and zoneInfo.isCity or false
     local reqClass = zoneInfo and zoneInfo.class or nil

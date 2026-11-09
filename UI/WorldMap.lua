@@ -275,6 +275,7 @@ local function CreateWorldMapBanner()
 end
 
 function UI.UpdateWorldMapBanner()
+    if InCombatLockdown and InCombatLockdown() then return end
     if not (addon.db and addon.db.enabled and addon.db.showInWorldMap ~= false) then
         if mapBanner then mapBanner:Hide() end
         return
@@ -392,6 +393,9 @@ local function CreateAdvisorRow(index, parent)
     local row = CreateFrame("Button", "WorthItAdvisorRow" .. index, parent, "BackdropTemplate")
     row:SetHeight(24)
     row:SetWidth(236)
+    if row.SetClipsChildren then
+        row:SetClipsChildren(true)
+    end
 
     -- Authentic Blizzard Quest Title Highlight on mouse hover
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
@@ -424,7 +428,7 @@ local function CreateAdvisorRow(index, parent)
 
     local rightFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     rightFS:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-    rightFS:SetWidth(48)
+    rightFS:SetWidth(52)
     rightFS:SetJustifyH("RIGHT")
     row.RightTag = rightFS
 
@@ -745,6 +749,7 @@ local function CreateZoneAdvisorPanel(parent)
 end
 
 function UI.UpdateZoneAdvisor()
+    if InCombatLockdown and InCombatLockdown() then return end
     if not advisorPanel or not advisorPanel:IsShown() then return end
     if advisorPanel.UpdateFilterVisuals then
         advisorPanel.UpdateFilterVisuals()
@@ -942,6 +947,13 @@ function UI.ToggleZoneAdvisor(enable)
 
     if addon.db then
         addon.db.showZoneAdvisor = targetState
+    end
+
+    if InCombatLockdown and InCombatLockdown() then
+        if toggle then
+            toggle.Text:SetText(targetState and "|cff00ff00[◀ Zones]|r" or "|cff00ccff[≡ Zones %]|r")
+        end
+        return
     end
 
     pcall(function()

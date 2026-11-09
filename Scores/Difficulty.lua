@@ -21,8 +21,11 @@ local GROUP_TAGS = { [1] = true }
 
 -- Detect if active class / spec is Melee-focused
 local function IsMeleePlayer()
-    local _, playerClass = UnitClass("player")
-    playerClass = playerClass or "WARRIOR"
+    local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
+    if not playerClass then
+        local _, c = UnitClass("player")
+        playerClass = c or "WARRIOR"
+    end
 
     if playerClass == "WARRIOR" or playerClass == "ROGUE" or playerClass == "DEATHKNIGHT" or playerClass == "DEMONHUNTER" then
         return true
@@ -102,9 +105,9 @@ local function CalculateBaseDifficulty(questLevel, playerLevel, isMelee)
 end
 
 function Scores.CalculateDifficulty(questID)
-    local playerLevel = UnitLevel("player") or 1
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local info = Utils.GetQuestBasicInfo(questID)
-    local questLevel = (info and info.level) or playerLevel
+    local questLevel = (info and info.level and info.level > 0) and info.level or playerLevel
     local isElite = (info and info.isElite) or false
     local isDungeon = false
     local isGroup = false
@@ -135,6 +138,29 @@ function Scores.CalculateDifficulty(questID)
     local penalty = 0.0
     local levelDelta = questLevel - playerLevel
 
+    -- Objective Workload / Tempo Adjustment:
+    -- Differentiates short, snappy quests (1-6 targets) from tedious grind quests (25+ items, 3+ objectives)
+    local tempoModifier = 0.0
+    if C_QuestLog and C_QuestLog.GetQuestObjectives then
+        local okObjs, objs = pcall(C_QuestLog.GetQuestObjectives, questID)
+        if okObjs and type(objs) == "table" and #objs > 0 then
+            local numObjs = #objs
+            local totalReq = 0
+            for _, obj in ipairs(objs) do
+                if obj and obj.numRequired and obj.numRequired > 0 then
+                    totalReq = totalReq + obj.numRequired
+                end
+            end
+            if numObjs == 1 and totalReq <= 6 then
+                tempoModifier = 0.03
+            elseif numObjs >= 3 or totalReq >= 25 then
+                tempoModifier = -0.04
+            elseif numObjs == 2 and totalReq >= 15 then
+                tempoModifier = -0.02
+            end
+        end
+    end
+
     -- Penalty: Dungeon / Group / Elite Quest solo overhead (No double-penalty on delta)
     if isDungeon then
         penalty = 0.35 -- Requires full 5-man instance group + travel
@@ -148,7 +174,7 @@ function Scores.CalculateDifficulty(questID)
         end
     end
 
-    local finalScore = math.max(0.0, math.min(1.0, baseScore - penalty))
+    local finalScore = math.max(0.0, math.min(1.0, baseScore + tempoModifier - penalty))
 
     local reason = nil
     if colorName == "red" or colorName == "orange" then

@@ -117,7 +117,7 @@ local function OnEvent(self, event, ...)
             end)
         end
 
-    elseif event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED" then
+    elseif event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" then
         ScanCurrentZoneQuestLines()
         if addon.Engine and addon.Engine.InvalidateCache then
             addon.Engine.InvalidateCache()
@@ -208,7 +208,7 @@ end
 
 local EVENTS = {
     "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
-    "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "QUEST_LOG_UPDATE",
+    "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "QUEST_LOG_UPDATE",
     "QUEST_WATCH_LIST_CHANGED", "QUEST_DATA_LOAD_RESULT",
     "QUEST_WATCH_UPDATE", "UNIT_QUEST_LOG_CHANGED", "QUEST_POI_UPDATE",
     "BAG_UPDATE_DELAYED",
