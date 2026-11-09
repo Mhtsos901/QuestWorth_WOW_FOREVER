@@ -57,11 +57,17 @@ local function PruneZoneQuests()
     local isOnQuest = (C_QuestLog and C_QuestLog.IsOnQuest) or IsOnQuest
     if not isOnQuest then return end
     for zoneName, quests in pairs(ZoneQuests) do
+        local hasAny = false
         for qID in pairs(quests) do
             local ok, onQuest = pcall(isOnQuest, qID)
             if ok and onQuest == false then
                 quests[qID] = nil
+            else
+                hasAny = true
             end
+        end
+        if not hasAny then
+            ZoneQuests[zoneName] = nil
         end
     end
 end
@@ -103,8 +109,10 @@ local function ScanQuestLogClusters()
         end
 
         if isHeader and title then
-            currentHeader = title
-            isNonZoneHeader = NON_ZONE_HEADERS[title] or false
+            local cleanH = string.gsub(title, "%s*%(%d+/?%d*%)%s*$", "")
+            cleanH = string.gsub(cleanH, "^%s*(.-)%s*$", "%1")
+            currentHeader = (cleanH ~= "") and cleanH or title
+            isNonZoneHeader = NON_ZONE_HEADERS[currentHeader] or NON_ZONE_HEADERS[title] or false
         elseif not isHeader and qID and qID > 0 then
             if isNonZoneHeader then
                 -- Quests under Class/Profession headers do not cluster together as hubs

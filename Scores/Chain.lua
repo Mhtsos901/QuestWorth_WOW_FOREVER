@@ -101,7 +101,7 @@ function Scores.CalculateChain(questID)
         if step == 1 and total > 1 then
             score = 0.65 -- Chain starter boost (early investment)
         else
-            score = isCap and 1.00 or (0.40 + 0.50 * (step / total))
+            score = isCap and 1.00 or (0.40 + 0.50 * (step / math.max(1, total)))
         end
         if chainInfo.isImportant and not isCap then
             score = math.min(0.90, score + 0.10) -- High importance chains get extra boost
@@ -156,7 +156,7 @@ function Scores.CalculateChain(questID)
                     if step == 1 and total > 1 then
                         score = 0.65 -- Chain starter boost
                     else
-                        score = isCap and 1.00 or (0.40 + 0.50 * (step / total))
+                        score = isCap and 1.00 or (0.40 + 0.50 * (step / math.max(1, total)))
                     end
                     if chainData.isImportant and not isCap then
                         score = math.min(0.90, score + 0.10)

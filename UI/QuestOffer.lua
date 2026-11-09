@@ -74,7 +74,8 @@ local function UpdateQuestOfferDialog()
 
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard)
+    local isBankable = (breakdown and breakdown.isBankable)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
 
     -- 1. Badge QuestInfoTitleHeader at the top of the quest offer parchment
     if QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader.SetText then
@@ -133,7 +134,8 @@ local function UpdateGossipAvailableQuests()
                         if worth then
                             local isComplete = (breakdown and breakdown.isComplete)
                             local isHard = (breakdown and breakdown.isHard)
-                            local badge = Utils.FormatBadge(worth, isComplete, isHard)
+                            local isBankable = (breakdown and breakdown.isBankable)
+                            local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
                             local raw = fontString:GetText() or ""
                             local clean = Utils.CleanQuestTitle(raw)
                             local target = badge .. " " .. clean
@@ -157,7 +159,8 @@ local function UpdateGossipAvailableQuests()
                 if worth then
                     local isComplete = (breakdown and breakdown.isComplete)
                     local isHard = (breakdown and breakdown.isHard)
-                    local badge = Utils.FormatBadge(worth, isComplete, isHard)
+                    local isBankable = (breakdown and breakdown.isBankable)
+                    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
                     local raw = button:GetText() or ""
                     local clean = Utils.CleanQuestTitle(raw)
                     local target = badge .. " " .. clean
@@ -195,7 +198,8 @@ local function UpdateQuestGreetingPanel()
                     if worth then
                         local isComplete = (breakdown and breakdown.isComplete)
                         local isHard = (breakdown and breakdown.isHard)
-                        local badge = Utils.FormatBadge(worth, isComplete, isHard)
+                        local isBankable = (breakdown and breakdown.isBankable)
+                        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
                         local raw = button:GetText() or ""
                         local clean = Utils.CleanQuestTitle(raw)
                         local target = badge .. " " .. clean

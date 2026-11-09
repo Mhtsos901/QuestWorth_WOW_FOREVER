@@ -181,11 +181,11 @@ local function CreateOptionsPanel()
         function(v) addon.db.weights.reward = v end)
 
     local sC = CreateWeightSlider(panel, L["CHAIN"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -26,
-        function() return addon.db and addon.db.weights and addon.db.weights.chain or 0.15 end,
+        function() return addon.db and addon.db.weights and addon.db.weights.chain or 0.30 end,
         function(v) addon.db.weights.chain = v end)
 
     local sF = CreateWeightSlider(panel, L["CLASS_FIT"], "TOPLEFT", sC, "BOTTOMLEFT", 0, -26,
-        function() return addon.db and addon.db.weights and addon.db.weights.classFit or 0.30 end,
+        function() return addon.db and addon.db.weights and addon.db.weights.classFit or 0.15 end,
         function(v) addon.db.weights.classFit = v end)
 
     local sH = CreateWeightSlider(panel, L["DENSITY"] or "Hub Density", "TOPLEFT", sF, "BOTTOMLEFT", 0, -26,

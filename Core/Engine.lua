@@ -14,6 +14,70 @@ local Engine = addon.Engine
 local Utils = addon.Utils
 local L = addon.L
 
+-- =========================================================================
+-- Dynamic Player Profile Manager (100% Dynamic for ANY Level 1-60, Class, Race, Faction)
+-- =========================================================================
+addon.Player = addon.Player or {}
+local Player = addon.Player
+
+function Player.Update()
+    local okLvl, lvl = pcall(UnitLevel, "player")
+    if okLvl and lvl and lvl > 0 then
+        Player.level = lvl
+    else
+        Player.level = Player.level or 1
+    end
+
+    local okClass, locClass, engClass = pcall(UnitClass, "player")
+    if okClass and (engClass or locClass) then
+        Player.class = engClass or locClass
+    else
+        Player.class = Player.class or "WARRIOR"
+    end
+
+    local okRace, locRace, engRace = pcall(UnitRace, "player")
+    if okRace and (engRace or locRace) then
+        Player.race = engRace or locRace
+    else
+        Player.race = Player.race or "Human"
+    end
+
+    local okFaction, faction = pcall(UnitFactionGroup, "player")
+    if okFaction and faction then
+        Player.faction = faction
+    else
+        Player.faction = Player.faction or "Alliance"
+    end
+
+    local maxLvl = (GetMaxPlayerLevel and GetMaxPlayerLevel()) or (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or 60
+    Player.maxLevel = maxLvl
+    Player.isMaxLevel = (Player.level >= maxLvl)
+    return Player
+end
+
+function Player.GetLevel()
+    if not Player.level or Player.level <= 0 then Player.Update() end
+    return Player.level or 1
+end
+
+function Player.GetClass()
+    if not Player.class then Player.Update() end
+    return Player.class or "WARRIOR"
+end
+
+function Player.GetRace()
+    if not Player.race then Player.Update() end
+    return Player.race or "Human"
+end
+
+function Player.GetFaction()
+    if not Player.faction then Player.Update() end
+    return Player.faction or "Alliance"
+end
+
+-- Early initialization
+Player.Update()
+
 -- In-memory cache for computed scores
 Engine.Cache = {}
 local MAX_CACHE_SIZE = 500
@@ -66,7 +130,7 @@ end
 
 -- Generate a unique cache key based on player state & active quest count
 local function GetCacheKey(questID)
-    local playerLevel = UnitLevel("player") or 1
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local specID = GetPlayerSpecID()
     local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
                        or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
@@ -77,6 +141,109 @@ end
 function Engine.InvalidateCache()
     wipe(Engine.Cache)
     addon.Debug("Evaluation cache invalidated.")
+end
+
+-- Helper to determine if a quest is complete / ready for turn-in
+function Engine.IsQuestComplete(questID)
+    if not questID or questID <= 0 then return false end
+
+    -- 1. Modern API: C_QuestLog.IsComplete
+    if C_QuestLog and C_QuestLog.IsComplete then
+        local ok, comp = pcall(C_QuestLog.IsComplete, questID)
+        if ok and comp then return true end
+    end
+
+    -- 2. Modern API: C_QuestLog.ReadyForTurnIn
+    if C_QuestLog and C_QuestLog.ReadyForTurnIn then
+        local ok, ready = pcall(C_QuestLog.ReadyForTurnIn, questID)
+        if ok and ready then return true end
+    end
+
+    -- 3. Modern API: Check all objectives finished via C_QuestLog.GetQuestObjectives
+    -- In Classic content / WoW Forever, dungeon & collection quests often mark all objectives finished
+    -- before turn-in without setting IsComplete immediately.
+    if C_QuestLog and C_QuestLog.GetQuestObjectives then
+        local ok, objectives = pcall(C_QuestLog.GetQuestObjectives, questID)
+        if ok and type(objectives) == "table" and #objectives > 0 then
+            local allFinished = true
+            for _, obj in ipairs(objectives) do
+                if not obj.finished then
+                    allFinished = false
+                    break
+                end
+            end
+            if allFinished then
+                return true
+            end
+        end
+    end
+
+    -- 4. Active Quest Log scan via C_QuestLog.GetNumQuestLogEntries & GetInfo
+    if C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo then
+        local ok, num = pcall(C_QuestLog.GetNumQuestLogEntries)
+        if ok and num and num > 0 then
+            for idx = 1, num do
+                local ok2, info = pcall(C_QuestLog.GetInfo, idx)
+                if ok2 and info and info.questID == questID then
+                    if info.isComplete == true or info.isComplete == 1 or info.readyForTurnIn then
+                        return true
+                    end
+                    break
+                end
+            end
+        end
+    end
+
+    -- 5. Classic Fallback scan via GetNumQuestLogEntries & GetQuestLogTitle
+    if GetNumQuestLogEntries and GetQuestLogTitle then
+        local ok, num = pcall(GetNumQuestLogEntries)
+        if ok and num and num > 0 then
+            for idx = 1, num do
+                local ok3, title, _, _, isHeader, _, isCompleteVal, _, qID = pcall(GetQuestLogTitle, idx)
+                if ok3 and not isHeader then
+                    local match = (qID and qID == questID)
+                    if not match and C_QuestLog and C_QuestLog.GetQuestIDForLogIndex then
+                        match = (C_QuestLog.GetQuestIDForLogIndex(idx) == questID)
+                    end
+                    if match then
+                        if isCompleteVal and (isCompleteVal == 1 or isCompleteVal == true) then
+                            return true
+                        end
+                        if GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+                            local okNum, numLB = pcall(GetNumQuestLeaderBoards, idx)
+                            if okNum and numLB and numLB > 0 then
+                                local allLBFinished = true
+                                for lbIdx = 1, numLB do
+                                    local okLB, _, _, finished = pcall(GetQuestLogLeaderBoard, lbIdx, idx)
+                                    if not (okLB and finished) then
+                                        allLBFinished = false
+                                        break
+                                    end
+                                end
+                                if allLBFinished then
+                                    return true
+                                end
+                            end
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    -- 6. Deprecated GetLogIndexForQuestID fallback
+    if C_QuestLog and C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetInfo then
+        local ok, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
+        if ok and idx and idx > 0 then
+            local ok2, info = pcall(C_QuestLog.GetInfo, idx)
+            if ok2 and info and (info.isComplete == true or info.isComplete == 1 or info.readyForTurnIn) then
+                return true
+            end
+        end
+    end
+
+    return false
 end
 
 -- Main entry point: Calculate Worth for a questID
@@ -91,33 +258,7 @@ function Engine.CalculateWorth(questID)
     end
 
     -- Rule: If quest is already completed / ready for turn-in, its worth is 100%!
-    local isComplete = false
-    if C_QuestLog and C_QuestLog.IsComplete then
-        local ok, comp = pcall(C_QuestLog.IsComplete, questID)
-        if ok and comp then isComplete = true end
-    end
-    if not isComplete and C_QuestLog and C_QuestLog.ReadyForTurnIn then
-        local ok, ready = pcall(C_QuestLog.ReadyForTurnIn, questID)
-        if ok and ready then isComplete = true end
-    end
-    if not isComplete and C_QuestLog and C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetInfo then
-        local ok, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
-        if ok and idx and idx > 0 then
-            local ok2, info = pcall(C_QuestLog.GetInfo, idx)
-            if ok2 and info and (info.isComplete == true or info.isComplete == 1 or info.readyForTurnIn) then
-                isComplete = true
-            end
-        end
-    end
-    if not isComplete and GetQuestLogTitle and C_QuestLog and C_QuestLog.GetLogIndexForQuestID then
-        local ok, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
-        if ok and idx and idx > 0 then
-            local ok3, _, _, _, _, _, comp = pcall(GetQuestLogTitle, idx)
-            if ok3 and comp and comp == 1 then
-                isComplete = true
-            end
-        end
-    end
+    local isComplete = Engine.IsQuestComplete(questID)
 
     if isComplete then
         local weights = (db and db.weights) or {}
@@ -147,26 +288,29 @@ function Engine.CalculateWorth(questID)
     end
 
     -- 1. Normalize 5 Weights (Endgame adapts to Gold & Economy priority)
-    local playerLevel = UnitLevel("player") or 1
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local maxLevel = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (GetMaxPlayerLevel and GetMaxPlayerLevel()) or 60
     local isMaxLevel = (playerLevel >= maxLevel)
     local weights = (db and db.weights) or {}
 
-    local rawD = weights.difficulty
-    local rawR = weights.reward
-    local rawC = weights.chain
-    local rawF = weights.classFit
-    local rawH = weights.density
+    local rawD = weights.difficulty or 0.10
+    local rawR = weights.reward or 0.35
+    local rawC = weights.chain or 0.25
+    local rawF = weights.classFit or 0.15
+    local rawH = weights.density or 0.15
+
+    -- Modernize legacy default weights (difficulty 0.00) during leveling
+    if not isMaxLevel and _approxEq(rawD, 0.00) and _approxEq(rawR, 0.40) and _approxEq(rawC, 0.30) then
+        rawD, rawR, rawC, rawF, rawH = 0.10, 0.35, 0.25, 0.15, 0.15
+    end
 
     -- If player is max level and using default weights, adapt to endgame weights
     if isMaxLevel
-        and _approxEq(rawD, 0.00) and _approxEq(rawR, 0.40)
-        and _approxEq(rawC, 0.15) and _approxEq(rawF, 0.30)
+        and _approxEq(rawD, 0.10) and _approxEq(rawR, 0.35)
+        and _approxEq(rawC, 0.25) and _approxEq(rawF, 0.15)
         and _approxEq(rawH, 0.15) then
-        rawD, rawR, rawC, rawF, rawH = 0.00, 0.50, 0.15, 0.25, 0.10
+        rawD, rawR, rawC, rawF, rawH = 0.00, 0.50, 0.25, 0.15, 0.10
     end
-
-    local wD, wR, wC, wF, wH = Utils.NormalizeWeights(rawD, rawR, rawC, rawF, rawH)
 
     -- 2. Individual Scores (Safe pcall wrapped)
     local dScore, dDetails = 0.50, {}
@@ -198,10 +342,37 @@ function Engine.CalculateWorth(questID)
     fScore = math.max(0.0, math.min(1.0, tonumber(fScore) or 0.5))
     hScore = math.max(0.0, math.min(1.0, tonumber(hScore) or 0.5))
 
-    -- 3. Dynamic Weight Redistribution when ClassFit is unavailable or has no items
-    -- Trigger for BOTH "no items" AND "calculation error" cases.
-    if (okF == false) or (fDetails and fDetails.hasItems == false) then
-        wD, wR, wC, wF, wH = Utils.NormalizeWeights(rawD, rawR, rawC, 0, rawH)
+    -- 3. Dynamic Weight Redistribution
+    local isMajorChain = (cDetails and (cDetails.isClassOrProfession or cDetails.isCap or (cDetails.totalSteps and cDetails.totalSteps >= 3) or (cScore and cScore >= 0.60)))
+    local hasNoGear = (okF == false) or (fDetails and fDetails.hasItems == false)
+
+    local wD, wR, wC, wF, wH
+    if hasNoGear and not isMajorChain then
+        -- Standalone / XP / Hub quests without gear rewards:
+        -- Shift unused ClassFit and excess Chain weight primarily into Difficulty and Density!
+        local effC = math.min(rawC, 0.06)
+        local released = rawF + (rawC - effC)
+        local effD = rawD + (released * 0.45)
+        local effH = rawH + (released * 0.35)
+        local effR = rawR + (released * 0.20)
+        local effF = 0.00
+        wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, effC, effF, effH)
+    elseif hasNoGear and isMajorChain then
+        -- Major chain quest offering no gear rewards (XP/story starter):
+        local released = rawF
+        local effD = rawD + (released * 0.30)
+        local effH = rawH + (released * 0.30)
+        local effR = rawR + (released * 0.40)
+        wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, rawC, 0.00, effH)
+    elseif not hasNoGear and not isMajorChain and cScore <= 0.20 then
+        -- Standalone quest with gear: shift excess Chain weight to ClassFit (gear upgrade) & Difficulty
+        local effC = math.min(rawC, 0.05)
+        local released = rawC - effC
+        local effF = rawF + (released * 0.65)
+        local effD = rawD + (released * 0.35)
+        wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, rawR, effC, effF, rawH)
+    else
+        wD, wR, wC, wF, wH = Utils.NormalizeWeights(rawD, rawR, rawC, rawF, rawH)
     end
 
     -- 4. 5-Factor Weighted Average
@@ -210,53 +381,61 @@ function Engine.CalculateWorth(questID)
     -- Detect High Future Value ("Bank / Save for Later" quests)
     local hasGearUpgrade = (fScore >= 0.75) or (fDetails and fDetails.reason == "Gear Upgrade")
     local isChainStarter = (cDetails and cDetails.step == 1 and (cDetails.totalSteps or 0) > 1)
-    local isHighReward = (rScore >= 0.80) or (rDetails and rDetails.reason == "High XP")
+    local isHighReward = (rScore >= 0.75) or (rDetails and rDetails.reason == "High XP")
     local isHighValue = (hasGearUpgrade or isChainStarter or isHighReward)
 
-    -- Viability Damping: Red quests or trivial Gray quests shouldn't inflate to 80%+ from rewards/hub alone
     local color = dDetails and dDetails.colorName
+    local delta = (dDetails and dDetails.levelDelta) or 0
     local isBankable = false
-    local isHard = (color == "red" or color == "orange" or (dDetails and (dDetails.isElite or dDetails.isDungeon == true)))
+    local isHard = (color == "red" or color == "orange" or delta >= 3 or (dDetails and (dDetails.isElite or dDetails.isDungeon == true)))
 
-    if wD > 0 then
-        -- Difficulty weight is enabled: apply full viability damping to difficult quests
-        if color == "red" then
-            if isHighValue then
-                -- High-value red quest (great gear, chain start, or big XP): allow player to bank it (50% - 60%)
-                totalWorth = math.max(0.55, totalWorth * 0.75)
-                isBankable = true
-            else
-                totalWorth = totalWorth * 0.40 -- Generic red quest: cap so player waits to level up first
-            end
-        elseif color == "orange" then
-            if isHighValue then
-                totalWorth = math.max(0.60, totalWorth * 0.85)
-                isBankable = true
-            end
-        elseif color == "gray" and not (cDetails and cDetails.isClassOrProfession) and fScore < 0.80 then
-            totalWorth = totalWorth * 0.30 -- Gray quest with no major gear/bag upgrade or class skill
-        elseif dScore <= 0.10 then
-            if isHighValue then
-                totalWorth = math.max(0.45, totalWorth * 0.70)
-                isBankable = true
-            else
-                totalWorth = totalWorth * 0.50 -- Unsoloable high-level Elite/Dungeon penalty
-            end
-        end
-    else
-        -- Difficulty weight is 0 (Decoupled Danger Skull Mode):
-        -- Quests are not penalized in worth % for level delta, but marked as Hard with Skull icon
-        if isHard then
+    -- Gear Upgrade Boost (ensure genuine upgrades reach the 82% - 95% bracket)
+    if hasGearUpgrade and fScore >= 0.80 and not (color == "red" or color == "orange" or delta >= 3) then
+        totalWorth = math.max(totalWorth, 0.78 + (fScore - 0.75) * 0.60)
+    end
+
+    -- Viability Damping & Bankable Calibration
+    if color == "red" or delta >= 5 then
+        if isHighValue then
+            -- High-value red quest: Bank for later (+5 or higher)
+            -- Calibrated strictly to 48% - 52% (below Yellow hub clusters)
+            totalWorth = math.max(0.48, math.min(0.52, totalWorth * 0.75))
             isBankable = true
+        else
+            -- Generic red quest: too dangerous, do not attempt
+            totalWorth = math.min(0.35, totalWorth * 0.40)
         end
-        if color == "gray" and not (cDetails and cDetails.isClassOrProfession) and fScore < 0.80 then
-            totalWorth = totalWorth * 0.30 -- Gray quest with no major gear/bag upgrade or class skill
+    elseif color == "orange" or delta >= 3 then
+        if isHighValue then
+            -- High-value orange quest: Bank for later (+3 / +4)
+            -- Calibrated strictly to 53% - 60%
+            totalWorth = math.max(0.53, math.min(0.60, totalWorth * 0.85))
+            isBankable = true
+        else
+            -- Generic orange quest
+            totalWorth = math.min(0.48, totalWorth * 0.60)
         end
+    elseif (dDetails and (dDetails.isElite or dDetails.isDungeon)) and delta >= 0 then
+        if isHighValue then
+            totalWorth = math.max(0.45, math.min(0.55, totalWorth * 0.70))
+            isBankable = true
+        else
+            totalWorth = math.min(0.42, totalWorth * 0.50)
+        end
+    elseif color == "gray" and not (cDetails and cDetails.isClassOrProfession) and fScore < 0.80 then
+        totalWorth = totalWorth * 0.30
+    end
+
+    -- For No-Gear, Non-Chain quests ("Do Now" XP hub quests):
+    -- Cap strictly at 0.76 so that the 80% - 100% band remains strictly reserved
+    -- for Gear Upgrades, Chain Finales, and Class Quests!
+    if hasNoGear and not isMajorChain then
+        totalWorth = math.min(0.76, totalWorth)
     end
 
     -- Chain Start Floor:
     -- If quest is the start of a chain (step 1 of >1) and not red, floor at 0.35 to save player from skipping and backtracking
-    if cDetails and cDetails.step == 1 and (cDetails.totalSteps or 0) > 1 and color ~= "red" then
+    if cDetails and cDetails.step == 1 and (cDetails.totalSteps or 0) > 1 and color ~= "red" and delta < 5 then
         totalWorth = math.max(totalWorth, 0.35)
     end
 
@@ -339,12 +518,168 @@ function Engine.CalculateZoneWorth(zoneName)
     return zoneWorth, count
 end
 
+-- Table mapping player race to starting home continent (1 = Kalimdor, 2 = Eastern Kingdoms)
+local RACE_HOME_CONTINENT = {
+    -- Eastern Kingdoms (Continent 2)
+    ["Human"]       = 2,
+    ["Dwarf"]       = 2,
+    ["Gnome"]       = 2,
+    ["Scourge"]     = 2, -- Classic API Undead
+    ["Undead"]      = 2,
+    ["BloodElf"]    = 2,
+    ["HighElf"]     = 2,
+    -- Kalimdor (Continent 1)
+    ["NightElf"]    = 1,
+    ["Orc"]         = 1,
+    ["Tauren"]      = 1,
+    ["Troll"]       = 1,
+    ["Draenei"]     = 1,
+    ["Goblin"]      = 1,
+}
+
+-- Returns the player's home continent based on race
+function Engine.GetHomeContinent(playerRace)
+    local race = playerRace or (addon.Player and addon.Player.GetRace and addon.Player.GetRace())
+    if not race then return nil end
+    return RACE_HOME_CONTINENT[race]
+end
+
+-- Resolve faction-specific effective minimum entry level for a zone
+function Engine.GetEffectiveMinLevel(zoneInfo, playerFaction)
+    if not zoneInfo then return nil end
+    local faction = playerFaction or (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or "Alliance"
+
+    if faction == "Alliance" and zoneInfo.allianceMin then
+        return zoneInfo.allianceMin
+    elseif faction == "Horde" and zoneInfo.hordeMin then
+        return zoneInfo.hordeMin
+    end
+
+    local eff = zoneInfo.effectiveMin
+    if type(eff) == "table" then
+        return eff[faction] or eff["Alliance"] or zoneInfo.min
+    elseif type(eff) == "number" then
+        return eff
+    end
+
+    return zoneInfo.min
+end
+
+-- Universal Class-Specific Mob & Terrain Modifiers for all 9 classes
+function Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effectiveMin)
+    if not zoneInfo then return 0, nil end
+    local pClass = playerClass or (addon.Player and addon.Player.GetClass and addon.Player.GetClass()) or "WARRIOR"
+    local pLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or 1
+    local effMin = effectiveMin or zoneInfo.min or 1
+    local isUnderleveled = (pLevel < (effMin + 2))
+    local isBelowMin = (pLevel < effMin)
+
+    local mod = 0
+    local reasons = {}
+
+    -- Group 1: Physical Bleed & Poison Classes (ROGUE, WARRIOR, DRUID, HUNTER)
+    if pClass == "ROGUE" or pClass == "WARRIOR" or pClass == "DRUID" or pClass == "HUNTER" then
+        if isUnderleveled and (zoneInfo.undeadHeavy or zoneInfo.elementalHeavy or zoneInfo.mechanicalHeavy) then
+            local penalty = (pClass == "ROGUE") and -0.15 or -0.10
+            mod = mod + penalty
+            if zoneInfo.undeadHeavy then
+                table.insert(reasons, "Undead (Immune to Bleeds/Poisons, High Armor)")
+            elseif zoneInfo.elementalHeavy then
+                table.insert(reasons, "Elementals (Immune to Bleeds/Poisons, High Armor)")
+            elseif zoneInfo.mechanicalHeavy then
+                table.insert(reasons, "Mechanicals (Immune to Bleeds/Poisons)")
+            end
+        elseif (not isBelowMin) and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
+            if pClass == "ROGUE" then
+                mod = mod + 0.08
+                table.insert(reasons, "Humanoid/Beast Synergy (Pick Pocket & 100% Bleed/Poison)")
+            else
+                mod = mod + 0.05
+                table.insert(reasons, "Humanoid/Beast Synergy (100% Bleed Efficiency)")
+            end
+        end
+
+    -- Group 2: Anti-Undead & Holy Classes (PALADIN, PRIEST)
+    elseif pClass == "PALADIN" or pClass == "PRIEST" then
+        if zoneInfo.undeadHeavy then
+            mod = mod + 0.10
+            if pClass == "PALADIN" then
+                table.insert(reasons, "Holy Synergy (Exorcism, Turn Undead & Holy Wrath)")
+            else
+                table.insert(reasons, "Holy Synergy (Shackle Undead & Holy Damage)")
+            end
+        end
+
+    -- Group 3: AoE & Ranged Kiting Classes (MAGE, WARLOCK)
+    elseif pClass == "MAGE" or pClass == "WARLOCK" then
+        if (not isBelowMin) and zoneInfo.openTerrain and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
+            mod = mod + 0.08
+            table.insert(reasons, "Open Terrain Kiting & AoE Farm")
+        end
+        if isUnderleveled and zoneInfo.denseCaves then
+            mod = mod - 0.10
+            table.insert(reasons, "Confined Caves (High Line-of-Sight & Add Risk)")
+        end
+
+    -- Group 4: SHAMAN
+    elseif pClass == "SHAMAN" then
+        if isUnderleveled and zoneInfo.elementalHeavy then
+            mod = mod - 0.10
+            table.insert(reasons, "Elemental Resistance Penalty (Fire/Nature Resists)")
+        elseif (not isBelowMin) and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
+            mod = mod + 0.05
+            table.insert(reasons, "Melee/Caster Totem Synergy")
+        end
+    end
+
+    -- Additional check for Hunter open-terrain kiting:
+    if (not isBelowMin) and pClass == "HUNTER" and zoneInfo.openTerrain and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
+        mod = mod + 0.05
+        table.insert(reasons, "Open Range Kiting Synergy")
+    end
+
+    mod = math.max(-0.20, math.min(0.15, mod))
+    local reasonStr = (#reasons > 0) and table.concat(reasons, "; ") or nil
+    return mod, reasonStr
+end
+
+-- Universal Race / Home Continent Travel Friction (Low-Level Tie-Breaker)
+-- Applies -8% penalty when playerLevel <= 24 to opposite continent UNLESS player has active quests in zone
+function Engine.GetTravelFrictionPenalty(zoneContinent, playerRace, playerLevel, activeCount)
+    if not zoneContinent then return 0, nil end
+    local pLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or 1
+    if pLevel > 24 then return 0, nil end
+
+    -- If player already has active quests in this zone, travel friction is waived
+    if activeCount and activeCount > 0 then
+        return 0, nil
+    end
+
+    local pRace = playerRace or (addon.Player and addon.Player.GetRace and addon.Player.GetRace()) or "Human"
+    local homeCont = RACE_HOME_CONTINENT[pRace]
+    if homeCont and zoneContinent ~= homeCont then
+        return 0.08, "Cross-Continent Travel Friction (Low level before complete FP network)"
+    end
+
+    return 0, nil
+end
+
 -- Calculate comprehensive World Map Zone Worth (combining zone level bracket and active quests)
 function Engine.CalculateWorldMapZoneWorth(zoneName)
     if not zoneName or zoneName == "" then return nil end
 
-    local playerLevel = UnitLevel("player") or 1
-    local playerFaction = UnitFactionGroup("player") or "Alliance"
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+    local playerFaction = (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or UnitFactionGroup("player") or "Alliance"
+    local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
+    if not playerClass then
+        local _, c = UnitClass("player")
+        playerClass = c or "WARRIOR"
+    end
+    local playerRace = (addon.Player and addon.Player.GetRace and addon.Player.GetRace())
+    if not playerRace then
+        local _, r = UnitRace("player")
+        playerRace = r or "Human"
+    end
 
     local zoneInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(zoneName)
     local activeWorth, activeCount = Engine.CalculateZoneWorth(zoneName)
@@ -355,7 +690,11 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
 
     local minLevel = zoneInfo and zoneInfo.min or nil
     local maxLevel = zoneInfo and zoneInfo.max or nil
+    local effectiveMin = Engine.GetEffectiveMinLevel(zoneInfo, playerFaction) or minLevel
     local faction = zoneInfo and zoneInfo.faction or "Contested"
+    local isCity = zoneInfo and zoneInfo.isCity or false
+    local reqClass = zoneInfo and zoneInfo.class or nil
+    local continent = zoneInfo and zoneInfo.continent or nil
 
     local bracketScore = 0.50
     local status = "Neutral Zone"
@@ -365,6 +704,14 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         bracketScore = activeWorth or 0.50
         status = (activeCount and activeCount > 0) and string.format("%d Quests in Log", activeCount) or "Zone"
         recommendation = "Zone has active quests in your Quest Log."
+    elseif isCity then
+        bracketScore = 0.15
+        status = "Capital City"
+        recommendation = "Major capital city (bank, auction house, trainers). Not a leveling zone."
+    elseif reqClass and reqClass ~= playerClass then
+        bracketScore = 0.05
+        status = string.format("Class Restricted (%s)", reqClass)
+        recommendation = string.format("Dedicated to %s class quests only. No leveling content for %s.", reqClass, playerClass)
     elseif faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction then
         -- Faction territory check
         if minLevel and minLevel <= 10 then
@@ -377,17 +724,38 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
             recommendation = "Few or no friendly quests available."
         end
     else
-        -- Level bracket suitability evaluation
-        if minLevel and playerLevel < (minLevel - 3) then
-            bracketScore = 0.20
-            status = "Too High Level"
-            recommendation = string.format("Difficult enemies. Recommended to return at level %d+.", minLevel)
-        elseif minLevel and playerLevel < minLevel then
-            bracketScore = 0.60
-            status = string.format("Upcoming Zone (%d+)", minLevel)
-            recommendation = string.format("Challenging. Unlocks optimal leveling soon at level %d.", minLevel)
-        elseif minLevel and maxLevel and playerLevel >= minLevel and playerLevel <= maxLevel then
-            if playerLevel <= (minLevel + 3) then
+        -- Level bracket suitability evaluation using effectiveMin & smooth curve
+        if effectiveMin and playerLevel < effectiveMin then
+            local diff = effectiveMin - playerLevel
+            if diff == 1 then
+                bracketScore = 0.82
+                status = string.format("Upcoming Zone (%d+)", effectiveMin)
+                recommendation = string.format("Challenging entry quests. Unlocks optimal leveling soon at level %d.", effectiveMin)
+            elseif diff == 2 then
+                bracketScore = 0.70
+                status = string.format("Upcoming Zone (%d+)", effectiveMin)
+                recommendation = string.format("Few intro quests available. Main quest hubs open at level %d.", effectiveMin)
+            elseif diff == 3 then
+                bracketScore = 0.40
+                status = string.format("High Level Entry (%d+)", effectiveMin)
+                if zoneName == "Hillsbrad Foothills" and playerFaction == "Alliance" then
+                    recommendation = "Alliance quests in Southshore start at level 22-24 (Tarren Mill has earlier quests). Return at level 23+."
+                else
+                    recommendation = string.format("Most quests are currently red/orange. Recommended level %d+.", effectiveMin)
+                end
+            else
+                local smoothScore = math.max(0.05, 0.40 - (diff - 3) * 0.10)
+                bracketScore = smoothScore
+                status = "Too High Level"
+                recommendation = string.format("Dangerous enemies. Recommended to return at level %d+.", effectiveMin)
+            end
+        elseif zoneName == "Redridge Mountains" and (playerLevel == 20 or playerLevel == 21) then
+            -- Redridge mid-bracket dip: solo lakeshore quests are done, remaining quests are 21-25 Blackrock / Elite
+            bracketScore = 0.65
+            status = "Elite / Group Quests"
+            recommendation = "Solo lakeshore quests outleveled. Remaining quests are difficult level 21-25 Blackrock and Elite group challenges."
+        elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
+            if playerLevel <= (effectiveMin + 3) then
                 bracketScore = 1.00
                 status = "Peak Leveling Bracket"
                 recommendation = "Ideal entry level! Maximum XP rewards and gear upgrades."
@@ -411,13 +779,20 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         end
     end
 
+    -- Universal Class mob modifier & continent travel friction
+    local classMod, classModReason = Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effectiveMin)
+    local travelPenalty, travelReason = Engine.GetTravelFrictionPenalty(continent, playerRace, playerLevel, activeCount)
+
+    local baseZoneScore = math.min(1.0, bracketScore + classMod) - travelPenalty
+    baseZoneScore = math.max(0.05, math.min(1.0, baseZoneScore))
+
     local finalWorth
     if zoneInfo and activeWorth and activeCount and activeCount > 0 then
-        finalWorth = (0.50 * activeWorth) + (0.50 * bracketScore)
+        finalWorth = (0.50 * activeWorth) + (0.50 * baseZoneScore)
     elseif activeWorth and activeCount and activeCount > 0 then
         finalWorth = activeWorth
     else
-        finalWorth = bracketScore
+        finalWorth = baseZoneScore
     end
 
     finalWorth = math.max(0.0, math.min(1.0, finalWorth))
@@ -427,12 +802,21 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         worth = finalWorth,
         minLevel = minLevel,
         maxLevel = maxLevel,
+        effectiveMin = effectiveMin,
         faction = faction,
+        isCity = isCity,
+        reqClass = reqClass,
+        continent = continent,
         status = status,
         recommendation = recommendation,
         activeCount = activeCount or 0,
         activeWorth = activeWorth,
         bracketScore = bracketScore,
+        baseZoneScore = baseZoneScore,
+        classModifier = classMod,
+        classModifierReason = classModReason,
+        travelPenalty = travelPenalty,
+        travelReason = travelReason,
     }
 end
 

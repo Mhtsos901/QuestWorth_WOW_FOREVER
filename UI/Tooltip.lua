@@ -98,8 +98,14 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
     local worth, b = addon.Engine.CalculateWorth(questID)
     if not worth or not b then return end
 
-    local colorHex = Utils.GetScoreColorHex(worth)
-    local r, g, bColor = Utils.GetScoreColor(worth)
+    local isBankable = b.isBankable
+    local colorHex = isBankable and "ff9900" or Utils.GetScoreColorHex(worth)
+    local r, g, bColor
+    if isBankable then
+        r, g, bColor = 1.0, 0.60, 0.0
+    else
+        r, g, bColor = Utils.GetScoreColor(worth)
+    end
 
     tooltip:AddLine(" ")
     if b.isComplete then
@@ -148,6 +154,15 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         local reasons = GetReasonSummary(b)
         if reasons and #reasons > 0 then
             tooltip:AddLine("  |cff9d9d9d" .. table.concat(reasons, " • ") .. "|r")
+        end
+
+        if b.isBankable then
+            tooltip:AddDoubleLine(
+                "  |cffff9900Advice:|r",
+                "|cffffcc00Bank for Later (Do in +1-2 Levels)|r",
+                1, 1, 1,
+                1.0, 0.8, 0.0
+            )
         end
     end
 

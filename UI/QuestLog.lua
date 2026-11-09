@@ -14,6 +14,316 @@ local isTrackerHooked = false
 local _lastQuestLogUpdate = 0
 local _questLogUpdatePending = false
 
+-- Helper to normalize a quest title for reliable comparison against raw button text
+local function NormalizeQuestTitle(str)
+    if not str or str == "" then return "" end
+    local s = tostring(str)
+    -- 1. Strip all WoW color codes and formatting
+    s = string.gsub(s, "|c%x%x%x%x%x%x%x%x", "")
+    s = string.gsub(s, "|r", "")
+    s = string.gsub(s, "|T.-|t", "")
+    -- 2. Strip status icon prefixes like (?), (...), (!)
+    s = string.gsub(s, "^%s*%([?.!]+%)%s*", "")
+    -- 3. Strip existing badges
+    s = string.gsub(s, "%[%d+%%%]", "")
+    s = string.gsub(s, "%[OK%]", "")
+    s = string.gsub(s, "%[[^%]]*Worth[^%]]*%]", "")
+    -- 4. Strip status icon prefixes again in case badge was first
+    s = string.gsub(s, "^%s*%([?.!]+%)%s*", "")
+    -- 5. Strip level prefixes: [15], [15+], 15., etc.
+    s = string.gsub(s, "^%s*%[%d+%+?%]%s*", "")
+    s = string.gsub(s, "^%s*%d+%.%s*", "")
+    -- 6. Strip status tags and suffixes
+    s = string.gsub(s, "%s*%(%s*[Dd]ungeon%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Ee]lite%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Gg]roup%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Rr]aid%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Cc]omplete%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Ff]ailed%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Dd]aily%s*%)%s*", "")
+    s = string.gsub(s, "%s*%(%s*[Rr]epeatable%s*%)%s*", "")
+    -- 7. Trim whitespace
+    s = string.gsub(s, "^%s*(.-)%s*$", "%1")
+    return s
+end
+
+-- Helper to check if a frame or text is an objective/detail line rather than a quest title button
+local function IsObjectiveOrDetailFrame(button, text)
+    if not button and not text then return false end
+
+    -- Guard: If button has genuine quest info, it is DEFINITIVELY a Quest Title button, NEVER an objective!
+    if button then
+        if button.questID and type(button.questID) == "number" and button.questID > 0 then
+            return false
+        end
+        if button.info and not button.info.isHeader and button.info.title then
+            return false
+        end
+        if button.GetElementData then
+            local okED, ed = pcall(button.GetElementData, button)
+            if okED and ed then
+                if type(ed) == "number" and ed > 0 then
+                    return false
+                elseif type(ed) == "table" then
+                    if ed.questID and type(ed.questID) == "number" and ed.questID > 0 and not ed.isHeader then
+                        return false
+                    end
+                    if ed.info and not ed.info.isHeader and ed.info.title then
+                        return false
+                    end
+                end
+            end
+        end
+    end
+
+    -- 1. Check frame flags and attributes
+    if button then
+        if button.objectiveIndex or button.isObjective or button.lineID then
+            return true
+        end
+
+        local name = button.GetName and button:GetName()
+        if name and (string.find(name, "Objective") or string.find(name, "Detail") or string.find(name, "QuestLogObjective")) then
+            return true
+        end
+
+        -- Check if frame belongs to objectiveFramePool
+        if QuestScrollFrame then
+            local objPool = QuestScrollFrame.objectiveFramePool or QuestScrollFrame.ObjectiveFramePool
+            if objPool and objPool.EnumerateActive then
+                for objFrame in objPool:EnumerateActive() do
+                    if objFrame == button then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Check text patterns characteristic of objectives / progress lines
+    local raw = text
+    if not raw and button then
+        local fs = button.Text or button.ButtonText or button.LineText or (button.GetFontString and button:GetFontString())
+        if fs and fs.GetText then
+            raw = fs:GetText() or ""
+        end
+    end
+
+    if raw and raw ~= "" then
+        -- Progress numbers: e.g. "0/10", "3/5", "1/1"
+        if string.find(raw, "%d+/%d+") then
+            return true
+        end
+        -- Bullet points or leading dashes: e.g. "- 0/10", "• Speak with", "- Find the"
+        if string.find(raw, "^%s*[%-%•%*]") then
+            return true
+        end
+        -- Turn-in ready status line under quest
+        if string.find(raw, "^%s*[Rr]eady for turn") or string.find(raw, "^%s*[Cc]ompleted") then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Safely resolves a questID from a Quest Log button across Classic & Modern ScrollBox/Camelot APIs
+local function ResolveButtonQuestID(button, rawText)
+    if not button then return nil end
+
+    -- 1. Direct button properties
+    if button.questID and type(button.questID) == "number" and button.questID > 0 then
+        return button.questID
+    end
+    if button.info and button.info.questID and type(button.info.questID) == "number" and button.info.questID > 0 then
+        return button.info.questID
+    end
+    if button.id and type(button.id) == "number" and button.id > 0 then
+        return button.id
+    end
+    if button.data and button.data.questID and type(button.data.questID) == "number" and button.data.questID > 0 then
+        return button.data.questID
+    end
+
+    -- 2. Modern ScrollBox ElementData (Dragonflight / Camelot / Midnight / Forever)
+    if button.GetElementData then
+        local okED, ed = pcall(button.GetElementData, button)
+        if okED and ed then
+            if type(ed) == "number" and ed > 0 then
+                return ed
+            elseif type(ed) == "table" then
+                if ed.questID and type(ed.questID) == "number" and ed.questID > 0 then
+                    return ed.questID
+                end
+                if ed.info and ed.info.questID and type(ed.info.questID) == "number" and ed.info.questID > 0 then
+                    return ed.info.questID
+                end
+                if ed.id and type(ed.id) == "number" and ed.id > 0 then
+                    return ed.id
+                end
+                if ed.data and ed.data.questID and type(ed.data.questID) == "number" and ed.data.questID > 0 then
+                    return ed.data.questID
+                end
+                if ed.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
+                    local okI, info = pcall(C_QuestLog.GetInfo, ed.questLogIndex)
+                    if okI and info and not info.isHeader and info.questID and info.questID > 0 then
+                        return info.questID
+                    end
+                end
+            end
+        end
+    end
+
+    -- 3. questLogIndex on button
+    if button.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
+        local okI, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
+        if okI and info and not info.isHeader and info.questID and info.questID > 0 then
+            return info.questID
+        end
+    end
+
+    -- 4. GetID() on button
+    if button.GetID then
+        local btnID = button:GetID()
+        if btnID and btnID > 0 then
+            if C_QuestLog and C_QuestLog.GetInfo then
+                local okI, info = pcall(C_QuestLog.GetInfo, btnID)
+                if okI and info and not info.isHeader and info.questID and info.questID > 0 then
+                    return info.questID
+                end
+            elseif GetQuestLogTitle then
+                local okT, t, _, _, h, _, _, _, qid = pcall(GetQuestLogTitle, btnID)
+                if okT and not h and qid and qid > 0 then
+                    return qid
+                end
+            end
+        end
+    end
+
+    -- 5. Fallback: Match by normalized quest title against active quest log
+    local norm = NormalizeQuestTitle(rawText)
+    if norm and norm ~= "" then
+        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                           or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+        for i = 1, numEntries do
+            local qTitle, candidateID, isH
+            if C_QuestLog and C_QuestLog.GetInfo then
+                local okI, info = pcall(C_QuestLog.GetInfo, i)
+                if okI and info then
+                    isH = info.isHeader
+                    qTitle = info.title
+                    candidateID = info.questID
+                end
+            elseif GetQuestLogTitle then
+                local okT, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+                if okT then
+                    isH = h
+                    qTitle = t
+                    candidateID = id
+                end
+            end
+
+            if not isH and candidateID and candidateID > 0 and qTitle and qTitle ~= "" then
+                local normQ = NormalizeQuestTitle(qTitle)
+                local clean = Utils.CleanQuestTitle(rawText)
+                local titleNoLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
+                if normQ ~= "" and (normQ == norm or string.lower(normQ) == string.lower(norm) or title == titleNoLevel or title == clean) then
+                    return candidateID
+                elseif #title >= 10 and string.find(norm, normQ, 1, true) then
+                    return candidateID
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Hook fontString:SetText on a quest log button so Blizzard's text updates retain their badge synchronously
+local function HookQuestButtonText(button, fontString)
+    if not fontString or fontString._worthItHooked then return end
+    fontString._worthItHooked = true
+
+    hooksecurefunc(fontString, "SetText", function(self, text)
+        if self._worthItSettingText then return end
+        if addon.db and (addon.db.enabled == false or addon.db.showInQuestLog == false) then return end
+        if InCombatLockdown and InCombatLockdown() then return end
+        if not text or text == "" then return end
+
+        -- Check if header: NEVER badge zone headers!
+        if button then
+            if button.isHeader or button.header or (button.info and button.info.isHeader) then
+                local clean = Utils.CleanQuestTitle(text)
+                if text ~= clean then
+                    self._worthItSettingText = true
+                    self:SetText(clean)
+                    self._worthItSettingText = false
+                end
+                return
+            end
+            if button.GetElementData then
+                local okED, ed = pcall(button.GetElementData, button)
+                if okED and ed and type(ed) == "table" and (ed.isHeader or (ed.info and ed.info.isHeader)) then
+                    local clean = Utils.CleanQuestTitle(text)
+                    if text ~= clean then
+                        self._worthItSettingText = true
+                        self:SetText(clean)
+                        self._worthItSettingText = false
+                    end
+                    return
+                end
+            end
+        end
+
+        -- Check if objective or detail line: NEVER badge details/objectives!
+        if IsObjectiveOrDetailFrame(button, text) then
+            local clean = Utils.CleanQuestTitle(text)
+            if text ~= clean then
+                self._worthItSettingText = true
+                self:SetText(clean)
+                self._worthItSettingText = false
+            end
+            return
+        end
+
+        -- Fast skip if text already has badge
+        if string.find(text, "%[%d+%%%]") or string.find(text, "%[OK%]") then
+            return
+        end
+
+        local clean = Utils.CleanQuestTitle(text)
+        local cleanTrimmed = string.gsub(clean, "^%s*(.-)%s*$", "%1")
+        local cleanZoneName = string.gsub(cleanTrimmed, "%s*%(%d+/?%d*%)%s*$", "")
+        if (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(cleanZoneName))
+           or (addon.Scores and addon.Scores.IsNonZoneHeader and addon.Scores.IsNonZoneHeader(cleanZoneName)) then
+            if text ~= clean then
+                self._worthItSettingText = true
+                self:SetText(clean)
+                self._worthItSettingText = false
+            end
+            return
+        end
+
+        local qID = ResolveButtonQuestID(button, text)
+        if not qID or qID <= 0 then return end
+
+        local worth, breakdown = addon.Engine.CalculateWorth(qID)
+        if not worth then return end
+
+        local isComplete = (breakdown and breakdown.isComplete)
+        local isHard = (breakdown and breakdown.isHard)
+        local isBankable = (breakdown and breakdown.isBankable)
+        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+        local targetText = badge .. " " .. clean
+
+        if text ~= targetText then
+            self._worthItSettingText = true
+            self:SetText(targetText)
+            self._worthItSettingText = false
+        end
+    end)
+end
+
 -- Function to badge ONLY a quest title button in Quest Log (QuestScrollFrame)
 local function ProcessQuestButton(button, showTag)
     if not (button and button:IsShown()) then return end
@@ -29,124 +339,63 @@ local function ProcessQuestButton(button, showTag)
     if rawText == "" then return end
     local cleanText = Utils.CleanQuestTitle(rawText)
 
-    -- Guard 1: Objective line filter (lines starting with dash, bullet, or containing lineID)
-    if button.lineID or string.find(rawText, "^%s*%-") or string.find(cleanText, "^%s*%-") then
+    -- Guard 1: Objective & Detail filter (Do NOT badge details/objectives under the quest)
+    if IsObjectiveOrDetailFrame(button, rawText) then
         if rawText ~= cleanText then
+            fontString._worthItSettingText = true
             fontString:SetText(cleanText)
+            fontString._worthItSettingText = false
         end
         return
     end
 
     -- Guard 2: Header filter (Zone headers like "Elwynn Forest", "Duskwood")
-    -- Do not strip header badges here; handled by ProcessHeaderButton
     if button.isHeader or button.header or (button.info and button.info.isHeader) then
+        if rawText ~= cleanText then
+            fontString._worthItSettingText = true
+            fontString:SetText(cleanText)
+            fontString._worthItSettingText = false
+        end
         return
+    end
+    if button.GetElementData then
+        local okED, ed = pcall(button.GetElementData, button)
+        if okED and ed and type(ed) == "table" and (ed.isHeader or (ed.info and ed.info.isHeader)) then
+            if rawText ~= cleanText then
+                fontString._worthItSettingText = true
+                fontString:SetText(cleanText)
+                fontString._worthItSettingText = false
+            end
+            return
+        end
     end
 
     local cleanTrimmed = string.gsub(cleanText, "^%s*(.-)%s*$", "%1")
     local cleanZoneName = string.gsub(cleanTrimmed, "%s*%(%d+/?%d*%)%s*$", "")
     if (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(cleanZoneName))
        or (addon.Scores and addon.Scores.IsNonZoneHeader and addon.Scores.IsNonZoneHeader(cleanZoneName)) then
+        if rawText ~= cleanText then
+            fontString._worthItSettingText = true
+            fontString:SetText(cleanText)
+            fontString._worthItSettingText = false
+        end
         return
     end
 
-    -- 1. Try to resolve questID directly from button properties
-    local qID = button.questID
-    if not qID or qID <= 0 then
-        if button.id and type(button.id) == "number" and button.id > 0 then
-            qID = button.id
-        elseif button.info and button.info.questID and button.info.questID > 0 then
-            qID = button.info.questID
-        elseif button.data and button.data.questID and button.data.questID > 0 then
-            qID = button.data.questID
-        end
-    end
-
-    -- 2. Try button.questLogIndex or button:GetID()
-    if (not qID or qID <= 0) and button.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
-        local ok, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
-        if ok and info then
-            if info.isHeader then
-                return
-            end
-            if info.questID and info.questID > 0 then
-                qID = info.questID
-            end
-        end
-    end
-
-    if (not qID or qID <= 0) and button.GetID then
-        local btnID = button:GetID()
-        if btnID and btnID > 0 then
-            if C_QuestLog and C_QuestLog.GetInfo then
-                local ok, info = pcall(C_QuestLog.GetInfo, btnID)
-                if ok and info then
-                    if info.isHeader then
-                        return
-                    end
-                    if info.questID and info.questID > 0 then
-                        qID = info.questID
-                    end
-                end
-            elseif GetQuestLogTitle then
-                local ok, t, _, _, isH, _, _, _, id = pcall(GetQuestLogTitle, btnID)
-                if ok then
-                    if isH then
-                        return
-                    end
-                    if id and id > 0 then
-                        qID = id
-                    end
-                end
-            end
-        end
-    end
-
-    -- 3. Fallback: Match by Quest Title from active quest log
-    if not qID or qID <= 0 then
-        local titleNoLevel = string.gsub(cleanText, "^%s*%[%d+%]%s*", "")
-        titleNoLevel = string.gsub(titleNoLevel, "^%s*(.-)%s*$", "%1")
-        local cleanTrim = string.gsub(cleanText, "^%s*(.-)%s*$", "%1")
-
-        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
-                           or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-        for i = 1, numEntries do
-            local qTitle, candidateID, isH
-            if C_QuestLog and C_QuestLog.GetInfo then
-                local ok, info = pcall(C_QuestLog.GetInfo, i)
-                if ok and info then
-                    isH = info.isHeader
-                    qTitle = info.title
-                    candidateID = info.questID
-                end
-            elseif GetQuestLogTitle then
-                local ok, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
-                if ok then
-                    isH = h
-                    qTitle = t
-                    candidateID = id
-                end
-            end
-
-            if not isH and candidateID and candidateID > 0 and qTitle and qTitle ~= "" then
-                local ct = Utils.CleanQuestTitle(qTitle)
-                ct = string.gsub(ct, "^%s*(.-)%s*$", "%1")
-                if ct == cleanTrim or ct == titleNoLevel then
-                    qID = candidateID
-                    break
-                end
-            end
-        end
-    end
-
-    -- If we still cannot identify this as a quest, do not touch it
+    -- Resolve questID through universal button resolver
+    local qID = ResolveButtonQuestID(button, rawText)
     if not qID or qID <= 0 then
         return
     end
+
+    -- Hook text updates for genuine Quest Title Buttons
+    HookQuestButtonText(button, fontString)
 
     if not showTag then
         if rawText ~= cleanText then
+            fontString._worthItSettingText = true
             fontString:SetText(cleanText)
+            fontString._worthItSettingText = false
         end
         return
     end
@@ -156,10 +405,13 @@ local function ProcessQuestButton(button, showTag)
 
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard)
+    local isBankable = (breakdown and breakdown.isBankable)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
     local targetText = badge .. " " .. cleanText
     if rawText ~= targetText then
+        fontString._worthItSettingText = true
         fontString:SetText(targetText)
+        fontString._worthItSettingText = false
     end
 end
 
@@ -177,26 +429,121 @@ local function ProcessHeaderButton(button, showTag)
 
     -- Clean any badge on zone headers so headers remain pristine (e.g. "Westfall", "Redridge Mountains")
     if rawText ~= cleanText then
+        fontString._worthItSettingText = true
         fontString:SetText(cleanText)
+        fontString._worthItSettingText = false
     end
 end
 
 -- Function to clean objective frames so details never show a badge
 local function CleanObjectiveFrame(frame)
-    if not (frame and frame:IsShown()) then return end
-    local fontString = frame.Text or frame.ButtonText or (frame.GetFontString and frame:GetFontString())
+    if not frame then return end
+    local fontString = frame.Text or frame.ButtonText or frame.LineText or (frame.GetFontString and frame:GetFontString())
     if fontString and fontString.GetText and fontString.SetText then
         local rawText = fontString:GetText() or ""
-        local cleanText = Utils.CleanQuestTitle(rawText)
-        if rawText ~= cleanText then
-            fontString:SetText(cleanText)
+        if rawText ~= "" and (string.find(rawText, "%[%d+%%%]") or string.find(rawText, "%[OK%]")) then
+            local cleanText = Utils.CleanQuestTitle(rawText)
+            if rawText ~= cleanText then
+                fontString._worthItSettingText = true
+                fontString:SetText(cleanText)
+                fontString._worthItSettingText = false
+            end
+        end
+    end
+    if frame.GetRegions then
+        local ok, regions = pcall(function() return { frame:GetRegions() } end)
+        if ok and regions then
+            for _, region in ipairs(regions) do
+                if region and region.GetObjectType and region:GetObjectType() == "FontString" and region.GetText and region.SetText then
+                    local raw = region:GetText() or ""
+                    if raw ~= "" and (string.find(raw, "%[%d+%%%]") or string.find(raw, "%[OK%]")) then
+                        local clean = Utils.CleanQuestTitle(raw)
+                        if raw ~= clean then
+                            region._worthItSettingText = true
+                            region:SetText(clean)
+                            region._worthItSettingText = false
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Clean any detail/objective FontStrings in QuestInfoFrame / QuestLogDetailFrame
+local function CleanQuestInfoDetails()
+    if QuestInfoObjectivesFrame then
+        if QuestInfoObjectivesFrame.Objectives then
+            for _, fs in pairs(QuestInfoObjectivesFrame.Objectives) do
+                if fs and fs.GetText and fs.SetText then
+                    local t = fs:GetText() or ""
+                    if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
+                        local ct = Utils.CleanQuestTitle(t)
+                        if t ~= ct then
+                            fs._worthItSettingText = true
+                            fs:SetText(ct)
+                            fs._worthItSettingText = false
+                        end
+                    end
+                end
+            end
+        end
+        for i = 1, 10 do
+            local fs = _G["QuestInfoObjective" .. i]
+            if fs and fs.GetText and fs.SetText then
+                local t = fs:GetText() or ""
+                if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
+                    local ct = Utils.CleanQuestTitle(t)
+                    if t ~= ct then
+                        fs._worthItSettingText = true
+                        fs:SetText(ct)
+                        fs._worthItSettingText = false
+                    end
+                end
+            end
+        end
+    end
+    if QuestInfoObjectivesText and QuestInfoObjectivesText.GetText and QuestInfoObjectivesText.SetText then
+        local t = QuestInfoObjectivesText:GetText() or ""
+        if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
+            local ct = Utils.CleanQuestTitle(t)
+            if t ~= ct then
+                QuestInfoObjectivesText._worthItSettingText = true
+                QuestInfoObjectivesText:SetText(ct)
+                QuestInfoObjectivesText._worthItSettingText = false
+            end
+        end
+    end
+    if QuestLogObjectivesText and QuestLogObjectivesText.GetText and QuestLogObjectivesText.SetText then
+        local t = QuestLogObjectivesText:GetText() or ""
+        if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
+            local ct = Utils.CleanQuestTitle(t)
+            if t ~= ct then
+                QuestLogObjectivesText._worthItSettingText = true
+                QuestLogObjectivesText:SetText(ct)
+                QuestLogObjectivesText._worthItSettingText = false
+            end
+        end
+    end
+    for i = 1, 10 do
+        local fs = _G["QuestLogObjective" .. i]
+        if fs and fs.GetText and fs.SetText then
+            local t = fs:GetText() or ""
+            if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
+                local ct = Utils.CleanQuestTitle(t)
+                if t ~= ct then
+                    fs._worthItSettingText = true
+                    fs:SetText(ct)
+                    fs._worthItSettingText = false
+                end
+            end
         end
     end
 end
 
 -- Master function to update all visible quest entries in Quest Log
 function UI.UpdateQuestLog(force)
-    if not addon.db then return end
+    if addon.db and addon.db.enabled == false then return end
     if InCombatLockdown and InCombatLockdown() then return end
     if addon.isUpdatingUI then return end
 
@@ -220,28 +567,48 @@ function UI.UpdateQuestLog(force)
 
     addon.isUpdatingUI = true
 
-    local showTag = (addon.db and addon.db.enabled and addon.db.showInQuestLog ~= false)
+    local ok, err = pcall(function()
+        local showTag = not addon.db or (addon.db.enabled ~= false and addon.db.showInQuestLog ~= false)
 
-    -- 1. Modern Blizzard & OpenMap QuestScrollFrame
-    if QuestScrollFrame then
-        local pool = QuestScrollFrame.titleFramePool or QuestScrollFrame.TitleFramePool
-        if pool and pool.EnumerateActive then
-            for button in pool:EnumerateActive() do
-                ProcessQuestButton(button, showTag)
+        -- 1. Modern Blizzard & OpenMap QuestScrollFrame / QuestMapFrame
+        local scrollBox = (QuestScrollFrame and QuestScrollFrame.ScrollBox)
+                          or (QuestMapFrame and QuestMapFrame.QuestsFrame and QuestMapFrame.QuestsFrame.ScrollBox)
+
+        if QuestScrollFrame then
+            local pool = QuestScrollFrame.titleFramePool or QuestScrollFrame.TitleFramePool
+            if pool and pool.EnumerateActive then
+                for button in pool:EnumerateActive() do
+                    if not IsObjectiveOrDetailFrame(button) then
+                        ProcessQuestButton(button, showTag)
+                    else
+                        CleanObjectiveFrame(button)
+                    end
+                end
+            end
+
+            local headerPool = QuestScrollFrame.headerFramePool or QuestScrollFrame.HeaderFramePool
+            if headerPool and headerPool.EnumerateActive then
+                for button in headerPool:EnumerateActive() do
+                    ProcessHeaderButton(button, showTag)
+                end
             end
         end
 
-        local headerPool = QuestScrollFrame.headerFramePool or QuestScrollFrame.HeaderFramePool
-        if headerPool and headerPool.EnumerateActive then
-            for button in headerPool:EnumerateActive() do
-                ProcessHeaderButton(button, showTag)
-            end
-        end
-
-        -- Modern Dragonflight ScrollBox frames
-        if QuestScrollFrame.ScrollBox then
+        -- ScrollBox frames handling (Dragonflight / Camelot / Forever)
+        if scrollBox then
             local function handleScrollFrame(button)
+                if not button or not button:IsShown() then return end
+
                 local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
+                if not isHeader and button.GetElementData then
+                    local okED, ed = pcall(button.GetElementData, button)
+                    if okED and ed and type(ed) == "table" then
+                        if ed.isHeader or (ed.info and ed.info.isHeader) then
+                            isHeader = true
+                        end
+                    end
+                end
+
                 if not isHeader and button.GetID then
                     local btnID = button:GetID()
                     if btnID and btnID > 0 then
@@ -257,18 +624,20 @@ function UI.UpdateQuestLog(force)
 
                 if isHeader then
                     ProcessHeaderButton(button, showTag)
+                elseif IsObjectiveOrDetailFrame(button) then
+                    CleanObjectiveFrame(button)
                 else
                     ProcessQuestButton(button, showTag)
                 end
             end
 
-            if QuestScrollFrame.ScrollBox.ForEachFrame then
+            if scrollBox.ForEachFrame then
                 pcall(function()
-                    QuestScrollFrame.ScrollBox:ForEachFrame(handleScrollFrame)
+                    scrollBox:ForEachFrame(handleScrollFrame)
                 end)
-            elseif QuestScrollFrame.ScrollBox.GetFrames then
-                local ok, frames = pcall(QuestScrollFrame.ScrollBox.GetFrames, QuestScrollFrame.ScrollBox)
-                if ok and frames then
+            elseif scrollBox.GetFrames then
+                local okF, frames = pcall(scrollBox.GetFrames, scrollBox)
+                if okF and frames then
                     for _, button in ipairs(frames) do
                         handleScrollFrame(button)
                     end
@@ -276,131 +645,149 @@ function UI.UpdateQuestLog(force)
             end
         end
 
-        -- Contents frame children
-        if QuestScrollFrame.Contents and QuestScrollFrame.Contents.GetChildren then
-            local ok, children = pcall(function() return { QuestScrollFrame.Contents:GetChildren() } end)
-            if ok and children then
+        -- Contents frame children fallback
+        local contents = (QuestScrollFrame and QuestScrollFrame.Contents)
+                         or (QuestMapFrame and QuestMapFrame.QuestsFrame and QuestMapFrame.QuestsFrame.Contents)
+        if contents and contents.GetChildren then
+            local okC, children = pcall(function() return { contents:GetChildren() } end)
+            if okC and children then
                 for _, button in ipairs(children) do
-                    local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
-                    if not isHeader and button.GetID then
-                        local btnID = button:GetID()
-                        if btnID and btnID > 0 then
-                            if C_QuestLog and C_QuestLog.GetInfo then
-                                local okInfo, info = pcall(C_QuestLog.GetInfo, btnID)
-                                if okInfo and info and info.isHeader then isHeader = true end
-                            elseif GetQuestLogTitle then
-                                local okTitle, _, _, _, isH = pcall(GetQuestLogTitle, btnID)
-                                if okTitle and isH then isHeader = true end
+                    if button and button:IsShown() then
+                        local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
+                        if not isHeader and button.GetElementData then
+                            local okED, ed = pcall(button.GetElementData, button)
+                            if okED and ed and type(ed) == "table" then
+                                if ed.isHeader or (ed.info and ed.info.isHeader) then
+                                    isHeader = true
+                                end
                             end
                         end
-                    end
 
-                    if isHeader then
-                        ProcessHeaderButton(button, showTag)
-                    else
-                        ProcessQuestButton(button, showTag)
+                        if isHeader then
+                            ProcessHeaderButton(button, showTag)
+                        elseif IsObjectiveOrDetailFrame(button) then
+                            CleanObjectiveFrame(button)
+                        else
+                            ProcessQuestButton(button, showTag)
+                        end
                     end
                 end
             end
         end
 
-        local objPool = QuestScrollFrame.objectiveFramePool or QuestScrollFrame.ObjectiveFramePool
-        if objPool and objPool.EnumerateActive then
-            for objFrame in objPool:EnumerateActive() do
-                CleanObjectiveFrame(objFrame)
+        if QuestScrollFrame then
+            local objPool = QuestScrollFrame.objectiveFramePool or QuestScrollFrame.ObjectiveFramePool
+            if objPool and objPool.EnumerateActive then
+                for objFrame in objPool:EnumerateActive() do
+                    CleanObjectiveFrame(objFrame)
+                end
             end
         end
-    end
 
-    -- 2. Classic QuestLogFrame (QuestLogTitle1..QUESTS_DISPLAYED)
-    if QuestLogFrame and QuestLogFrame:IsShown() then
-        local numQuests = QUESTS_DISPLAYED or 25
-        local scrollOffset = (FauxScrollFrame_GetOffset and QuestLogScrollFrame and FauxScrollFrame_GetOffset(QuestLogScrollFrame)) or 0
-        for i = 1, numQuests do
-            local button = _G["QuestLogTitle" .. i]
-            if button and button:IsShown() then
-                local questIndex = i + scrollOffset
-                local ok, qTitle, _, _, isHeader, _, isComplete, _, qID = pcall(GetQuestLogTitle, questIndex)
-                local fontString = button.normalText or _G[button:GetName() .. "NormalText"] or (button.GetFontString and button:GetFontString()) or button.Text
-                if fontString and fontString.GetText and fontString.SetText then
-                    local rawTitle = fontString:GetText() or ""
-                    local cleanTitle = Utils.CleanQuestTitle(rawTitle)
-                    if ok and qTitle and not isHeader then
-                        if showTag then
-                            local id = qID
-                            if not id or id <= 0 then
-                                if C_QuestLog and C_QuestLog.GetInfo then
-                                    local okInfo, info = pcall(C_QuestLog.GetInfo, questIndex)
-                                    if okInfo and info and info.questID and info.questID > 0 then
-                                        id = info.questID
+        -- 2. Classic QuestLogFrame (QuestLogTitle1..QUESTS_DISPLAYED)
+        if QuestLogFrame and QuestLogFrame:IsShown() then
+            local numQuests = QUESTS_DISPLAYED or 25
+            local scrollOffset = (FauxScrollFrame_GetOffset and QuestLogScrollFrame and FauxScrollFrame_GetOffset(QuestLogScrollFrame)) or 0
+            for i = 1, numQuests do
+                local button = _G["QuestLogTitle" .. i]
+                if button and button:IsShown() then
+                    local questIndex = i + scrollOffset
+                    local okT, qTitle, _, _, isHeader, _, isComplete, _, qID = pcall(GetQuestLogTitle, questIndex)
+                    local fontString = button.normalText or _G[button:GetName() .. "NormalText"] or (button.GetFontString and button:GetFontString()) or button.Text
+                    if fontString and fontString.GetText and fontString.SetText then
+                        local rawTitle = fontString:GetText() or ""
+                        local cleanTitle = Utils.CleanQuestTitle(rawTitle)
+                        if okT and qTitle and not isHeader then
+                            if showTag then
+                                local id = qID
+                                if not id or id <= 0 then
+                                    if C_QuestLog and C_QuestLog.GetInfo then
+                                        local okInfo, info = pcall(C_QuestLog.GetInfo, questIndex)
+                                        if okInfo and info and info.questID and info.questID > 0 then
+                                            id = info.questID
+                                        end
                                     end
                                 end
-                            end
-                            if id and id > 0 then
-                                local worth, breakdown = addon.Engine.CalculateWorth(id)
-                                if worth then
-                                    local comp = (breakdown and breakdown.isComplete) or isComplete
-                                    local isHard = (breakdown and breakdown.isHard)
-                                    local badge = Utils.FormatBadge(worth, comp, isHard)
-                                    local targetText = badge .. " " .. cleanTitle
-                                    if rawTitle ~= targetText then
-                                        fontString:SetText(targetText)
+                                if id and id > 0 then
+                                    local worth, breakdown = addon.Engine.CalculateWorth(id)
+                                    if worth then
+                                        local comp = (breakdown and breakdown.isComplete) or isComplete
+                                        local isHard = (breakdown and breakdown.isHard)
+                                        local isBankable = (breakdown and breakdown.isBankable)
+                                        local badge = Utils.FormatBadge(worth, comp, isHard, isBankable)
+                                        local targetText = badge .. " " .. cleanTitle
+                                        if rawTitle ~= targetText then
+                                            fontString:SetText(targetText)
+                                        end
                                     end
+                                end
+                            else
+                                if rawTitle ~= cleanTitle then
+                                    fontString:SetText(cleanTitle)
+                                end
+                            end
+                        elseif isHeader then
+                            ProcessHeaderButton(button, showTag)
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 3. Classic QuestLogListScrollFrame fallback (WotLK / Classic hybrid)
+        if QuestLogListScrollFrame and QuestLogListScrollFrame.buttons then
+            local scrollOffset = HybridScrollFrame_GetOffset and HybridScrollFrame_GetOffset(QuestLogListScrollFrame) or 0
+            local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries()) or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+            for i, button in ipairs(QuestLogListScrollFrame.buttons) do
+                local index = i + scrollOffset
+                if button:IsShown() and index <= numEntries then
+                    local info = C_QuestLog and C_QuestLog.GetInfo and C_QuestLog.GetInfo(index)
+                    if info and not info.isHeader and info.questID and button.normalText then
+                        local rawTitle = info.title or button.normalText:GetText() or ""
+                        local cleanTitle = Utils.CleanQuestTitle(rawTitle)
+                        if showTag then
+                            local worth, breakdown = addon.Engine.CalculateWorth(info.questID)
+                            if worth then
+                                local isComplete = (breakdown and breakdown.isComplete)
+                                local isHard = (breakdown and breakdown.isHard)
+                                local isBankable = (breakdown and breakdown.isBankable)
+                                local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+                                local targetText = badge .. " " .. cleanTitle
+                                if rawTitle ~= targetText then
+                                    button.normalText:SetText(targetText)
                                 end
                             end
                         else
                             if rawTitle ~= cleanTitle then
-                                fontString:SetText(cleanTitle)
+                                button.normalText:SetText(cleanTitle)
                             end
                         end
-                    elseif isHeader then
+                    elseif info and info.isHeader and button.normalText then
                         ProcessHeaderButton(button, showTag)
                     end
                 end
             end
         end
-    end
 
-    -- 3. Classic QuestLogListScrollFrame fallback (WotLK / Classic hybrid)
-    if QuestLogListScrollFrame and QuestLogListScrollFrame.buttons then
-        local scrollOffset = HybridScrollFrame_GetOffset and HybridScrollFrame_GetOffset(QuestLogListScrollFrame) or 0
-        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries()) or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-        for i, button in ipairs(QuestLogListScrollFrame.buttons) do
-            local index = i + scrollOffset
-            if button:IsShown() and index <= numEntries then
-                local info = C_QuestLog and C_QuestLog.GetInfo and C_QuestLog.GetInfo(index)
-                if info and not info.isHeader and info.questID and button.normalText then
-                    local rawTitle = info.title or button.normalText:GetText() or ""
-                    local cleanTitle = Utils.CleanQuestTitle(rawTitle)
-                    if showTag then
-                        local worth, breakdown = addon.Engine.CalculateWorth(info.questID)
-                        if worth then
-                            local isComplete = (breakdown and breakdown.isComplete)
-                            local isHard = (breakdown and breakdown.isHard)
-                            local badge = Utils.FormatBadge(worth, isComplete, isHard)
-                            local targetText = badge .. " " .. cleanTitle
-                            if rawTitle ~= targetText then
-                                button.normalText:SetText(targetText)
-                            end
-                        end
-                    else
-                        if rawTitle ~= cleanTitle then
-                            button.normalText:SetText(cleanTitle)
-                        end
-                    end
-                elseif info and info.isHeader and button.normalText then
-                    ProcessHeaderButton(button, showTag)
-                end
-            end
-        end
-    end
+        -- Clean any detail/objective FontStrings in QuestInfoFrame / QuestLogDetailFrame
+        CleanQuestInfoDetails()
+    end)
 
     addon.isUpdatingUI = false
+    if not ok and err and addon.Debug then
+        addon.Debug("Error in UpdateQuestLog: " .. tostring(err))
+    end
 end
 
 -- Helper to locate the header FontString on an Objective Tracker block across Classic & Modern clients
 local function GetBlockHeaderFontString(block)
     if not block then return nil end
+    -- Guard: Never treat line frames or tracker modules as blocks!
+    if block.lineIndex or block.isLine then return nil end
+    if block == QuestObjectiveTracker or block == CampaignQuestObjectiveTracker or block == WorldQuestObjectiveTracker then
+        return nil
+    end
+
     if block.HeaderText and block.HeaderText.GetText and block.HeaderText.SetText then
         return block.HeaderText
     end
@@ -440,9 +827,23 @@ local function IsActiveQuestInLog(questID)
         local ok, onQuest = pcall(C_QuestLog.IsOnQuest, questID)
         if ok and onQuest then return true end
     end
-    if C_QuestLog and C_QuestLog.GetLogIndexForQuestID then
-        local ok, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
-        if ok and idx and idx > 0 then return true end
+    if C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo then
+        local ok, num = pcall(C_QuestLog.GetNumQuestLogEntries)
+        if ok and num and num > 0 then
+            for i = 1, num do
+                local ok2, info = pcall(C_QuestLog.GetInfo, i)
+                if ok2 and info and info.questID == questID then return true end
+            end
+        end
+    end
+    if GetNumQuestLogEntries and GetQuestLogTitle then
+        local ok, num = pcall(GetNumQuestLogEntries)
+        if ok and num and num > 0 then
+            for i = 1, num do
+                local ok3, _, _, _, isH, _, _, _, id = pcall(GetQuestLogTitle, i)
+                if ok3 and not isH and id == questID then return true end
+            end
+        end
     end
     return false
 end
@@ -451,43 +852,37 @@ end
 local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
     if not block then return nil end
 
-    local function isValidQuest(id)
-        if not id or type(id) ~= "number" or id <= 0 then return false end
-        if activeQuests then
-            return activeQuests[id] == true
-        end
-        return IsActiveQuestInLog(id)
-    end
-
-    -- 1. Check direct properties on the block
-    if isValidQuest(block.questID) then
+    -- 1. Direct properties on the block (in QuestObjectiveTracker, block.id or block.questID IS the questID)
+    if block.questID and type(block.questID) == "number" and block.questID > 0 then
         return block.questID
     end
-    if isValidQuest(block.id) then
+    if block.id and type(block.id) == "number" and block.id > 0 then
         return block.id
     end
     if block.GetQuestID then
         local ok, qid = pcall(block.GetQuestID, block)
-        if ok and isValidQuest(qid) then return qid end
+        if ok and qid and type(qid) == "number" and qid > 0 then
+            return qid
+        end
     end
     if block.Header then
-        if isValidQuest(block.Header.questID) then
+        if block.Header.questID and type(block.Header.questID) == "number" and block.Header.questID > 0 then
             return block.Header.questID
         end
-        if isValidQuest(block.Header.id) then
+        if block.Header.id and type(block.Header.id) == "number" and block.Header.id > 0 then
             return block.Header.id
         end
     end
 
-    -- 2. Check questLogIndex
+    -- 2. questLogIndex
     if block.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
         local ok, info = pcall(C_QuestLog.GetInfo, block.questLogIndex)
-        if ok and info and not info.isHeader and isValidQuest(info.questID) then
+        if ok and info and not info.isHeader and info.questID and info.questID > 0 then
             return info.questID
         end
     end
 
-    -- 3. Match by Quest Title (O(1) table lookup or direct search)
+    -- 3. Match by Quest Title (table lookup or scan)
     local text = currentText or ""
     if text == "" then
         local fs = GetBlockHeaderFontString(block)
@@ -497,12 +892,19 @@ local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
     end
 
     if text and text ~= "" then
+        local norm = NormalizeQuestTitle(text)
         local clean = Utils.CleanQuestTitle(text)
         local titleNoLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
         clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
         titleNoLevel = string.gsub(titleNoLevel, "^%s*(.-)%s*$", "%1")
 
         if titleToID then
+            if norm ~= "" and titleToID[norm] then
+                return titleToID[norm]
+            end
+            if norm ~= "" and titleToID[string.lower(norm)] then
+                return titleToID[string.lower(norm)]
+            end
             if titleToID[clean] then
                 return titleToID[clean]
             end
@@ -511,7 +913,7 @@ local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
             end
         end
 
-        -- Direct fallback scan if titleToID table was not passed or exact match missed
+        -- Direct fallback scan if titleToID missed
         local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
                            or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
         for i = 1, numEntries do
@@ -523,20 +925,16 @@ local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
                     qid = info.questID
                 end
             elseif GetQuestLogTitle then
-                local ok, t, _, _, isH, _, _, _, id = pcall(GetQuestLogTitle, i)
-                if ok and not isH then
+                local ok, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+                if ok and not h then
                     qTitle = t
                     qid = id
                 end
             end
 
-            if qTitle and qid and qid > 0 and isValidQuest(qid) then
-                local title = Utils.CleanQuestTitle(qTitle)
-                title = string.gsub(title, "^%s*(.-)%s*$", "%1")
-                if title == titleNoLevel or title == clean then
-                    return qid
-                end
-                if #title >= 10 and (string.find(clean, title, 1, true) or string.find(titleNoLevel, title, 1, true)) then
+            if qTitle and qid and qid > 0 then
+                local normQ = NormalizeQuestTitle(qTitle)
+                if normQ ~= "" and (normQ == norm or string.lower(normQ) == string.lower(norm)) then
                     return qid
                 end
             end
@@ -554,9 +952,14 @@ local function HookBlockHeaderText(block)
 
     hooksecurefunc(fs, "SetText", function(self, text)
         if self._worthItSettingText then return end
-        if not (addon.db and addon.db.enabled and addon.db.showInTracker ~= false) then return end
+        if addon.db and (addon.db.enabled == false or addon.db.showInTracker == false) then return end
         if InCombatLockdown and InCombatLockdown() then return end
         if not text or text == "" then return end
+
+        -- Fast skip if text already has badge
+        if string.find(text, "%[%d+%%%]") or string.find(text, "%[OK%]") then
+            return
+        end
 
         local clean = Utils.CleanQuestTitle(text)
         local qID = ResolveBlockQuestID(block, clean)
@@ -567,7 +970,8 @@ local function HookBlockHeaderText(block)
 
         local isComplete = (breakdown and breakdown.isComplete)
         local isHard = (breakdown and breakdown.isHard)
-        local badge = Utils.FormatBadge(worth, isComplete, isHard)
+        local isBankable = (breakdown and breakdown.isBankable)
+        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
         local targetText = badge .. " " .. clean
 
         if text ~= targetText then
@@ -579,35 +983,24 @@ local function HookBlockHeaderText(block)
     block._worthItTextHooked = true
 end
 
--- Apply badge to a single Objective Tracker block header and clean its objective lines
+-- Apply badge to a single Objective Tracker block header (leaves objective detail lines 100% untouched)
 local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     if not block then return end
     local fontString = GetBlockHeaderFontString(block)
     if not (fontString and fontString.GetText and fontString.SetText) then return end
-    if not addon.db then return end
+    if addon.db and addon.db.enabled == false then return end
     if InCombatLockdown and InCombatLockdown() then return end
 
     local rawText = fontString:GetText() or ""
     if rawText == "" then return end
     local cleanText = Utils.CleanQuestTitle(rawText)
 
-    local showTag = (addon.db and addon.db.enabled and addon.db.showInTracker ~= false)
+    local showTag = not addon.db or (addon.db.enabled ~= false and addon.db.showInTracker ~= false)
     if not showTag then
         if rawText ~= cleanText then
             fontString._worthItSettingText = true
             fontString:SetText(cleanText)
             fontString._worthItSettingText = false
-        end
-        if block.lines then
-            for _, line in pairs(block.lines) do
-                if line and line.Text and line.Text.GetText and line.Text.SetText then
-                    local t = line.Text:GetText() or ""
-                    local ct = Utils.CleanQuestTitle(t)
-                    if t ~= ct then
-                        line.Text:SetText(ct)
-                    end
-                end
-            end
         end
         return
     end
@@ -620,7 +1013,8 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
 
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard)
+    local isBankable = (breakdown and breakdown.isBankable)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
     local targetText = badge .. " " .. cleanText
 
     if rawText ~= targetText then
@@ -628,25 +1022,10 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
         fontString:SetText(targetText)
         fontString._worthItSettingText = false
     end
-
-    -- Clean objective detail lines in this block so they never display a badge
-    if block.lines then
-        for _, line in pairs(block.lines) do
-            if line and line.Text and line.Text.GetText and line.Text.SetText then
-                local t = line.Text:GetText() or ""
-                local ct = Utils.CleanQuestTitle(t)
-                if t ~= ct then
-                    line.Text:SetText(ct)
-                end
-            end
-        end
-    end
 end
 
--- Cached module list (hoisted, deduplicated - QUEST MODULES ONLY)
-local _moduleListCache = nil
+-- Dynamic module list getter (QUEST MODULES ONLY across Classic & Modern clients)
 local function GetModuleList()
-    if _moduleListCache then return _moduleListCache end
     local seen, list = {}, {}
     local function add(mod)
         if mod and not seen[mod] then
@@ -654,6 +1033,7 @@ local function GetModuleList()
             list[#list + 1] = mod
         end
     end
+
     add(QuestObjectiveTracker)
     add(CampaignQuestObjectiveTracker)
     add(WorldQuestObjectiveTracker)
@@ -670,12 +1050,18 @@ local function GetModuleList()
             end
         end
     end
-    _moduleListCache = list
+
+    if ObjectiveTrackerFrame and ObjectiveTrackerFrame.MODULES then
+        for _, mod in ipairs(ObjectiveTrackerFrame.MODULES) do
+            add(mod)
+        end
+    end
+
     return list
 end
 
 function UI.InvalidateModuleListCache()
-    _moduleListCache = nil
+    -- Kept for API compatibility; GetModuleList is now always dynamic
 end
 
 local _lastTrackerUpdate = 0
@@ -683,7 +1069,7 @@ local _isUpdatingTracker = false
 
 -- Master function to update all visible quest entries in the Objective Tracker
 function UI.UpdateObjectiveTracker(force)
-    if not addon.db then return end
+    if addon.db and addon.db.enabled == false then return end
     if InCombatLockdown and InCombatLockdown() then return end
     if _isUpdatingTracker then return end
 
@@ -693,147 +1079,167 @@ function UI.UpdateObjectiveTracker(force)
 
     _isUpdatingTracker = true
 
-    -- Precompute active quests & fast title lookup table once for this cycle
-    local activeQuests = {}
-    local titleToID = {}
-    local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
-                       or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+    local ok, err = pcall(function()
+        -- Ensure any newly loaded tracker modules are hooked
+        if UI.HookTrackerModules then
+            UI.HookTrackerModules()
+        end
 
-    for i = 1, numEntries do
-        local qTitle, qid, isH
-        if C_QuestLog and C_QuestLog.GetInfo then
-            local ok, info = pcall(C_QuestLog.GetInfo, i)
-            if ok and info then
-                isH = info.isHeader
-                qTitle = info.title
-                qid = info.questID
+        -- Precompute active quests & fast title lookup table once for this cycle
+        local activeQuests = {}
+        local titleToID = {}
+        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                           or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+
+        for i = 1, numEntries do
+            local qTitle, qid, isH
+            if C_QuestLog and C_QuestLog.GetInfo then
+                local okI, info = pcall(C_QuestLog.GetInfo, i)
+                if okI and info then
+                    isH = info.isHeader
+                    qTitle = info.title
+                    qid = info.questID
+                end
+            elseif GetQuestLogTitle then
+                local okT, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+                if okT then
+                    isH = h
+                    qTitle = t
+                    qid = id
+                end
             end
-        elseif GetQuestLogTitle then
-            local ok, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
-            if ok then
-                isH = h
-                qTitle = t
-                qid = id
+
+            if not isH and qid and qid > 0 then
+                activeQuests[qid] = true
+                if qTitle and qTitle ~= "" then
+                    local clean = Utils.CleanQuestTitle(qTitle)
+                    local noLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
+                    clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
+                    noLevel = string.gsub(noLevel, "^%s*(.-)%s*$", "%1")
+                    local norm = NormalizeQuestTitle(qTitle)
+
+                    titleToID[clean] = qid
+                    titleToID[noLevel] = qid
+                    if norm ~= "" then
+                        titleToID[norm] = qid
+                        titleToID[string.lower(norm)] = qid
+                    end
+                end
             end
         end
 
-        if not isH and qid and qid > 0 then
-            activeQuests[qid] = true
-            if qTitle and qTitle ~= "" then
-                local clean = Utils.CleanQuestTitle(qTitle)
-                local noLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
-                clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
-                noLevel = string.gsub(noLevel, "^%s*(.-)%s*$", "%1")
-
-                titleToID[clean] = qid
-                titleToID[noLevel] = qid
-            end
+        local processedBlocks = {}
+        local function ProcessBlock(block)
+            if not block or processedBlocks[block] then return end
+            processedBlocks[block] = true
+            HookBlockHeaderText(block)
+            BadgeObjectiveBlock(block, activeQuests, titleToID)
         end
-    end
 
-    local processedBlocks = {}
-    local function ProcessBlock(block)
-        if not block or processedBlocks[block] then return end
-        processedBlocks[block] = true
-        HookBlockHeaderText(block)
-        BadgeObjectiveBlock(block, activeQuests, titleToID)
-    end
+        local modules = GetModuleList()
 
-    local modules = GetModuleList()
+        -- 1. Enumerate blocks across quest tracker modules
+        for _, mod in ipairs(modules) do
+            if mod then
+                local enumerated = false
 
-    -- 1. Enumerate blocks across quest tracker modules
-    for _, mod in ipairs(modules) do
-        if mod then
-            local enumerated = false
+                -- Modern Dragonflight API: mod:EnumerateBlocks()
+                if mod.EnumerateBlocks then
+                    local okE = pcall(function()
+                        for block in mod:EnumerateBlocks() do
+                            ProcessBlock(block)
+                            enumerated = true
+                        end
+                    end)
+                    if not okE then enumerated = false end
+                end
 
-            -- Modern Dragonflight API: mod:EnumerateBlocks()
-            if mod.EnumerateBlocks then
-                local ok = pcall(function()
-                    for block in mod:EnumerateBlocks() do
-                        ProcessBlock(block)
-                        enumerated = true
-                    end
-                end)
-                if not ok then enumerated = false end
-            end
+                -- Modern Dragonflight FramePoolCollection: mod.blockPools
+                if not enumerated and mod.blockPools and mod.blockPools.EnumerateActive then
+                    local okP = pcall(function()
+                        for block in mod.blockPools:EnumerateActive() do
+                            ProcessBlock(block)
+                            enumerated = true
+                        end
+                    end)
+                    if not okP then enumerated = false end
+                end
 
-            -- Modern Dragonflight FramePoolCollection: mod.blockPools
-            if not enumerated and mod.blockPools and mod.blockPools.EnumerateActive then
-                local ok = pcall(function()
-                    for block in mod.blockPools:EnumerateActive() do
-                        ProcessBlock(block)
-                        enumerated = true
-                    end
-                end)
-                if not ok then enumerated = false end
-            end
+                -- Legacy pool: mod.blockPool
+                if not enumerated and mod.blockPool and mod.blockPool.EnumerateActive then
+                    local okP = pcall(function()
+                        for block in mod.blockPool:EnumerateActive() do
+                            ProcessBlock(block)
+                            enumerated = true
+                        end
+                    end)
+                    if not okP then enumerated = false end
+                end
 
-            -- Legacy pool: mod.blockPool
-            if not enumerated and mod.blockPool and mod.blockPool.EnumerateActive then
-                local ok = pcall(function()
-                    for block in mod.blockPool:EnumerateActive() do
-                        ProcessBlock(block)
-                        enumerated = true
-                    end
-                end)
-                if not ok then enumerated = false end
-            end
-
-            -- Handle mod.usedBlocks
-            if not enumerated and mod.usedBlocks and type(mod.usedBlocks) == "table" then
-                for _, v in pairs(mod.usedBlocks) do
-                    if type(v) == "table" then
-                        if GetBlockHeaderFontString(v) or v.id or v.questID then
-                            ProcessBlock(v)
-                        else
-                            for _, subBlock in pairs(v) do
-                                if type(subBlock) == "table" and (GetBlockHeaderFontString(subBlock) or subBlock.id or subBlock.questID) then
-                                    ProcessBlock(subBlock)
+                -- Handle mod.usedBlocks
+                if not enumerated and mod.usedBlocks and type(mod.usedBlocks) == "table" then
+                    for _, v in pairs(mod.usedBlocks) do
+                        if type(v) == "table" then
+                            if GetBlockHeaderFontString(v) or v.id or v.questID then
+                                ProcessBlock(v)
+                            else
+                                for _, subBlock in pairs(v) do
+                                    if type(subBlock) == "table" and (GetBlockHeaderFontString(subBlock) or subBlock.id or subBlock.questID) then
+                                        ProcessBlock(subBlock)
+                                    end
                                 end
                             end
                         end
                     end
                 end
-            end
 
-            -- Query mod:GetExistingBlock(questID) for all active quests
-            if mod.GetExistingBlock then
-                for qid in pairs(activeQuests) do
-                    local okB, block = pcall(mod.GetExistingBlock, mod, qid)
-                    if okB and block then
-                        ProcessBlock(block)
-                    end
-                end
-            end
-        end
-    end
-
-    -- 2. Fallback: Enumerate blocks in container frames if module enumeration missed them
-    local containers = {
-        ObjectiveTrackerBlocksFrame,
-        ObjectiveTrackerFrame and ObjectiveTrackerFrame.BlocksFrame,
-    }
-
-    for _, container in ipairs(containers) do
-        if container and container.GetChildren then
-            local children = { container:GetChildren() }
-            for _, child in ipairs(children) do
-                if child and child:IsShown() then
-                    if GetBlockHeaderFontString(child) then
-                        ProcessBlock(child)
-                    elseif child.GetChildren then
-                        for _, sub in ipairs({ child:GetChildren() }) do
-                            if sub and sub:IsShown() and GetBlockHeaderFontString(sub) then
-                                ProcessBlock(sub)
-                            end
+                -- Query mod:GetExistingBlock(questID) for all active quests
+                if mod.GetExistingBlock then
+                    for qid in pairs(activeQuests) do
+                        local okB, block = pcall(mod.GetExistingBlock, mod, qid)
+                        if okB and block then
+                            ProcessBlock(block)
                         end
                     end
                 end
             end
         end
-    end
+
+        -- 2. Fallback: Recursive container frame scanning (handles nested modern tracker structures)
+        local containers = {
+            ObjectiveTrackerBlocksFrame,
+            ObjectiveTrackerFrame and ObjectiveTrackerFrame.BlocksFrame,
+            ObjectiveTrackerFrame,
+        }
+
+        local function ScanContainerTree(frame, depth)
+            if not frame or depth > 4 then return end
+            if GetBlockHeaderFontString(frame) then
+                ProcessBlock(frame)
+            end
+            if frame.GetChildren then
+                local okC, kids = pcall(function() return { frame:GetChildren() } end)
+                if okC and kids then
+                    for _, child in ipairs(kids) do
+                        if child and child:IsShown() then
+                            ScanContainerTree(child, depth + 1)
+                        end
+                    end
+                end
+            end
+        end
+
+        for _, container in ipairs(containers) do
+            if container then
+                ScanContainerTree(container, 1)
+            end
+        end
+    end)
 
     _isUpdatingTracker = false
+    if not ok and err and addon.Debug then
+        addon.Debug("Error in UpdateObjectiveTracker: " .. tostring(err))
+    end
 end
 
 -- Hook all available Objective Tracker modules and global update functions
@@ -892,6 +1298,16 @@ local function HookTrackerModules()
         ObjectiveTrackerFrame._worthItHooked = true
     end
 
+    -- Hook ObjectiveTrackerManager.Update (modern Midnight / Dragonflight manager)
+    if ObjectiveTrackerManager and ObjectiveTrackerManager.Update and not ObjectiveTrackerManager._worthItHooked then
+        hooksecurefunc(ObjectiveTrackerManager, "Update", function()
+            if not _isUpdatingTracker then
+                UI.UpdateObjectiveTracker()
+            end
+        end)
+        ObjectiveTrackerManager._worthItHooked = true
+    end
+
     -- Hook ObjectiveTracker_Update (legacy global function)
     if ObjectiveTracker_Update and not isTrackerHooked then
         hooksecurefunc("ObjectiveTracker_Update", function()
@@ -936,23 +1352,9 @@ function UI.InitializeQuestLog()
         UI._questLogUpdateHooked = true
     end
 
-    if QuestMapFrame_ShowQuestDetails and not UI._showQuestDetailsHooked then
-        hooksecurefunc("QuestMapFrame_ShowQuestDetails", function()
-            if not addon.isUpdatingUI then
-                UI.UpdateQuestLog()
-            end
-        end)
-        UI._showQuestDetailsHooked = true
-    end
-
-    if SelectQuestLogEntry and not UI._selectQuestLogEntryHooked then
-        hooksecurefunc("SelectQuestLogEntry", function()
-            if not addon.isUpdatingUI then
-                UI.UpdateQuestLog()
-            end
-        end)
-        UI._selectQuestLogEntryHooked = true
-    end
+    -- Note: Do NOT hook QuestMapFrame_ShowQuestDetails or SelectQuestLogEntry here.
+    -- Selecting a quest or viewing details does not change Worth % scores,
+    -- and triggering UpdateQuestLog on selection causes redundant UI redraws and map flickering.
 
     if WorldMapFrame and WorldMapFrame.HookScript and not UI._worldMapOnShowHooked then
         pcall(function()

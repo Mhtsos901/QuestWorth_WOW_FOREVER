@@ -32,12 +32,12 @@ $$\text{Worth} = (D \cdot w_D) + (R \cdot w_R) + (C \cdot w_C) + (F \cdot w_F) +
 - **Default Leveling Weights**:
   - $w_D = 0.00$ (**Difficulty** - Decoupled Danger Skull `💀` mode)
   - $w_R = 0.40$ (**Reward Value**)
-  - $w_C = 0.15$ (**Quest Chain Value**)
-  - $w_F = 0.30$ (**Class Fit**)
+  - $w_C = 0.30$ (**Quest Chain Value**)
+  - $w_F = 0.15$ (**Class Fit**)
   - $w_H = 0.15$ (**Hub Density & Clustering**)
 - **Decoupled Danger Skull Indicator**: Hard/Dangerous quests (Orange $\ge +3$ levels, Red $\ge +5$ levels, Elite, or Dungeon) display a danger skull icon `💀` next to their badge without dragging down the pure value percentage score.
 - **Endgame Weights (Level 60)**: Automatically adapts to Gold & Economy priority:
-  - $w_D = 0.00, \ w_R = 0.50, \ w_C = 0.15, \ w_F = 0.25, \ w_H = 0.10$.
+  - $w_D = 0.00, \ w_R = 0.50, \ w_C = 0.25, \ w_F = 0.15, \ w_H = 0.10$.
 - **Dynamic Weight Redistribution**: Quests with no equipment or item rewards automatically redistribute their Class Fit weight ($w_F$) proportionally across the other active factors.
 - **Viability Damping**: Red/impossible quests and trivial Gray quests are intelligently capped when custom difficulty weight is configured.
 
@@ -99,7 +99,7 @@ Continuous, smooth chromatic gradient:
 
 - `/worthit` or `/qw` - Open configuration panel
 - `/worthit test` - Run diagnostic simulator on all 5 scoring criteria
-- `/worthit weights <d> <r> <c> <f> <h>` - Configure custom weights (e.g. `0.15 0.35 0.15 0.20 0.15`)
+- `/worthit weights <d> <r> <c> <f> <h>` - Configure custom weights (e.g. `0.00 0.40 0.30 0.15 0.15`)
 - `/worthit questlog` - Toggle Worth % badges in Quest Log and Objective Tracker
 - `/worthit debug` - Toggle debug mode or print breakdown for hovered quest
 - `/worthit reset` - Reset weights and settings to default

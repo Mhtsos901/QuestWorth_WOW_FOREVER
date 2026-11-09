@@ -474,40 +474,17 @@ function Scores.CalculateClassFit(questID)
 
     local itemLinks = {}
 
-    -- Safely read Quest Log rewards by ensuring questID is selected
-    Utils.WithSelectedQuest(questID, function()
-        local numChoices = (C_QuestLog and C_QuestLog.GetNumQuestLogChoices and C_QuestLog.GetNumQuestLogChoices(questID)) or (GetNumQuestLogChoices and GetNumQuestLogChoices(questID)) or 0
-        for i = 1, numChoices do
-            local link = (GetQuestLogItemLink and GetQuestLogItemLink("choice", i, questID)) or
-                         (C_QuestLog and C_QuestLog.GetQuestRewardItemLink and C_QuestLog.GetQuestRewardItemLink(i, questID))
-            if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
-                local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, i, questID)
-                if ok and info and info.itemID then
-                    link = select(2, addon.SafeGetItemInfo(info.itemID))
-                end
+    if Utils and Utils.GetQuestRewardData then
+        local choices, rewards = Utils.GetQuestRewardData(questID)
+        if choices then
+            for _, link in ipairs(choices) do
+                table.insert(itemLinks, link)
             end
-            if link then table.insert(itemLinks, link) end
         end
-
-        local numRewards = (C_QuestLog and C_QuestLog.GetNumQuestLogRewards and C_QuestLog.GetNumQuestLogRewards(questID)) or (GetNumQuestLogRewards and GetNumQuestLogRewards(questID)) or 0
-        for i = 1, numRewards do
-            local link = (GetQuestLogItemLink and GetQuestLogItemLink("reward", i, questID))
-            if link then table.insert(itemLinks, link) end
-        end
-    end)
-
-    -- Fallback for unaccepted quest currently in QuestFrame
-    if #itemLinks == 0 and QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID then
-        local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
-        for i = 1, numOfferChoices do
-            local link = GetQuestItemLink and GetQuestItemLink("choice", i)
-            if link then table.insert(itemLinks, link) end
-        end
-
-        local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
-        for i = 1, numOfferRewards do
-            local link = GetQuestItemLink and GetQuestItemLink("reward", i)
-            if link then table.insert(itemLinks, link) end
+        if rewards then
+            for _, link in ipairs(rewards) do
+                table.insert(itemLinks, link)
+            end
         end
     end
 

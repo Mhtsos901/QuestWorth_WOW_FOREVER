@@ -33,6 +33,9 @@ local function RefreshAllUI()
         if addon.UI.UpdateWorldMapBanner then
             addon.UI.UpdateWorldMapBanner()
         end
+        if addon.UI.UpdateZoneAdvisor then
+            addon.UI.UpdateZoneAdvisor()
+        end
     end
 end
 
@@ -40,7 +43,7 @@ local _refreshPending = false
 local function DelayedRefresh(delay)
     if _refreshPending then return end
     _refreshPending = true
-    delay = delay or 0.15
+    delay = delay or 0.18
     if C_Timer and C_Timer.After then
         C_Timer.After(delay, function()
             _refreshPending = false
@@ -89,6 +92,9 @@ local function OnEvent(self, event, ...)
         end
 
     elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+        if addon.Player and addon.Player.Update then
+            addon.Player.Update()
+        end
         ScanCurrentZoneQuestLines()
         if addon.UI and addon.UI.InitializeQuestLog then
             addon.UI.InitializeQuestLog()
@@ -119,37 +125,45 @@ local function OnEvent(self, event, ...)
         DelayedRefresh(0.1)
 
     elseif event == "QUEST_LOG_UPDATE" or
-           event == "QUEST_WATCH_LIST_CHANGED" or
-           event == "SUPER_TRACKING_CHANGED" or
+           event == "QUEST_DATA_LOAD_RESULT" or
+           event == "QUEST_WATCH_UPDATE" or
+           event == "UNIT_QUEST_LOG_CHANGED" or
            event == "QUEST_POI_UPDATE" or
-           event == "TRACKED_ACHIEVEMENT_LIST_CHANGED" or
-           event == "QUEST_DATA_LOAD_RESULT" then
+           event == "BAG_UPDATE_DELAYED" then
         if addon.Engine and addon.Engine.InvalidateCache then
             addon.Engine.InvalidateCache()
         end
-        DelayedRefresh(0.05)
+        DelayedRefresh(0.18)
+
+    elseif event == "QUEST_WATCH_LIST_CHANGED" then
+        -- Watch list (tracked quests) changed: only refresh UI badges, do not invalidate calculation cache
+        DelayedRefresh(0.15)
 
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         if addon.Engine and addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
         if addon.InvalidateHitExpertiseCache then addon.InvalidateHitExpertiseCache() end
-        DelayedRefresh(0.05)
+        DelayedRefresh(0.18)
 
     elseif event == "QUEST_ACCEPTED" or
            event == "QUEST_TURNED_IN" or
            event == "QUEST_REMOVED" then
         if addon.Engine and addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
         if addon.Scores and addon.Scores.InvalidateDensityCache then addon.Scores.InvalidateDensityCache() end
-        DelayedRefresh(0.05)
+        if addon.Utils and addon.Utils.ClearQuestRewardsCache then addon.Utils.ClearQuestRewardsCache() end
+        DelayedRefresh(0.18)
 
     elseif event == "PLAYER_LEVEL_UP" or
            event == "PLAYER_SPECIALIZATION_CHANGED" or
            event == "CHARACTER_POINTS_CHANGED" or
            event == "TRAIT_CONFIG_UPDATED" then
+        if addon.Player and addon.Player.Update then
+            addon.Player.Update()
+        end
         if addon.Engine then
             if addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
             if addon.Engine.InvalidateSpecCache then addon.Engine.InvalidateSpecCache() end
         end
-        DelayedRefresh(0.05)
+        DelayedRefresh(0.18)
 
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         if addon.Engine and addon.Engine.InvalidateCache then
@@ -158,10 +172,10 @@ local function OnEvent(self, event, ...)
         if addon.ClearSafeGetItemInfoCache then
             addon.ClearSafeGetItemInfoCache()
         end
-        DelayedRefresh(0.1)
+        DelayedRefresh(0.18)
 
     elseif event == "PLAYER_REGEN_ENABLED" then
-        DelayedRefresh(0.05)
+        DelayedRefresh(0.10)
 
     elseif event == "QUEST_DETAIL" or event == "QUEST_PROGRESS" or event == "QUEST_COMPLETE" then
         if addon.UI and addon.UI.UpdateQuestOfferDialog then
@@ -195,8 +209,9 @@ end
 local EVENTS = {
     "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
     "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "QUEST_LOG_UPDATE",
-    "QUEST_WATCH_LIST_CHANGED", "SUPER_TRACKING_CHANGED", "QUEST_POI_UPDATE",
-    "TRACKED_ACHIEVEMENT_LIST_CHANGED", "QUEST_DATA_LOAD_RESULT",
+    "QUEST_WATCH_LIST_CHANGED", "QUEST_DATA_LOAD_RESULT",
+    "QUEST_WATCH_UPDATE", "UNIT_QUEST_LOG_CHANGED", "QUEST_POI_UPDATE",
+    "BAG_UPDATE_DELAYED",
     "PLAYER_LEVEL_UP", "PLAYER_SPECIALIZATION_CHANGED", "CHARACTER_POINTS_CHANGED",
     "TRAIT_CONFIG_UPDATED", "PLAYER_EQUIPMENT_CHANGED",
     "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED",

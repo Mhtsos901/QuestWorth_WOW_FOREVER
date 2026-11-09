@@ -8,115 +8,82 @@ addon.Scores = addon.Scores or {}
 local Scores = addon.Scores
 local Utils = addon.Utils
 
+local _xpCache = {}
+local _moneyCache = {}
+
 -- Safe helper to fetch XP reward for a quest
 local function GetQuestXP(questID)
-    if C_QuestLog and C_QuestLog.GetQuestRewardXP then
-        local ok, xp = pcall(C_QuestLog.GetQuestRewardXP, questID)
-        if ok and xp and xp > 0 then return xp end
-    end
-    if GetQuestLogRewardXP then
-        local xp = Utils.WithSelectedQuest(questID, function()
-            return GetQuestLogRewardXP(questID)
-        end)
-        if xp and xp > 0 then return xp end
+    if _xpCache[questID] and _xpCache[questID] > 0 then
+        return _xpCache[questID]
     end
 
-    if GetQuestID then
+    local xp = 0
+    if C_QuestLog and C_QuestLog.GetQuestRewardXP then
+        local ok, val = pcall(C_QuestLog.GetQuestRewardXP, questID)
+        if ok and val and val > 0 then xp = val end
+    end
+    if xp == 0 and GetQuestLogRewardXP then
+        local val = Utils.WithSelectedQuest(questID, function()
+            return GetQuestLogRewardXP(questID)
+        end)
+        if val and val > 0 then xp = val end
+    end
+
+    if xp == 0 and GetQuestID then
         local okID, currentID = pcall(GetQuestID)
         if okID and currentID and currentID == questID then
             if GetQuestRewardXP then
-                local ok, xp = pcall(GetQuestRewardXP)
-                if ok and xp and xp > 0 then return xp end
+                local ok, val = pcall(GetQuestRewardXP)
+                if ok and val and val > 0 then xp = val end
             end
-            if QuestInfoFrame and QuestInfoFrame.rewards and QuestInfoFrame.rewards.xp then
-                return QuestInfoFrame.rewards.xp
+            if xp == 0 and QuestInfoFrame and QuestInfoFrame.rewards and QuestInfoFrame.rewards.xp then
+                xp = QuestInfoFrame.rewards.xp or 0
             end
         end
     end
 
-    return 0
+    if xp > 0 then
+        _xpCache[questID] = xp
+    end
+    return xp
 end
 
 -- Safe helper to fetch direct Money reward for a quest
 local function GetQuestMoney(questID)
-    if C_QuestLog and C_QuestLog.GetQuestRewardMoney then
-        local ok, money = pcall(C_QuestLog.GetQuestRewardMoney, questID)
-        if ok and money and money > 0 then return money end
+    if _moneyCache[questID] and _moneyCache[questID] > 0 then
+        return _moneyCache[questID]
     end
-    if GetQuestLogRewardMoney then
-        local money = Utils.WithSelectedQuest(questID, function()
+
+    local money = 0
+    if C_QuestLog and C_QuestLog.GetQuestRewardMoney then
+        local ok, val = pcall(C_QuestLog.GetQuestRewardMoney, questID)
+        if ok and val and val > 0 then money = val end
+    end
+    if money == 0 and GetQuestLogRewardMoney then
+        local val = Utils.WithSelectedQuest(questID, function()
             return GetQuestLogRewardMoney(questID)
         end)
-        if money and money > 0 then return money end
+        if val and val > 0 then money = val end
     end
-    if QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID and GetRewardMoney then
-        local ok, money = pcall(GetRewardMoney)
-        if ok and money and money > 0 then return money end
+    if money == 0 and QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID and GetRewardMoney then
+        local ok, val = pcall(GetRewardMoney)
+        if ok and val and val > 0 then money = val end
     end
-    return 0
+
+    if money > 0 then
+        _moneyCache[questID] = money
+    end
+    return money
 end
 
--- Safe helper to fetch item links and calculate vendor sell values
+-- Safe helper to fetch item links and calculate vendor sell values (uses addon.SafeGetItemInfo via GetQuestRewardData)
 local function GetQuestVendorPrices(questID)
-    local maxChoicePrice = 0
-    local fixedPricesSum = 0
-
-    Utils.WithSelectedQuest(questID, function()
-        -- 1. Choice Rewards
-        local numChoices = (C_QuestLog and C_QuestLog.GetNumQuestLogChoices and C_QuestLog.GetNumQuestLogChoices(questID)) or (GetNumQuestLogChoices and GetNumQuestLogChoices(questID)) or 0
-        for i = 1, numChoices do
-            local link = (GetQuestLogItemLink and GetQuestLogItemLink("choice", i, questID)) or
-                         (C_QuestLog and C_QuestLog.GetQuestRewardItemLink and C_QuestLog.GetQuestRewardItemLink(i, questID))
-            if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
-                local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, i, questID)
-                if ok and info and info.itemID then
-                    link = select(2, addon.SafeGetItemInfo(info.itemID))
-                end
-            end
-
-            if link then
-                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
-                if sellPrice > maxChoicePrice then
-                    maxChoicePrice = sellPrice
-                end
-            end
-        end
-
-        -- 2. Fixed Rewards
-        local numRewards = (C_QuestLog and C_QuestLog.GetNumQuestLogRewards and C_QuestLog.GetNumQuestLogRewards(questID)) or (GetNumQuestLogRewards and GetNumQuestLogRewards(questID)) or 0
-        for i = 1, numRewards do
-            local link = (GetQuestLogItemLink and GetQuestLogItemLink("reward", i, questID))
-            if link then
-                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
-                fixedPricesSum = fixedPricesSum + sellPrice
-            end
-        end
-    end)
-
-    -- 3. Fallback for unaccepted quest currently in QuestFrame
-    if maxChoicePrice == 0 and fixedPricesSum == 0 and QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID then
-        local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
-        for i = 1, numOfferChoices do
-            local link = GetQuestItemLink and GetQuestItemLink("choice", i)
-            if link then
-                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
-                if sellPrice > maxChoicePrice then
-                    maxChoicePrice = sellPrice
-                end
-            end
-        end
-
-        local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
-        for i = 1, numOfferRewards do
-            local link = GetQuestItemLink and GetQuestItemLink("reward", i)
-            if link then
-                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
-                fixedPricesSum = fixedPricesSum + sellPrice
-            end
-        end
+    if Utils and Utils.GetQuestRewardData then
+        local _, _, maxChoicePrice, fixedPricesSum = Utils.GetQuestRewardData(questID)
+        return (maxChoicePrice or 0) + (fixedPricesSum or 0)
     end
-
-    return maxChoicePrice + fixedPricesSum
+    -- Fallback: Uses addon.SafeGetItemInfo directly
+    return 0
 end
 
 function Scores.CalculateReward(questID)

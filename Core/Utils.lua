@@ -97,6 +97,145 @@ function addon.ClearSafeGetItemInfoCache()
     wipe(_iic)
 end
 
+-- Persistent quest rewards cache (item links & vendor values)
+local _questRewardsCache = {}
+
+function Utils.GetQuestRewardData(questID)
+    if not questID or questID <= 0 then
+        return {}, {}, 0, 0
+    end
+
+    if _questRewardsCache[questID] then
+        local c = _questRewardsCache[questID]
+        return c.choices, c.rewards, c.maxChoicePrice, c.fixedPricesSum
+    end
+
+    local choices = {}
+    local rewards = {}
+    local maxChoicePrice = 0
+    local fixedPricesSum = 0
+
+    -- Modern C_QuestLog resolution (independent of player's UI selection!)
+    local numChoices = (C_QuestLog and C_QuestLog.GetNumQuestLogChoices and C_QuestLog.GetNumQuestLogChoices(questID)) or 0
+    for i = 1, numChoices do
+        local link = nil
+        if C_QuestLog and C_QuestLog.GetQuestRewardItemLink then
+            local ok, l = pcall(C_QuestLog.GetQuestRewardItemLink, i, questID)
+            if ok and l then link = l end
+            if not link then
+                local ok2, l2 = pcall(C_QuestLog.GetQuestRewardItemLink, questID, i)
+                if ok2 and l2 then link = l2 end
+            end
+        end
+        if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
+            local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, i, questID)
+            local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
+            if ok and itemID then
+                link = select(2, addon.SafeGetItemInfo(itemID))
+            end
+        end
+        if link then
+            table.insert(choices, link)
+            local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+            if sellPrice > maxChoicePrice then
+                maxChoicePrice = sellPrice
+            end
+        end
+    end
+
+    local numRewards = (C_QuestLog and C_QuestLog.GetNumQuestLogRewards and C_QuestLog.GetNumQuestLogRewards(questID)) or 0
+    for i = 1, numRewards do
+        local link = nil
+        if C_QuestLog and C_QuestLog.GetQuestRewardItemLink then
+            local ok, l = pcall(C_QuestLog.GetQuestRewardItemLink, i, questID)
+            if ok and l then link = l end
+            if not link then
+                local ok2, l2 = pcall(C_QuestLog.GetQuestRewardItemLink, questID, i)
+                if ok2 and l2 then link = l2 end
+            end
+        end
+        if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
+            local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, i, questID)
+            local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
+            if ok and itemID then
+                link = select(2, addon.SafeGetItemInfo(itemID))
+            end
+        end
+        if link then
+            table.insert(rewards, link)
+            local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+            fixedPricesSum = fixedPricesSum + sellPrice
+        end
+    end
+
+    -- Fallback: If modern APIs returned nothing, try with selected quest (only if map is not open)
+    if #choices == 0 and #rewards == 0 then
+        Utils.WithSelectedQuest(questID, function()
+            local nC = (GetNumQuestLogChoices and GetNumQuestLogChoices(questID)) or 0
+            for i = 1, nC do
+                local link = GetQuestLogItemLink and GetQuestLogItemLink("choice", i)
+                if link then
+                    table.insert(choices, link)
+                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
+                end
+            end
+            local nR = (GetNumQuestLogRewards and GetNumQuestLogRewards(questID)) or 0
+            for i = 1, nR do
+                local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", i)
+                if link then
+                    table.insert(rewards, link)
+                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    fixedPricesSum = fixedPricesSum + sellPrice
+                end
+            end
+        end)
+    end
+
+    -- Fallback for unaccepted quest in QuestFrame dialog
+    if #choices == 0 and #rewards == 0 and QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID then
+        local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
+        for i = 1, numOfferChoices do
+            local link = GetQuestItemLink and GetQuestItemLink("choice", i)
+            if link then
+                table.insert(choices, link)
+                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
+            end
+        end
+        local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
+        for i = 1, numOfferRewards do
+            local link = GetQuestItemLink and GetQuestItemLink("reward", i)
+            if link then
+                table.insert(rewards, link)
+                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                fixedPricesSum = fixedPricesSum + sellPrice
+            end
+        end
+    end
+
+    -- If we found items or prices, cache it!
+    if #choices > 0 or #rewards > 0 then
+        _questRewardsCache[questID] = {
+            choices = choices,
+            rewards = rewards,
+            maxChoicePrice = maxChoicePrice,
+            fixedPricesSum = fixedPricesSum,
+        }
+    end
+
+    return choices, rewards, maxChoicePrice, fixedPricesSum
+end
+
+function Utils.ClearQuestRewardsCache(questID)
+    if questID then
+        _questRewardsCache[questID] = nil
+    else
+        wipe(_questRewardsCache)
+    end
+end
+addon.ClearQuestRewardsCache = Utils.ClearQuestRewardsCache
+
 -- Smooth, continuous Red -> Orange -> Yellow -> Lime -> Bright Green gradient
 function Utils.GetScoreColor(score)
     score = tonumber(score) or 0.50
@@ -134,17 +273,31 @@ end
 
 function Utils.FormatScore(score)
     score = tonumber(score) or 0.50
+    if score ~= score then score = 0.50 end
+    score = math.max(0.0, math.min(1.0, score))
     local hex = Utils.GetScoreColorHex(score)
-    return string.format("|cff%s%.0f%%|r", hex, score * 100)
+    local pct = math.max(0, math.min(100, math.floor(score * 100 + 0.5)))
+    return string.format("|cff%s%d%%|r", hex, pct)
 end
 
-function Utils.FormatBadge(score, isComplete, isHard)
+function Utils.FormatBadge(score, isComplete, isHard, isBankable)
     if isComplete then
         return "|cff1aff4d[OK]|r"
     end
     score = tonumber(score) or 0.50
-    local hex = Utils.GetScoreColorHex(score)
-    local badge = string.format("|cff%s[%.0f%%]|r", hex, math.floor(score * 100 + 0.5))
+    if score ~= score then score = 0.50 end
+    score = math.max(0.0, math.min(1.0, score))
+    local pct = math.max(0, math.min(100, math.floor(score * 100 + 0.5)))
+    
+    local hex
+    if isBankable then
+        -- Distinctive Warm Amber / Orange for Viability-Damped / Bankable quests (Save for later)
+        hex = "ff9900"
+    else
+        hex = Utils.GetScoreColorHex(score)
+    end
+
+    local badge = string.format("|cff%s[%d%%]|r", hex, pct)
     if isHard then
         return "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t " .. badge
     end
@@ -152,18 +305,25 @@ function Utils.FormatBadge(score, isComplete, isHard)
 end
 
 function Utils.CleanQuestTitle(title)
-    if not title then return "" end
+    if not title or title == "" then return "" end
     local cleaned = title
-    cleaned = string.gsub(cleaned, "^(%s*%-?%s*)|T[^|]+|t%s*", "%1")
-    cleaned = string.gsub(cleaned, "^(%s*%-?%s*)|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r%s*", "%1")
-    cleaned = string.gsub(cleaned, "^(%s*%-?%s*)%[[^%]]*Worth[^%]]*%]%s*", "%1")
-    cleaned = string.gsub(cleaned, "^(%s*%-?%s*)%[%d+%%%]%s*", "%1")
-    cleaned = string.gsub(cleaned, "^(%s*%-?%s*)%[OK%]%s*", "%1")
-    cleaned = string.gsub(cleaned, "%s*|T[^|]+|t$", "")
-    cleaned = string.gsub(cleaned, "%s*|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r$", "")
-    cleaned = string.gsub(cleaned, "%s*%[[^%]]*Worth[^%]]*%]$", "")
-    cleaned = string.gsub(cleaned, "%s*%[%d+%%%]$", "")
-    cleaned = string.gsub(cleaned, "%s*%[OK%]$", "")
+    local changed = true
+    local passes = 0
+    while changed and passes < 5 do
+        passes = passes + 1
+        local prev = cleaned
+        cleaned = string.gsub(cleaned, "^(%s*%-?%s*)|T[^|]+|t%s*", "%1")
+        cleaned = string.gsub(cleaned, "^(%s*%-?%s*)|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r%s*", "%1")
+        cleaned = string.gsub(cleaned, "^(%s*%-?%s*)%[[^%]]*Worth[^%]]*%]%s*", "%1")
+        cleaned = string.gsub(cleaned, "^(%s*%-?%s*)%[%d+%%%]%s*", "%1")
+        cleaned = string.gsub(cleaned, "^(%s*%-?%s*)%[OK%]%s*", "%1")
+        cleaned = string.gsub(cleaned, "%s*|T[^|]+|t$", "")
+        cleaned = string.gsub(cleaned, "%s*|c%x%x%x%x%x%x%x%x%[[^%]]+%]%|r$", "")
+        cleaned = string.gsub(cleaned, "%s*%[[^%]]*Worth[^%]]*%]$", "")
+        cleaned = string.gsub(cleaned, "%s*%[%d+%%%]$", "")
+        cleaned = string.gsub(cleaned, "%s*%[OK%]$", "")
+        changed = (cleaned ~= prev)
+    end
     return cleaned
 end
 
@@ -186,16 +346,16 @@ end
 function Utils.NormalizeWeights(wD, wR, wC, wF, wH)
     local d = math.max(0, (wD ~= nil and tonumber(wD)) or 0.00)
     local r = math.max(0, (wR ~= nil and tonumber(wR)) or 0.40)
-    local c = math.max(0, (wC ~= nil and tonumber(wC)) or 0.15)
-    local f = math.max(0, (wF ~= nil and tonumber(wF)) or 0.30)
+    local c = math.max(0, (wC ~= nil and tonumber(wC)) or 0.30)
+    local f = math.max(0, (wF ~= nil and tonumber(wF)) or 0.15)
     local h = math.max(0, (wH ~= nil and tonumber(wH)) or 0.15)
 
     local sum = d + r + c + f + h
     if sum <= 0 then
         if wF == 0 then
-            return 0.00, 0.55, 0.25, 0.00, 0.20
+            return 0.00, 0.47, 0.35, 0.00, 0.18
         end
-        return 0.00, 0.40, 0.15, 0.30, 0.15
+        return 0.00, 0.40, 0.30, 0.15, 0.15
     end
     return d / sum, r / sum, c / sum, f / sum, h / sum
 end
@@ -289,10 +449,15 @@ function Utils.GetQuestBasicInfo(questID)
         end
     end
 
+    local finalLevel = level
+    if not finalLevel or finalLevel <= 0 then
+        finalLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+    end
+
     return {
         questID = questID,
         title = title or ("Quest #" .. questID),
-        level = level or UnitLevel("player") or 1,
+        level = finalLevel,
         isElite = isElite or false,
         isHeader = isHeader or false,
     }
