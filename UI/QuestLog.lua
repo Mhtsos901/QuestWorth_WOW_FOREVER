@@ -51,32 +51,7 @@ end
 local function IsObjectiveOrDetailFrame(button, text)
     if not button and not text then return false end
 
-    -- Guard: If button has genuine quest info, it is DEFINITIVELY a Quest Title button, NEVER an objective!
-    if button then
-        if button.questID and type(button.questID) == "number" and button.questID > 0 then
-            return false
-        end
-        if button.info and not button.info.isHeader and button.info.title then
-            return false
-        end
-        if button.GetElementData then
-            local okED, ed = pcall(button.GetElementData, button)
-            if okED and ed then
-                if type(ed) == "number" and ed > 0 then
-                    return false
-                elseif type(ed) == "table" then
-                    if ed.questID and type(ed.questID) == "number" and ed.questID > 0 and not ed.isHeader then
-                        return false
-                    end
-                    if ed.info and not ed.info.isHeader and ed.info.title then
-                        return false
-                    end
-                end
-            end
-        end
-    end
-
-    -- 1. Check frame flags and attributes
+    -- 1. Check frame flags and attributes characteristic of objectives / detail lines
     if button then
         if button.objectiveIndex or button.isObjective or button.lineID then
             return true
@@ -85,6 +60,15 @@ local function IsObjectiveOrDetailFrame(button, text)
         local name = button.GetName and button:GetName()
         if name and (string.find(name, "Objective") or string.find(name, "Detail") or string.find(name, "QuestLogObjective")) then
             return true
+        end
+
+        if button.GetElementData then
+            local okED, ed = pcall(button.GetElementData, button)
+            if okED and ed and type(ed) == "table" then
+                if ed.objectiveIndex or ed.isObjective or ed.lineID or ed.objectiveText or ed.type == "objective" then
+                    return true
+                end
+            end
         end
 
         -- Check if frame belongs to objectiveFramePool
@@ -121,6 +105,32 @@ local function IsObjectiveOrDetailFrame(button, text)
         -- Turn-in ready status line under quest
         if string.find(raw, "^%s*[Rr]eady for turn") or string.find(raw, "^%s*[Cc]ompleted") then
             return true
+        end
+    end
+
+    -- 3. Only if NONE of the objective checks matched:
+    -- Check if button has genuine quest info (definitively a Quest Title button)
+    if button then
+        if button.questID and type(button.questID) == "number" and button.questID > 0 then
+            return false
+        end
+        if button.info and not button.info.isHeader and button.info.title then
+            return false
+        end
+        if button.GetElementData then
+            local okED, ed = pcall(button.GetElementData, button)
+            if okED and ed then
+                if type(ed) == "number" and ed > 0 then
+                    return false
+                elseif type(ed) == "table" then
+                    if ed.questID and type(ed.questID) == "number" and ed.questID > 0 and not ed.isHeader then
+                        return false
+                    end
+                    if ed.info and not ed.info.isHeader and ed.info.title then
+                        return false
+                    end
+                end
+            end
         end
     end
 
@@ -242,6 +252,10 @@ end
 -- Hook fontString:SetText on a quest log button so Blizzard's text updates retain their badge synchronously
 local function HookQuestButtonText(button, fontString)
     if not fontString or fontString._worthItHooked then return end
+    -- Never hook objective lines or detail frames: prevents interference with Blizzard map hover highlights
+    if IsObjectiveOrDetailFrame(button, fontString.GetText and fontString:GetText()) then
+        return
+    end
     fontString._worthItHooked = true
 
     hooksecurefunc(fontString, "SetText", function(self, text)

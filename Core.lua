@@ -128,7 +128,6 @@ local function OnEvent(self, event, ...)
            event == "QUEST_DATA_LOAD_RESULT" or
            event == "QUEST_WATCH_UPDATE" or
            event == "UNIT_QUEST_LOG_CHANGED" or
-           event == "QUEST_POI_UPDATE" or
            event == "BAG_UPDATE_DELAYED" then
         if addon.Engine and addon.Engine.InvalidateCache then
             addon.Engine.InvalidateCache()
@@ -210,7 +209,7 @@ local EVENTS = {
     "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
     "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "QUEST_LOG_UPDATE",
     "QUEST_WATCH_LIST_CHANGED", "QUEST_DATA_LOAD_RESULT",
-    "QUEST_WATCH_UPDATE", "UNIT_QUEST_LOG_CHANGED", "QUEST_POI_UPDATE",
+    "QUEST_WATCH_UPDATE", "UNIT_QUEST_LOG_CHANGED",
     "BAG_UPDATE_DELAYED",
     "PLAYER_LEVEL_UP", "PLAYER_SPECIALIZATION_CHANGED", "CHARACTER_POINTS_CHANGED",
     "TRAIT_CONFIG_UPDATED", "PLAYER_EQUIPMENT_CHANGED",
