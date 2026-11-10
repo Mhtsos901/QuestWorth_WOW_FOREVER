@@ -568,7 +568,7 @@ Data.QuestPayoffs = {
     [174]  = { chain = "Look to the Stars (Step 1/3)", note = "Requires Bronze Tube from Engineering. Leads to telescope quest rewards.", summary = "Look to the Stars Chain" },
     [175]  = { chain = "Look to the Stars (Step 2/3)", summary = "Look to the Stars Chain" },
     [177]  = { chain = "Look to the Stars (Finale)", summary = "Look to the Stars (Finale)" },
-    [93]   = { reward = "Recipe: Seasoned Wolf Kabobs", note = "Darkshire cooking quest from Chef Grual.", summary = "Cooking Recipe Quest" },
+    [93]   = { reward = "Recipe: Seasoned Wolf Kabobs", note = "Farmed from Duskwood wolves (Starving/Rabid Dire Wolf) or bought on AH (tradeable meat).", summary = "Cooking Recipe Quest" },
     [377]  = { unlock = "Dungeon: The Stockade", note = "Stockade prison dungeon quest in Stormwind.", summary = "Dungeon: The Stockade", isKeyUnlock = true },
     [332]  = { reward = "Midnight Orb", note = "Elite quest to defeat Morganth in Tower of Azora / Redridge.", summary = "Redridge Elite Quest", isKeyUnlock = true },
 }
@@ -867,6 +867,7 @@ Data.QuestPayoffsByTitle = {
     },
     ["seasoned wolf kabobs"] = {
         reward = "Recipe: Seasoned Wolf Kabobs",
+        note = "Farmed from Duskwood wolves (Starving/Rabid Dire Wolf) or bought on AH (tradeable meat).",
         summary = "Cooking Recipe Quest",
     },
     ["crime and punishment"] = {
