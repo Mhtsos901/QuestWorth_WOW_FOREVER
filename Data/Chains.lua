@@ -135,6 +135,32 @@ function Data.ScanQuestLinesForMap(mapID)
 end
 
 -- =========================================================================
+-- Meta-Knowledge: Item-Quest Mapping (Hidden Item Drops & Quest Starters)
+-- =========================================================================
+Data.ItemQuestMap = {
+    [1358]  = 136,   -- Captain Sanders' Treasure Map (Westfall)
+    [1361]  = 138,   -- Captain Sanders' Treasure Map (Part 2)
+    [1362]  = 139,   -- Captain Sanders' Treasure Map (Part 3)
+    [8623]  = 2767,  -- OOX-17/TN Distress Beacon (Tanaris)
+    [8704]  = 2766,  -- OOX-09/HL Distress Beacon (Hinterlands)
+    [8705]  = 2768,  -- OOX-22/SC Distress Beacon (Feralas)
+    [5462]  = 943,   -- The Glowing Shard (Wailing Caverns)
+    [10593] = 3701,  -- Horn of the Beast (Margol the Rager / Searing Gorge Key)
+    [4098]  = 625,   -- Cortello's Riddle Scroll (Bloodsail / STV)
+    [4433]  = 633,   -- A Letter to Sully Balloo (Thandol Span)
+    [4854]  = 1017,  -- Befouled Water Globe (Ashenvale)
+    [4851]  = 954,   -- Glowing Stave (Darkshore)
+    [5805]  = 1435,  -- The Corrupter Flute (Desolace)
+    [10441] = 3367,  -- Slaghide Gauntlets (Searing Gorge)
+    [9254]  = 7003,  -- Perfect Yeti Hide (Feralas)
+    [12840] = 977,   -- Pristine Yeti Hide (Winterspring)
+    [13180] = 5405,  -- Araj's Scarab (Andorhal)
+    [12844] = 5401,  -- Minion's Scourgestone (WPL/EPL)
+    [2794]  = 338,   -- The Green Hills of Stranglethorn (STV)
+    [4941]  = 1029,  -- Dartol's Rod of Transformation (Ashenvale)
+}
+
+-- =========================================================================
 -- Meta-Knowledge: Curated Quest Payoffs, Key Unlocks & High-Value Rewards
 -- =========================================================================
 Data.QuestPayoffs = {
@@ -488,6 +514,36 @@ Data.QuestPayoffs = {
     [6062] = { unlock = "Ability: Beast Taming & Pet Training", note = "Hunter Level 10 class milestone.", summary = "Unlocks: Beast Taming & Pet Training", isKeyUnlock = true },
     [6063] = { unlock = "Ability: Beast Taming & Pet Training", note = "Hunter Level 10 class milestone.", summary = "Unlocks: Beast Taming & Pet Training", isKeyUnlock = true },
     [6064] = { unlock = "Ability: Beast Taming & Pet Training", note = "Hunter Level 10 class milestone.", summary = "Unlocks: Beast Taming & Pet Training", isKeyUnlock = true },
+
+    -- Hidden Item Drop Quests & Secrets
+    [2767] = { unlock = "Pet: Mechanical Chicken", chain = "Find OOX-17/TN! (Tanaris Escort)", origin = "Hidden Item Drop", note = "Rare distress beacon drop from Tanaris mobs.", summary = "Hidden Drop • OOX-17/TN Distress Beacon", isKeyUnlock = true },
+    [2766] = { unlock = "Pet: Mechanical Chicken", chain = "Find OOX-09/HL! (Hinterlands Escort)", origin = "Hidden Item Drop", note = "Rare distress beacon drop from Hinterlands mobs.", summary = "Hidden Drop • OOX-09/HL Distress Beacon", isKeyUnlock = true },
+    [2768] = { unlock = "Pet: Mechanical Chicken", chain = "Find OOX-22/SC! (Feralas Escort)", origin = "Hidden Item Drop", note = "Rare distress beacon drop from Feralas mobs.", summary = "Hidden Drop • OOX-22/SC Distress Beacon", isKeyUnlock = true },
+    [3791] = { reward = "Mechanical Chicken Companion Pet", chain = "An OOX of Your Own (Finale)", origin = "Secret Quest Finale", note = "Requires all 3 distress beacon escorts completed.", summary = "Reward: Mechanical Chicken Companion Pet", isKeyUnlock = true },
+    [633]  = { reward = "Sully Balloo's Letter", origin = "Hidden World Corpse", note = "Item drop from submerged dwarf corpse at Thandol Span.", summary = "Hidden Quest • Underwater Corpse at Thandol Span" },
+    [1017] = { origin = "Hidden Item Drop", note = "Item drop from Ashenvale water elementals.", summary = "Hidden Item Drop • Befouled Water Globe" },
+    [954]  = { origin = "Hidden Item Drop", note = "Item drop from Darkshore murlocs and naga.", summary = "Hidden Item Drop • Glowing Stave" },
+    [1435] = { origin = "Hidden Item Drop", note = "Item drop flute from Desolace centaurs.", summary = "Hidden Item Drop • The Corrupter" },
+    [3367] = { reward = "Slaghide Gauntlets (Mail/Leather)", origin = "Hidden Item Drop", note = "Item drop in Searing Gorge.", summary = "Hidden Item Drop • Slaghide Gauntlets" },
+    [7003] = { reward = "Pratt's Handcrafted Gloves", origin = "Hidden Item Drop", note = "Rare item drop from Feralas yetis.", summary = "Hidden Drop • Perfect Yeti Hide" },
+    [977]  = { reward = "Pristine Yeti Hide Gear", origin = "Hidden Item Drop", note = "Rare item drop from Winterspring yetis.", summary = "Hidden Drop • Pristine Yeti Hide" },
+    [5405] = { origin = "Hidden Item Drop", note = "Item drop from Araj the Summoner in Andorhal.", summary = "Hidden Drop • Araj's Scarab" },
+    [5401] = { origin = "Hidden Item Drop", note = "Scourgestone turn-ins in Western/Eastern Plaguelands.", summary = "Argent Dawn Commission Turn-in" },
+    [338]  = { reward = "Jungle Remedy / STV Book", origin = "Secret Collection", note = "Collection of all 4 chapters of Hemingway's book.", summary = "STV Lore • Green Hills of Stranglethorn" },
+
+    -- Wanted Posters & Bounties
+    [176]  = { reward = "Redridge Machete / Footman's Boots", origin = "Wanted Poster", note = "Wanted poster outside Lion's Pride Inn in Elwynn.", summary = "Wanted Poster • Hogger Bounty", isKeyUnlock = true },
+    [267]  = { reward = "Chok'sul's Cleaver", origin = "Wanted Poster", note = "Wanted poster in Thelsamar (Loch Modan).", summary = "Wanted Poster • Chok'sul Bounty", isKeyUnlock = true },
+    [184]  = { origin = "Wanted Poster", note = "Wanted poster in Sentinel Hill (Westfall).", summary = "Wanted Poster • Lieutenant Valent Bounty" },
+    [125]  = { reward = "Blackrock Mace / Redridge Shield", origin = "Wanted Poster", note = "Wanted poster outside Lakeshire Town Hall.", summary = "Wanted Poster • Gath'Ilzogg Bounty", isKeyUnlock = true },
+    [563]  = { origin = "Wanted Poster", note = "Wanted poster in Southshore (Hillsbrad).", summary = "Wanted Poster • Baron Vardus Bounty" },
+    [681]  = { origin = "Wanted Poster", note = "Wanted poster in Refuge Pointe (Arathi).", summary = "Wanted Poster • Syndicate Personnel Bounty" },
+    [2781] = { origin = "Wanted Poster", note = "Wanted poster in Gadgetzan (Tanaris).", summary = "Wanted Poster • Caliph Scorpidsting" },
+    [2875] = { origin = "Wanted Poster", note = "Wanted poster in Gadgetzan (Tanaris).", summary = "Wanted Poster • Andre Firebeard" },
+    [4740] = { origin = "Wanted Poster", note = "Wanted poster in Auberdine (Darkshore).", summary = "Wanted Poster • Murkdeep Bounty" },
+    [2855] = { origin = "Wanted Poster", note = "Wanted poster in Aerie Peak (Hinterlands).", summary = "Wanted Poster • Vile Priestess Hexx" },
+    [1070] = { origin = "Wanted Poster", note = "Wanted poster in Sun Rock Retreat / Stonetalon.", summary = "Wanted Poster • Besseleth Bounty" },
+    [231]  = { origin = "Wanted Poster", note = "Wanted poster in Darkshire (Duskwood).", summary = "Wanted Poster • Maggot Eye Bounty" },
 }
 
 -- Title-based matching (handles custom Forever servers or varying quest IDs)
@@ -668,6 +724,96 @@ Data.QuestPayoffsByTitle = {
         summary = "Reward: Whirlwind Axe / Weapon (Level 30)",
         isKeyUnlock = true,
     },
+    ["find oox-17/tn!"] = {
+        unlock = "Pet: Mechanical Chicken",
+        origin = "Hidden Item Drop",
+        note = "Rare distress beacon drop in Tanaris.",
+        summary = "Hidden Drop • OOX-17/TN Distress Beacon",
+        isKeyUnlock = true,
+    },
+    ["find oox-09/hl!"] = {
+        unlock = "Pet: Mechanical Chicken",
+        origin = "Hidden Item Drop",
+        note = "Rare distress beacon drop in Hinterlands.",
+        summary = "Hidden Drop • OOX-09/HL Distress Beacon",
+        isKeyUnlock = true,
+    },
+    ["find oox-22/sc!"] = {
+        unlock = "Pet: Mechanical Chicken",
+        origin = "Hidden Item Drop",
+        note = "Rare distress beacon drop in Feralas.",
+        summary = "Hidden Drop • OOX-22/SC Distress Beacon",
+        isKeyUnlock = true,
+    },
+    ["an oox of your own"] = {
+        reward = "Mechanical Chicken Companion Pet",
+        origin = "Secret Quest Finale",
+        summary = "Reward: Mechanical Chicken Companion Pet",
+        isKeyUnlock = true,
+    },
+    ["a letter to sully balloo"] = {
+        origin = "Hidden World Corpse",
+        note = "Underwater dwarf corpse at Thandol Span.",
+        summary = "Hidden Quest • Underwater Corpse at Thandol Span",
+    },
+    ["the green hills of stranglethorn"] = {
+        origin = "Secret Collection",
+        summary = "STV Lore • Green Hills of Stranglethorn",
+    },
+    ["wanted: hogger"] = {
+        reward = "Redridge Machete / Footman's Boots",
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Hogger Bounty",
+        isKeyUnlock = true,
+    },
+    ["wanted: chok'sul"] = {
+        reward = "Chok'sul's Cleaver",
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Chok'sul Bounty",
+        isKeyUnlock = true,
+    },
+    ["wanted: lieutenant valent"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Lieutenant Valent Bounty",
+    },
+    ["wanted: gath'ilzogg"] = {
+        reward = "Blackrock Mace / Redridge Shield",
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Gath'Ilzogg Bounty",
+        isKeyUnlock = true,
+    },
+    ["wanted: baron vardus"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Baron Vardus Bounty",
+    },
+    ["wanted: syndicate personnel"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Syndicate Personnel Bounty",
+    },
+    ["wanted: caliph scorpidsting"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Caliph Scorpidsting",
+    },
+    ["wanted: andre firebeard"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Andre Firebeard",
+    },
+    ["wanted: murkdeep"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Murkdeep Bounty",
+    },
+    ["wanted: vile priestess hexx"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Vile Priestess Hexx",
+    },
+    ["wanted: besseleth"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Besseleth Bounty",
+    },
+    ["wanted: maggot eye"] = {
+        origin = "Wanted Poster",
+        summary = "Wanted Poster • Maggot Eye Bounty",
+    },
 }
 
 -- Known dungeon & instance keywords for the Auto-Detector
@@ -707,6 +853,7 @@ function Data.GetQuestPayoff(questID, questTitle)
             reward = entry.reward,
             chain = entry.chain,
             note = entry.note,
+            origin = entry.origin,
             summary = entry.summary,
             isKeyUnlock = entry.isKeyUnlock or false,
         }
@@ -732,6 +879,7 @@ function Data.GetQuestPayoff(questID, questTitle)
                 reward = entry.reward,
                 chain = entry.chain,
                 note = entry.note,
+                origin = entry.origin,
                 summary = entry.summary,
                 isKeyUnlock = entry.isKeyUnlock or false,
             }
@@ -743,6 +891,7 @@ function Data.GetQuestPayoff(questID, questTitle)
     local detectedReward = nil
     local detectedChain = nil
     local detectedNote = nil
+    local detectedOrigin = nil
     local isKeyUnlock = false
 
     if targetID and targetID > 0 and addon.Utils and addon.Utils.GetQuestRewardData then
@@ -795,10 +944,35 @@ function Data.GetQuestPayoff(questID, questTitle)
             detectedUnlock = detectedUnlock or "Key Unlock Quest"
             isKeyUnlock = true
         end
+        if string.find(cleanTitle, "^wanted") or string.find(cleanTitle, "bounty") then
+            detectedOrigin = "Wanted Poster / Bounty"
+            isKeyUnlock = true
+        elseif string.find(cleanTitle, "beacon") or string.find(cleanTitle, "letter") or
+               string.find(cleanTitle, "scroll") or string.find(cleanTitle, "riddle") or
+               string.find(cleanTitle, "parchment") or string.find(cleanTitle, "bottle") or
+               string.find(cleanTitle, "shard") or string.find(cleanTitle, "horn") or
+               string.find(cleanTitle, "map") or string.find(cleanTitle, "globe") or
+               string.find(cleanTitle, "ledger") or string.find(cleanTitle, "flute") or
+               string.find(cleanTitle, "hide") or string.find(cleanTitle, "scarab") or
+               string.find(cleanTitle, "scourgestone") then
+            detectedOrigin = "Hidden Item Drop / Secret"
+        end
+    end
+
+    -- Detect WoW Forever Custom Content (Riverglades & Zephras Isle)
+    if C_Map and C_Map.GetBestMapForUnit then
+        local ok, currentMap = pcall(C_Map.GetBestMapForUnit, "player")
+        if ok and currentMap then
+            if currentMap == 2548 then
+                detectedNote = detectedNote or "WoW Forever Custom Content (Riverglades)"
+            elseif currentMap == 2521 then
+                detectedNote = detectedNote or "WoW Forever Custom Content (Zephras Isle)"
+            end
+        end
     end
 
     -- Merge auto-detected attributes if not already present
-    if not payoff and (detectedUnlock or detectedReward or detectedChain or detectedNote) then
+    if not payoff and (detectedUnlock or detectedReward or detectedChain or detectedNote or detectedOrigin) then
         payoff = {}
     end
 
@@ -807,11 +981,13 @@ function Data.GetQuestPayoff(questID, questTitle)
         payoff.reward = payoff.reward or detectedReward
         payoff.chain = payoff.chain or detectedChain
         payoff.note = payoff.note or detectedNote
+        payoff.origin = payoff.origin or detectedOrigin
         if isKeyUnlock then payoff.isKeyUnlock = true end
 
         -- Build concise summary if missing
         if not payoff.summary then
             local parts = {}
+            if payoff.origin then table.insert(parts, payoff.origin) end
             if payoff.unlock then table.insert(parts, payoff.unlock) end
             if payoff.reward then table.insert(parts, payoff.reward) end
             if #parts == 0 and payoff.chain then table.insert(parts, payoff.chain) end

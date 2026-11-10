@@ -46,6 +46,10 @@ local enUS = {
     ["PAYOFF_REWARD"] = "Top Reward:",
     ["PAYOFF_CHAIN"] = "Chain:",
     ["PAYOFF_NOTE"] = "Note:",
+    ["PAYOFF_TYPE"] = "Type:",
+    ["ITEM_QUEST_STARTER"] = "★ Hidden / Item Quest Starter:",
+    ["ITEM_STARTS_QUEST"] = "Starts Quest:",
+    ["ITEM_CLICK_TO_START"] = "Right-click in inventory to start quest!",
 }
 
 -- Greek translations (elGR)
@@ -85,6 +89,10 @@ local elGR = {
     ["PAYOFF_REWARD"] = "Κύρια Ανταμοιβή:",
     ["PAYOFF_CHAIN"] = "Αλυσίδα:",
     ["PAYOFF_NOTE"] = "Σημείωση:",
+    ["PAYOFF_TYPE"] = "Τύπος:",
+    ["ITEM_QUEST_STARTER"] = "★ Έναρξη Κρυφού Quest (Αντικείμενο):",
+    ["ITEM_STARTS_QUEST"] = "Ξεκινάει Quest:",
+    ["ITEM_CLICK_TO_START"] = "Δεξί κλικ στην τσάντα για να ξεκινήσετε!",
 }
 
 for k, v in pairs(enUS) do

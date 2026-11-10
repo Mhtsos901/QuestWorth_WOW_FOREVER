@@ -168,9 +168,12 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
 
     -- Meta-Knowledge: Key Unlock & Payoff details
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
-    if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note) then
+    if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin) then
         tooltip:AddLine(" ")
         tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
+        if payoff.origin then
+            tooltip:AddDoubleLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r", "|cffffffff" .. payoff.origin .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+        end
         if payoff.unlock then
             tooltip:AddDoubleLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r", "|cffffffff" .. payoff.unlock .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
         end
@@ -189,6 +192,68 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
 
     if isLegacy and tooltip.Show then
         tooltip:Show()
+    end
+end
+
+-- Check if an item tooltip text indicates it begins a quest
+local function TooltipHasQuestStarterText(tooltip)
+    if not tooltip or not tooltip.NumLines then return false end
+    local numLines = tooltip:NumLines() or 0
+    local name = tooltip:GetName()
+    if not name then return false end
+    for i = 1, numLines do
+        local line = _G[name .. "TextLeft" .. i]
+        if line and line.GetText then
+            local text = line:GetText()
+            if text and (string.find(text, "Begins a Quest", 1, true) or
+                         string.find(text, "starts a quest", 1, true) or
+                         (ITEM_STARTS_QUEST and string.find(text, ITEM_STARTS_QUEST, 1, true))) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Inject Hidden / Item Quest Starter notification when hovering items in inventory
+local function AddItemQuestStarterLines(tooltip)
+    if not (addon.db and addon.db.enabled) then return end
+    if not tooltip or not tooltip.GetItem then return end
+
+    local name, link = tooltip:GetItem()
+    if not link then return end
+
+    local itemID = tonumber(string.match(link, "item:(%d+)"))
+    if not itemID or itemID <= 0 then return end
+
+    if tooltip._worthItAddedItemID == itemID then return end
+
+    local qID = addon.Data and addon.Data.ItemQuestMap and addon.Data.ItemQuestMap[itemID]
+    local isStarter = (qID ~= nil)
+
+    if not isStarter then
+        local _, _, _, _, _, itemType, _, _, _, _, _, _, classID = addon.Utils.SafeGetItemInfo(link)
+        if classID == 12 or itemType == "Quest" then
+            isStarter = TooltipHasQuestStarterText(tooltip)
+        end
+    end
+
+    if isStarter then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cffffd100" .. (L["ITEM_QUEST_STARTER"] or "★ Hidden / Item Quest Starter:") .. "|r")
+        if qID then
+            local info = addon.Utils.GetQuestBasicInfo(qID)
+            local payoff = addon.Data.GetQuestPayoff(qID)
+            if info and info.title then
+                tooltip:AddDoubleLine("  |cff00ffff" .. (L["ITEM_STARTS_QUEST"] or "Starts Quest:") .. "|r", "|cffffffff" .. info.title .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+            end
+            if payoff and payoff.summary then
+                tooltip:AddDoubleLine("  |cffffd100" .. (L["PAYOFF_REWARD"] or "Payoff:") .. "|r", "|cffffffff" .. payoff.summary .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+            end
+        end
+        tooltip:AddLine("  |cff00ff00" .. (L["ITEM_CLICK_TO_START"] or "Right-click in inventory to start quest!") .. "|r")
+        tooltip._worthItAddedItemID = itemID
+        if tooltip.Show then tooltip:Show() end
     end
 end
 
@@ -211,21 +276,29 @@ end
 -- Clear the deduplication token when tooltip is cleared
 local function OnTooltipCleared(tooltip)
     tooltip._worthItAddedQuestID = nil
+    tooltip._worthItAddedItemID = nil
 end
 
 function UI.InitializeTooltips()
     local hooked = false
 
     -- Method 1: Modern TooltipDataProcessor (Interface 16001 / Modern Mainline engine)
-    if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Quest then
-        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Quest, function(tooltip, data)
-            local qID = data and (data.id or data.questID)
-            if qID and qID > 0 then
-                AddWorthLinesToTooltip(tooltip, qID, false)
-            end
-        end)
+    if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+        if Enum.TooltipDataType.Quest then
+            TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Quest, function(tooltip, data)
+                local qID = data and (data.id or data.questID)
+                if qID and qID > 0 then
+                    AddWorthLinesToTooltip(tooltip, qID, false)
+                end
+            end)
+        end
+        if Enum.TooltipDataType.Item then
+            TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+                AddItemQuestStarterLines(tooltip)
+            end)
+        end
         hooked = true
-        addon.Debug("Hooked TooltipDataProcessor for Quest tooltips.")
+        addon.Debug("Hooked TooltipDataProcessor for Quest and Item tooltips.")
     end
 
     -- Hook GameTooltip Clear
@@ -237,6 +310,18 @@ function UI.InitializeTooltips()
     if ItemRefTooltip and ItemRefTooltip.HookScript then
         pcall(function()
             ItemRefTooltip:HookScript("OnTooltipCleared", OnTooltipCleared)
+        end)
+    end
+
+    -- Hook Item tooltips for Legacy / Classic client
+    if GameTooltip and GameTooltip.HookScript then
+        pcall(function()
+            GameTooltip:HookScript("OnTooltipSetItem", AddItemQuestStarterLines)
+        end)
+    end
+    if ItemRefTooltip and ItemRefTooltip.HookScript then
+        pcall(function()
+            ItemRefTooltip:HookScript("OnTooltipSetItem", AddItemQuestStarterLines)
         end)
     end
 
