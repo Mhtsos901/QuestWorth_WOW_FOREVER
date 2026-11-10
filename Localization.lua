@@ -41,6 +41,11 @@ local enUS = {
     ["HELP_TRACKER"] = "  |cffffcc00/worthit tracker|r - Toggle score tags in Objective Tracker",
     ["HELP_TEST"] = "  |cffffcc00/worthit test|r - Run diagnostic tests on all 5 scores",
     ["HELP_RESET"] = "  |cffffcc00/worthit reset|r - Reset to default weights and settings",
+    ["PAYOFF_HEADER"] = "★ Key Unlock & Payoff:",
+    ["PAYOFF_UNLOCKS"] = "Unlocks:",
+    ["PAYOFF_REWARD"] = "Top Reward:",
+    ["PAYOFF_CHAIN"] = "Chain:",
+    ["PAYOFF_NOTE"] = "Note:",
 }
 
 -- Greek translations (elGR)
@@ -75,6 +80,11 @@ local elGR = {
     ["HELP_TRACKER"] = "  |cffffcc00/worthit tracker|r - Εμφάνιση σκορ στο Objective Tracker",
     ["HELP_TEST"] = "  |cffffcc00/worthit test|r - Εκτέλεση διαγνωστικών ελέγχων και στα 5 σκορ",
     ["HELP_RESET"] = "  |cffffcc00/worthit reset|r - Επαναφορά προεπιλογών",
+    ["PAYOFF_HEADER"] = "★ Ξεκλείδωμα & Ανταμοιβή:",
+    ["PAYOFF_UNLOCKS"] = "Ξεκλειδώνει:",
+    ["PAYOFF_REWARD"] = "Κύρια Ανταμοιβή:",
+    ["PAYOFF_CHAIN"] = "Αλυσίδα:",
+    ["PAYOFF_NOTE"] = "Σημείωση:",
 }
 
 for k, v in pairs(enUS) do

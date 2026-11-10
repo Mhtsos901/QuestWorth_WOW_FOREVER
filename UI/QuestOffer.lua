@@ -24,6 +24,26 @@ if _G["WorthIt_QuestOfferPill"] then
     _G["WorthIt_QuestOfferPill"]:SetParent(nil)
 end
 
+local titleHoverFrame = nil
+local function EnsureTitleHoverFrame()
+    if titleHoverFrame then return titleHoverFrame end
+    if not QuestInfoTitleHeader then return nil end
+    local parent = QuestInfoTitleHeader:GetParent() or QuestFrameDetailPanel or QuestFrame
+    titleHoverFrame = CreateFrame("Frame", "WorthIt_QuestOfferTitleHover", parent)
+    titleHoverFrame:SetAllPoints(QuestInfoTitleHeader)
+    titleHoverFrame:EnableMouse(true)
+    titleHoverFrame:SetFrameLevel((parent:GetFrameLevel() or 1) + 10)
+    titleHoverFrame:SetScript("OnEnter", function(self)
+        if self.questID and self.questID > 0 and UI.ShowQuestTooltip then
+            UI.ShowQuestTooltip(GameTooltip, self.questID, self)
+        end
+    end)
+    titleHoverFrame:SetScript("OnLeave", function(self)
+        if GameTooltip then GameTooltip:Hide() end
+    end)
+    return titleHoverFrame
+end
+
 -- Update Quest Detail / Offer dialog (QuestFrameDetailPanel / QuestInfoTitleHeader)
 local function UpdateQuestOfferDialog()
     if not (addon.db and addon.db.enabled) then return end
@@ -67,7 +87,10 @@ local function UpdateQuestOfferDialog()
         end
     end
 
-    if not qID or qID <= 0 then return end
+    if not qID or qID <= 0 then
+        if titleHoverFrame then titleHoverFrame:Hide() end
+        return
+    end
 
     local worth, breakdown = addon.Engine.CalculateWorth(qID)
     if not worth then return end
@@ -77,12 +100,24 @@ local function UpdateQuestOfferDialog()
     local isBankable = (breakdown and breakdown.isBankable)
     local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
 
+    -- Attach mouseover tooltip on QuestInfoTitleHeader
+    local hover = EnsureTitleHoverFrame()
+    if hover then
+        hover.questID = qID
+        hover:Show()
+    end
+
     -- 1. Badge QuestInfoTitleHeader at the top of the quest offer parchment
     if QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader.SetText then
         local rawTitle = QuestInfoTitleHeader:GetText() or ""
         if rawTitle ~= "" then
             local clean = Utils.CleanQuestTitle(rawTitle)
-            local targetTitle = badge .. " " .. clean
+            local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
+            local payoffLine = ""
+            if payoff and payoff.summary and payoff.summary ~= "" then
+                payoffLine = "\n|cffffd100★ " .. payoff.summary .. "|r"
+            end
+            local targetTitle = badge .. " " .. clean .. payoffLine
             if rawTitle ~= targetTitle then
                 QuestInfoTitleHeader:SetText(targetTitle)
             end
@@ -94,7 +129,12 @@ local function UpdateQuestOfferDialog()
         local raw = QuestDetailTitleText:GetText() or ""
         if raw ~= "" then
             local clean = Utils.CleanQuestTitle(raw)
-            local target = badge .. " " .. clean
+            local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
+            local payoffLine = ""
+            if payoff and payoff.summary and payoff.summary ~= "" then
+                payoffLine = "\n|cffffd100★ " .. payoff.summary .. "|r"
+            end
+            local target = badge .. " " .. clean .. payoffLine
             if raw ~= target then
                 QuestDetailTitleText:SetText(target)
             end
@@ -142,6 +182,21 @@ local function UpdateGossipAvailableQuests()
                             if raw ~= target then
                                 fontString:SetText(target)
                             end
+
+                            -- Hook frame tooltip to show Worth breakdown and payoffs on hover
+                            if not frame._worthItHooked and frame.HookScript then
+                                frame._worthItHooked = true
+                                frame:HookScript("OnEnter", function(self)
+                                    local d = self.GetElementData and self:GetElementData()
+                                    local id = d and ((d.info and d.info.questID) or d.questID)
+                                    if id and id > 0 and UI.ShowQuestTooltip then
+                                        UI.ShowQuestTooltip(GameTooltip, id, self)
+                                    end
+                                end)
+                                frame:HookScript("OnLeave", function()
+                                    if GameTooltip then GameTooltip:Hide() end
+                                end)
+                            end
                         end
                     end
                 end
@@ -166,6 +221,19 @@ local function UpdateGossipAvailableQuests()
                     local target = badge .. " " .. clean
                     if raw ~= target then
                         button:SetText(target)
+                    end
+
+                    button._worthItQuestID = qInfo.questID
+                    if not button._worthItHooked and button.HookScript then
+                        button._worthItHooked = true
+                        button:HookScript("OnEnter", function(self)
+                            if self._worthItQuestID and UI.ShowQuestTooltip then
+                                UI.ShowQuestTooltip(GameTooltip, self._worthItQuestID, self)
+                            end
+                        end)
+                        button:HookScript("OnLeave", function()
+                            if GameTooltip then GameTooltip:Hide() end
+                        end)
                     end
                 end
             end
@@ -206,6 +274,19 @@ local function UpdateQuestGreetingPanel()
                         if raw ~= target then
                             button:SetText(target)
                         end
+
+                        button._worthItQuestID = qID
+                        if not button._worthItHooked and button.HookScript then
+                            button._worthItHooked = true
+                            button:HookScript("OnEnter", function(self)
+                                if self._worthItQuestID and UI.ShowQuestTooltip then
+                                    UI.ShowQuestTooltip(GameTooltip, self._worthItQuestID, self)
+                                end
+                            end)
+                            button:HookScript("OnLeave", function()
+                                if GameTooltip then GameTooltip:Hide() end
+                            end)
+                        end
                     end
                 end
             end
@@ -218,6 +299,14 @@ function UI.InitializeQuestOffer()
     if QuestInfo_Display then
         hooksecurefunc("QuestInfo_Display", function()
             UpdateQuestOfferDialog()
+        end)
+    end
+
+    if QuestFrame and QuestFrame.HookScript then
+        pcall(function()
+            QuestFrame:HookScript("OnHide", function()
+                if titleHoverFrame then titleHoverFrame:Hide() end
+            end)
         end)
     end
 

@@ -371,7 +371,7 @@ end
 
 function Utils.CleanQuestTitle(title)
     if not title or title == "" then return "" end
-    local cleaned = title
+    local cleaned = string.gsub(title, "[\r\n].*$", "")
     local changed = true
     local passes = 0
     while changed and passes < 5 do

@@ -793,6 +793,16 @@ function Engine.PrintBreakdown(questID)
         L["CLASS_FIT"], Utils.FormatScore(b.f), b.wF * 100))
     DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (H): %s |cff888888(Weight: %.0f%%)|r",
         L["DENSITY"] or "Hub Density", Utils.FormatScore(b.h), b.wH * 100))
+
+    local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID, info.title)
+    if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note) then
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
+        if payoff.unlock then DEFAULT_CHAT_FRAME:AddMessage("    * |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r " .. payoff.unlock) end
+        if payoff.reward then DEFAULT_CHAT_FRAME:AddMessage("    * |cffffd100" .. L["PAYOFF_REWARD"] .. "|r " .. payoff.reward) end
+        if payoff.chain then DEFAULT_CHAT_FRAME:AddMessage("    * |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r " .. payoff.chain) end
+        if payoff.note then DEFAULT_CHAT_FRAME:AddMessage("    * |cffbbbbbb" .. L["PAYOFF_NOTE"] .. "|r " .. payoff.note) end
+    end
+
     DEFAULT_CHAT_FRAME:AddMessage(L["DEBUG_BREAKDOWN_FOOTER"])
 end
 

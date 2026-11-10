@@ -166,11 +166,46 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         end
     end
 
+    -- Meta-Knowledge: Key Unlock & Payoff details
+    local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
+    if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note) then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
+        if payoff.unlock then
+            tooltip:AddDoubleLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r", "|cffffffff" .. payoff.unlock .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+        end
+        if payoff.reward then
+            tooltip:AddDoubleLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r", "|cffffffff" .. payoff.reward .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+        end
+        if payoff.chain then
+            tooltip:AddDoubleLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r", "|cffffffff" .. payoff.chain .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+        end
+        if payoff.note then
+            tooltip:AddLine("  |cffbbbbbb" .. payoff.note .. "|r")
+        end
+    end
+
     tooltip._worthItAddedQuestID = questID
 
     if isLegacy and tooltip.Show then
         tooltip:Show()
     end
+end
+
+-- Programmatic Tooltip display for NPC dialogs, gossip, or custom frames
+function UI.ShowQuestTooltip(tooltip, questID, owner)
+    if not tooltip or not questID or questID <= 0 then return end
+    if owner then
+        tooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    end
+    tooltip:ClearLines()
+    local info = Utils.GetQuestBasicInfo(questID)
+    local title = info and info.title or ("Quest #" .. questID)
+    local level = info and info.level
+    local levelStr = (level and level > 0) and (" [" .. level .. "]") or ""
+    tooltip:AddLine(title .. levelStr, 1, 0.82, 0)
+    AddWorthLinesToTooltip(tooltip, questID, true)
+    if tooltip.Show then tooltip:Show() end
 end
 
 -- Clear the deduplication token when tooltip is cleared
