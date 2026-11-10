@@ -73,12 +73,39 @@ $$\text{Worth} = (D \cdot w_D) + (R \cdot w_R) + (C \cdot w_C) + (F \cdot w_F) +
   - 3 quests: $0.85$.
   - 4+ quests: $1.00$ (dense hub synergy).
 
-### 🗺️ Zone Header Worth %
-Geographical Zone Headers in the Quest Log (e.g. `Westfall`, `Loch Modan`, `Redridge Mountains`) dynamically calculate a composite zone score:
+### 🗺️ Zone Header Worth % & Zone Advisor Sidebar
+Geographical Zone Headers in the Quest Log dynamically calculate a composite zone score:
 $$\text{Zone Worth} = (0.60 \cdot \text{avgWorth}) + (0.40 \cdot \text{maxWorth})$$
 - Displays a clean `[XX%]` badge next to each zone name.
 - Persistent zone-to-quest tracking preserves accurate cluster counts and zone scores even when headers are collapsed (`[+]`) in the Quest Log.
-- Allows players to instantly see if a zone is worth traveling to or has been depleted/outleveled.
+- **Zone Advisor Sidebar**: Built directly into the World Map. Click the `[Zones]` button in the top header to toggle an interactive zone guide ranking every leveling zone by player level, faction, mob ecology, and active quests. Features 1-click map navigation and filters (`All`, `Optimal 70%+`, `In Log`).
+
+---
+
+## 🌟 Meta-Knowledge: Quest Payoffs, Unlocks & Hidden Quests
+
+WoW Forever contains quests that look mundane on the surface but are essential prerequisites for major dungeons, keys, or BiS items. QuestWorth surfaces this hidden meta-knowledge directly:
+
+### 1. Before Accepting (NPC Quest Offer & Gossip)
+- **Quest Offer Parchment**: Displays gold payoff callouts directly under the title (e.g. `★ Unlocks: Deadmines Dungeon • Westfall Tunic (Rare)`).
+- **Interactive Title Hover**: Hovering over the quest title on the NPC parchment opens the full breakdown tooltip.
+- **Gossip List Hover**: Hovering over any available quest in an NPC's gossip dialog shows the full Worth tooltip.
+
+### 2. After Accepting (Quest Log, Tracker & Map)
+- Hovering any quest in the Quest Log, Tracker, or World Map displays the `★ Key Unlock & Payoff:` section:
+  - **Unlocks**: Dungeon access, attunements, portals, or class abilities.
+  - **Top Reward**: Iconic Rare/Epic items (e.g. *Bonebiter*, *Thrash Blade*, *Triprunner Dungarees*).
+  - **Chain Context**: Current step and finale indicators.
+  - **Tactical Notes**: Crucial gameplay reminders (e.g. *"DO NOT turn in if you want to keep Furbolg disguise!"*).
+
+### 3. Hidden & Item-Started Quest Alerts in Bags
+- **Inventory Item Tooltips**: When hovering any item in your bags that begins a quest (e.g. *OOX Distress Beacons*, *Cortello's Riddle Scroll*, *Captain Sanders' Treasure Map*, *Glowing Shard*, *Horn of the Beast*), the item tooltip highlights:
+  - `★ Hidden / Item Quest Starter`
+  - `Starts Quest: [Quest Name]`
+  - `Payoff: [Reward / Pet / Bag]`
+  - `Right-click in inventory to start quest!`
+- **Wanted Posters & Bounties**: Full detection of all classic and custom bounty posters.
+- **WoW Forever Custom Content**: Native awareness and dynamic analysis of custom Forever quests and zones (e.g. *Riverglades*, *Zephras Isle*).
 
 ---
 
