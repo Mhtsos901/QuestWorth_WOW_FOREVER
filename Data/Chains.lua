@@ -83,6 +83,16 @@ Data.KnownChains = {
         quests = { 5742, 5944 },
         isImportant = true,
     },
+    -- [1060] The Night Watch (Duskwood Undead Defense)
+    [1060] = {
+        quests = { 57, 58, 60 },
+        isImportant = true,
+    },
+    -- [1065] The Hermit & Eliza (Duskwood Lore)
+    [1065] = {
+        quests = { 148, 156, 157, 158 },
+        isImportant = true,
+    },
 }
 
 -- Build the fast lookup reverse index
@@ -544,6 +554,23 @@ Data.QuestPayoffs = {
     [2855] = { origin = "Wanted Poster", note = "Wanted poster in Aerie Peak (Hinterlands).", summary = "Wanted Poster • Vile Priestess Hexx" },
     [1070] = { origin = "Wanted Poster", note = "Wanted poster in Sun Rock Retreat / Stonetalon.", summary = "Wanted Poster • Besseleth Bounty" },
     [231]  = { origin = "Wanted Poster", note = "Wanted poster in Darkshire (Duskwood).", summary = "Wanted Poster • Maggot Eye Bounty" },
+
+    -- Duskwood Leveling Chains & Lore
+    [57]   = { chain = "The Night Watch (Step 1/3)", note = "Darkshire undead defense series. Kill Skeletal Warriors and Mages.", summary = "The Night Watch (Step 1/3)" },
+    [58]   = { chain = "The Night Watch (Step 2/3)", note = "Second step in Raven Hill cemetery against Plague Spreaders.", summary = "The Night Watch (Step 2/3)" },
+    [60]   = { reward = "Ring of the Night Watch / Weapon", chain = "The Night Watch (Step 3/3 Finale)", note = "Confronting Nightbane Worgens in Roland's Doom.", summary = "The Night Watch Finale • Ring of the Night Watch", isKeyUnlock = true },
+    [226]  = { chain = "The Story of Morgan Ladimore (Pre-quest)", note = "Raven Hill cemetery investigation. Leads to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)" },
+    [148]  = { chain = "The Hermit & Eliza (Step 1/4)", note = "Abercrombie in Raven Hill. Leads to the haunting of Eliza's Tomb.", summary = "The Hermit & Eliza Chain" },
+    [156]  = { chain = "The Hermit & Eliza (Step 2/4)", summary = "The Hermit & Eliza Chain" },
+    [157]  = { chain = "The Hermit & Eliza (Step 3/4)", summary = "The Hermit & Eliza Chain" },
+    [158]  = { chain = "The Hermit & Eliza (Finale)", summary = "The Hermit & Eliza Finale" },
+    [163]  = { note = "Althea Ebonlocke's research into the Darkshire undead curse.", summary = "Duskwood Undead Defense" },
+    [174]  = { chain = "Look to the Stars (Step 1/3)", note = "Requires Bronze Tube from Engineering. Leads to telescope quest rewards.", summary = "Look to the Stars Chain" },
+    [175]  = { chain = "Look to the Stars (Step 2/3)", summary = "Look to the Stars Chain" },
+    [177]  = { chain = "Look to the Stars (Finale)", summary = "Look to the Stars (Finale)" },
+    [93]   = { reward = "Recipe: Seasoned Wolf Kabobs", note = "Darkshire cooking quest from Chef Grual.", summary = "Cooking Recipe Quest" },
+    [377]  = { unlock = "Dungeon: The Stockade", note = "Stockade prison dungeon quest in Stormwind.", summary = "Dungeon: The Stockade", isKeyUnlock = true },
+    [332]  = { reward = "Midnight Orb", note = "Elite quest to defeat Morganth in Tower of Azora / Redridge.", summary = "Redridge Elite Quest", isKeyUnlock = true },
 }
 
 -- Title-based matching (handles custom Forever servers or varying quest IDs)
@@ -813,6 +840,44 @@ Data.QuestPayoffsByTitle = {
     ["wanted: maggot eye"] = {
         origin = "Wanted Poster",
         summary = "Wanted Poster • Maggot Eye Bounty",
+    },
+    ["the night watch"] = {
+        chain = "The Night Watch",
+        note = "Alliance iconic Duskwood undead defense chain.",
+        summary = "The Night Watch Chain (Step 1/3)",
+    },
+    ["the valor family"] = {
+        chain = "The Story of Morgan Ladimore",
+        note = "Leads to Mor'ladim & Archeus (Rare 2H Sword).",
+        summary = "Leads to: Mor'ladim & Archeus (Rare Sword)",
+    },
+    ["the hermit"] = {
+        chain = "The Hermit & Eliza",
+        note = "Abercrombie in Raven Hill. Leads to Eliza's Tomb.",
+        summary = "The Hermit & Eliza Chain",
+    },
+    ["the totem of infliction"] = {
+        note = "Althea Ebonlocke's research into the Darkshire undead curse.",
+        summary = "Duskwood Undead Defense",
+    },
+    ["look to the stars"] = {
+        chain = "Look to the Stars",
+        note = "Requires Bronze Tube from Engineering.",
+        summary = "Look to the Stars Chain",
+    },
+    ["seasoned wolf kabobs"] = {
+        reward = "Recipe: Seasoned Wolf Kabobs",
+        summary = "Cooking Recipe Quest",
+    },
+    ["crime and punishment"] = {
+        unlock = "Dungeon: The Stockade",
+        summary = "Dungeon: The Stockade",
+        isKeyUnlock = true,
+    },
+    ["shadow magic"] = {
+        reward = "Midnight Orb",
+        summary = "Redridge Elite Quest",
+        isKeyUnlock = true,
     },
 }
 

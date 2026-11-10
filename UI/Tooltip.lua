@@ -366,12 +366,41 @@ function UI.InitializeTooltips()
         end)
     end
 
-    -- Method 4: Hook QuestMapLogTitleButton_OnEnter
+    -- Method 4: Hook QuestMapLogTitleButton_OnEnter & QuestLogTitleButton_OnEnter
     if QuestMapLogTitleButton_OnEnter then
         hooksecurefunc("QuestMapLogTitleButton_OnEnter", function(button)
-            if button and button.questID then
-                addon.lastHoveredQuestID = button.questID
+            local qID = button and (button.questID or (button.GetElementData and button:GetElementData() and ((button:GetElementData().info and button:GetElementData().info.questID) or button:GetElementData().questID)))
+            if not qID and button and button.GetID then
+                local idx = button:GetID()
+                if idx and idx > 0 and C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, idx)
+                    if ok and info then qID = info.questID end
+                end
+            end
+            if qID and qID > 0 then
+                addon.lastHoveredQuestID = qID
+                AddWorthLinesToTooltip(GameTooltip, qID, true)
+            end
+        end)
+    end
+
+    if QuestLogTitleButton_OnEnter then
+        hooksecurefunc("QuestLogTitleButton_OnEnter", function(button)
+            local qID = button and button.questID
+            if not qID and button and button.GetID then
+                local idx = button:GetID()
+                if idx and idx > 0 and C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, idx)
+                    if ok and info then qID = info.questID end
+                end
+            end
+            if qID and qID > 0 then
+                addon.lastHoveredQuestID = qID
+                AddWorthLinesToTooltip(GameTooltip, qID, true)
             end
         end)
     end
 end
+
+-- Export routines
+UI.AddWorthLinesToTooltip = AddWorthLinesToTooltip

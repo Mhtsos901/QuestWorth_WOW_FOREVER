@@ -405,6 +405,37 @@ local function ProcessQuestButton(button, showTag)
     -- Hook text updates for genuine Quest Title Buttons
     HookQuestButtonText(button, fontString)
 
+    -- Hook OnEnter to inject Worth Meter & Meta-Knowledge Payoffs into GameTooltip
+    if not button._worthItHoverHooked and button.HookScript then
+        button._worthItHoverHooked = true
+        button:HookScript("OnEnter", function(self)
+            local id = self.questID
+            if not id and self.GetElementData then
+                local ok, ed = pcall(self.GetElementData, self)
+                if ok and ed and type(ed) == "table" then
+                    id = (ed.info and ed.info.questID) or ed.questID
+                end
+            end
+            if not id and self.GetID then
+                local idx = self:GetID()
+                if idx and idx > 0 and C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, idx)
+                    if ok and info then id = info.questID end
+                end
+            end
+            if not id and fontString and fontString.GetText then
+                id = ResolveButtonQuestID(self, fontString:GetText() or "")
+            end
+            if not id and qID then
+                id = qID
+            end
+            if id and id > 0 and UI.AddWorthLinesToTooltip then
+                addon.lastHoveredQuestID = id
+                UI.AddWorthLinesToTooltip(GameTooltip, id, true)
+            end
+        end)
+    end
+
     if not showTag then
         if rawText ~= cleanText then
             fontString._worthItSettingText = true
@@ -1035,6 +1066,28 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
         fontString._worthItSettingText = true
         fontString:SetText(targetText)
         fontString._worthItSettingText = false
+    end
+
+    -- Hook OnEnter to inject Worth Meter & Meta-Knowledge into Tracker Tooltips
+    if not block._worthItHoverHooked and block.HookScript then
+        block._worthItHoverHooked = true
+        block:HookScript("OnEnter", function(self)
+            local id = qID or ResolveBlockQuestID(self, cleanText, activeQuests, titleToID)
+            if id and id > 0 and UI.AddWorthLinesToTooltip then
+                addon.lastHoveredQuestID = id
+                UI.AddWorthLinesToTooltip(GameTooltip, id, true)
+            end
+        end)
+    end
+    if block.Header and not block.Header._worthItHoverHooked and block.Header.HookScript then
+        block.Header._worthItHoverHooked = true
+        block.Header:HookScript("OnEnter", function(self)
+            local id = qID or ResolveBlockQuestID(block, cleanText, activeQuests, titleToID)
+            if id and id > 0 and UI.AddWorthLinesToTooltip then
+                addon.lastHoveredQuestID = id
+                UI.AddWorthLinesToTooltip(GameTooltip, id, true)
+            end
+        end)
     end
 end
 
