@@ -301,15 +301,17 @@ function UI.InitializeTooltips()
         addon.Debug("Hooked TooltipDataProcessor for Quest and Item tooltips.")
     end
 
-    -- Hook GameTooltip Clear
+    -- Hook GameTooltip Clear & Hide
     if GameTooltip and GameTooltip.HookScript then
         pcall(function()
             GameTooltip:HookScript("OnTooltipCleared", OnTooltipCleared)
+            GameTooltip:HookScript("OnHide", OnTooltipCleared)
         end)
     end
     if ItemRefTooltip and ItemRefTooltip.HookScript then
         pcall(function()
             ItemRefTooltip:HookScript("OnTooltipCleared", OnTooltipCleared)
+            ItemRefTooltip:HookScript("OnHide", OnTooltipCleared)
         end)
     end
 

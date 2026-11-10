@@ -19,8 +19,12 @@ addon.Player = addon.Player or {}
 local Player = addon.Player
 Player.Update()
 
--- In-memory cache for computed scores
+-- In-memory cache for computed scores & completions
 Engine.Cache = {}
+Engine.CacheSize = 0
+Engine.CompletionCache = {}
+Engine._completionScanned = false
+Engine.WorldMapZoneCache = {}
 local MAX_CACHE_SIZE = 500
 
 -- Hoisted: created ONCE at load, not per-call
@@ -69,88 +73,71 @@ function Engine.InvalidateSpecCache()
     _cachedSpecID = nil
 end
 
--- Generate a unique cache key based on player state & active quest count
-local function GetCacheKey(questID)
-    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
-    local specID = GetPlayerSpecID()
-    local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
-                       or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-    return string.format("%d:%d:%s:%d", questID, playerLevel, tostring(specID), numEntries)
-end
-
 -- Invalidate calculation cache
 function Engine.InvalidateCache()
     wipe(Engine.Cache)
+    Engine.CacheSize = 0
+    wipe(Engine.CompletionCache)
+    Engine._completionScanned = false
+    wipe(Engine.WorldMapZoneCache)
     addon.Debug("Evaluation cache invalidated.")
 end
 
--- Helper to determine if a quest is complete / ready for turn-in
-function Engine.IsQuestComplete(questID)
-    if not questID or questID <= 0 then return false end
+-- Single-pass scanner: scans the player's active quest log once per cache generation
+local function ScanActiveQuestCompletion()
+    if Engine._completionScanned then return end
+    Engine._completionScanned = true
 
-    -- 1. Modern API: C_QuestLog.IsComplete
-    if C_QuestLog and C_QuestLog.IsComplete then
-        local ok, comp = pcall(C_QuestLog.IsComplete, questID)
-        if ok and comp then return true end
-    end
-
-    -- 2. Modern API: C_QuestLog.ReadyForTurnIn
-    if C_QuestLog and C_QuestLog.ReadyForTurnIn then
-        local ok, ready = pcall(C_QuestLog.ReadyForTurnIn, questID)
-        if ok and ready then return true end
-    end
-
-    -- 3. Modern API: Check all objectives finished via C_QuestLog.GetQuestObjectives
-    -- In Classic content / WoW Forever, dungeon & collection quests often mark all objectives finished
-    -- before turn-in without setting IsComplete immediately.
-    if C_QuestLog and C_QuestLog.GetQuestObjectives then
-        local ok, objectives = pcall(C_QuestLog.GetQuestObjectives, questID)
-        if ok and type(objectives) == "table" and #objectives > 0 then
-            local allFinished = true
-            for _, obj in ipairs(objectives) do
-                if not obj.finished then
-                    allFinished = false
-                    break
-                end
-            end
-            if allFinished then
-                return true
-            end
-        end
-    end
-
-    -- 4. Active Quest Log scan via C_QuestLog.GetNumQuestLogEntries & GetInfo
+    -- 1. Modern API scan
     if C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetInfo then
         local ok, num = pcall(C_QuestLog.GetNumQuestLogEntries)
         if ok and num and num > 0 then
             for idx = 1, num do
-                local ok2, info = pcall(C_QuestLog.GetInfo, idx)
-                if ok2 and info and info.questID == questID then
-                    if info.isComplete == true or info.isComplete == 1 or info.readyForTurnIn then
-                        return true
+                local okInfo, info = pcall(C_QuestLog.GetInfo, idx)
+                if okInfo and info and info.questID and not info.isHeader then
+                    local qID = info.questID
+                    local comp = (info.isComplete == true or info.isComplete == 1 or info.readyForTurnIn == true)
+                    if not comp and C_QuestLog.IsComplete then
+                        local okC, isC = pcall(C_QuestLog.IsComplete, qID)
+                        if okC and isC then comp = true end
                     end
-                    break
+                    if not comp and C_QuestLog.ReadyForTurnIn then
+                        local okR, isR = pcall(C_QuestLog.ReadyForTurnIn, qID)
+                        if okR and isR then comp = true end
+                    end
+                    if not comp and C_QuestLog.GetQuestObjectives then
+                        local okObj, objectives = pcall(C_QuestLog.GetQuestObjectives, qID)
+                        if okObj and type(objectives) == "table" and #objectives > 0 then
+                            local allFinished = true
+                            for _, obj in ipairs(objectives) do
+                                if not obj.finished then
+                                    allFinished = false
+                                    break
+                                end
+                            end
+                            if allFinished then comp = true end
+                        end
+                    end
+                    Engine.CompletionCache[qID] = comp
                 end
             end
+            return
         end
     end
 
-    -- 5. Classic Fallback scan via GetNumQuestLogEntries & GetQuestLogTitle
+    -- 2. Classic Fallback scan
     if GetNumQuestLogEntries and GetQuestLogTitle then
         local ok, num = pcall(GetNumQuestLogEntries)
         if ok and num and num > 0 then
             for idx = 1, num do
-                local ok3, title, _, _, isHeader, _, isCompleteVal, _, qID = pcall(GetQuestLogTitle, idx)
-                if ok3 and not isHeader then
-                    local match = (qID and qID == questID)
-                    if not match and C_QuestLog and C_QuestLog.GetQuestIDForLogIndex then
-                        match = (C_QuestLog.GetQuestIDForLogIndex(idx) == questID)
+                local okTitle, title, _, _, isHeader, _, isCompleteVal, _, qID = pcall(GetQuestLogTitle, idx)
+                if okTitle and not isHeader then
+                    if (not qID or qID == 0) and C_QuestLog and C_QuestLog.GetQuestIDForLogIndex then
+                        qID = C_QuestLog.GetQuestIDForLogIndex(idx)
                     end
-                    if match then
-                        if isCompleteVal and (isCompleteVal == 1 or isCompleteVal == true) then
-                            return true
-                        end
-                        if GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+                    if qID and qID > 0 then
+                        local comp = (isCompleteVal == 1 or isCompleteVal == true)
+                        if not comp and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
                             local okNum, numLB = pcall(GetNumQuestLeaderBoards, idx)
                             if okNum and numLB and numLB > 0 then
                                 local allLBFinished = true
@@ -161,30 +148,47 @@ function Engine.IsQuestComplete(questID)
                                         break
                                     end
                                 end
-                                if allLBFinished then
-                                    return true
-                                end
+                                if allLBFinished then comp = true end
                             end
                         end
-                        break
+                        Engine.CompletionCache[qID] = comp
                     end
                 end
             end
         end
     end
+end
 
-    -- 6. Deprecated GetLogIndexForQuestID fallback
-    if C_QuestLog and C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetInfo then
-        local ok, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
-        if ok and idx and idx > 0 then
-            local ok2, info = pcall(C_QuestLog.GetInfo, idx)
-            if ok2 and info and (info.isComplete == true or info.isComplete == 1 or info.readyForTurnIn) then
-                return true
-            end
+-- Helper to determine if a quest is complete / ready for turn-in (ultra-fast cached lookup)
+function Engine.IsQuestComplete(questID)
+    if not questID or questID <= 0 then return false end
+
+    -- Fast path: already known in current cache generation
+    if Engine.CompletionCache[questID] ~= nil then
+        return Engine.CompletionCache[questID]
+    end
+
+    -- Populate cache for all active quests in one single pass
+    if not Engine._completionScanned then
+        ScanActiveQuestCompletion()
+        if Engine.CompletionCache[questID] ~= nil then
+            return Engine.CompletionCache[questID]
         end
     end
 
-    return false
+    -- If quest is not in the active log (e.g. queried from DB or another zone):
+    local isComp = false
+    if C_QuestLog and C_QuestLog.IsComplete then
+        local ok, comp = pcall(C_QuestLog.IsComplete, questID)
+        if ok and comp then isComp = true end
+    end
+    if not isComp and C_QuestLog and C_QuestLog.ReadyForTurnIn then
+        local ok, ready = pcall(C_QuestLog.ReadyForTurnIn, questID)
+        if ok and ready then isComp = true end
+    end
+
+    Engine.CompletionCache[questID] = isComp
+    return isComp
 end
 
 -- Main entry point: Calculate Worth for a questID
@@ -198,13 +202,18 @@ function Engine.CalculateWorth(questID)
         return nil, nil
     end
 
+    -- Fast path: Check Cache first (zero-allocation numeric key lookup!)
+    local cached = Engine.Cache[questID]
+    if cached then
+        return cached.worth, cached.breakdown
+    end
+
     -- Rule: If quest is already completed / ready for turn-in, its worth is 100%!
     local isComplete = Engine.IsQuestComplete(questID)
-
     if isComplete then
         local weights = (db and db.weights) or {}
         local wD, wR, wC, wF, wH = Utils.NormalizeWeights(weights.difficulty, weights.reward, weights.chain, weights.classFit, weights.density)
-        return 1.00, {
+        local completeBreakdown = {
             worth = 1.00,
             d = 1.00,
             r = 1.00,
@@ -220,12 +229,16 @@ function Engine.CalculateWorth(questID)
             isHard = false,
             details = { note = "Ready for turn-in!" }
         }
-    end
-
-    local cacheKey = GetCacheKey(questID)
-    if Engine.Cache[cacheKey] then
-        local entry = Engine.Cache[cacheKey]
-        return entry.worth, entry.breakdown
+        if Engine.CacheSize >= MAX_CACHE_SIZE then
+            wipe(Engine.Cache)
+            Engine.CacheSize = 0
+        end
+        Engine.Cache[questID] = {
+            worth = 1.00,
+            breakdown = completeBreakdown,
+        }
+        Engine.CacheSize = Engine.CacheSize + 1
+        return 1.00, completeBreakdown
     end
 
     -- 1. Normalize 5 Weights (Endgame adapts to Gold & Economy priority)
@@ -409,15 +422,16 @@ function Engine.CalculateWorth(questID)
     -- Cache result (only if not waiting on pending item data from server)
     local isPendingItem = fDetails and fDetails.isPending
     if not isPendingItem then
-        -- Evict cache if it grows too large
-        local count = 0
-        for _ in pairs(Engine.Cache) do count = count + 1; if count >= MAX_CACHE_SIZE then break end end
-        if count >= MAX_CACHE_SIZE then wipe(Engine.Cache) end
+        if Engine.CacheSize >= MAX_CACHE_SIZE then
+            wipe(Engine.Cache)
+            Engine.CacheSize = 0
+        end
 
-        Engine.Cache[cacheKey] = {
+        Engine.Cache[questID] = {
             worth = totalWorth,
             breakdown = breakdown,
         }
+        Engine.CacheSize = Engine.CacheSize + 1
     end
 
     return totalWorth, breakdown
@@ -609,6 +623,11 @@ end
 function Engine.CalculateWorldMapZoneWorth(zoneName)
     if not zoneName or zoneName == "" then return nil end
 
+    -- Fast path: cached zone evaluation
+    if Engine.WorldMapZoneCache and Engine.WorldMapZoneCache[zoneName] then
+        return Engine.WorldMapZoneCache[zoneName]
+    end
+
     local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local playerFaction = (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or UnitFactionGroup("player") or "Alliance"
     local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
@@ -741,7 +760,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
 
     finalWorth = math.max(0.0, math.min(1.0, finalWorth))
 
-    return {
+    local result = {
         zoneName = zoneName,
         worth = finalWorth,
         minLevel = minLevel,
@@ -762,6 +781,12 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         travelPenalty = travelPenalty,
         travelReason = travelReason,
     }
+
+    if Engine.WorldMapZoneCache then
+        Engine.WorldMapZoneCache[zoneName] = result
+    end
+
+    return result
 end
 
 -- Format and print full debug breakdown for a quest

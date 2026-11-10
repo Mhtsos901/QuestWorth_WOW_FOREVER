@@ -905,9 +905,20 @@ local DUNGEON_KEYWORDS = {
     { pattern = "onyxia", name = "Onyxia's Lair Raid" },
 }
 
--- Public API: Retrieve Meta-Knowledge Payoff for any quest
+-- Memoization cache for computed payoffs
+local _payoffMemo = {}
+
+function Data.InvalidatePayoffMemo()
+    wipe(_payoffMemo)
+end
+
+-- Public API: Retrieve Meta-Knowledge Payoff for any quest (memoized)
 function Data.GetQuestPayoff(questID, questTitle)
     local targetID = tonumber(questID) or questID
+    if targetID and targetID > 0 and _payoffMemo[targetID] ~= nil then
+        return _payoffMemo[targetID] or nil
+    end
+
     local payoff = nil
 
     -- 1. Check direct questID lookup in Data.QuestPayoffs
@@ -1060,6 +1071,10 @@ function Data.GetQuestPayoff(questID, questTitle)
                 payoff.summary = table.concat(parts, " • ")
             end
         end
+    end
+
+    if targetID and targetID > 0 then
+        _payoffMemo[targetID] = payoff or false
     end
 
     return payoff

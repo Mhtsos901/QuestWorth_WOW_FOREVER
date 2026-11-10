@@ -113,8 +113,16 @@ local function GetStatsForItem(itemLink)
     return {}
 end
 
--- Detect Active Class, Spec and Talent Archetype
+-- Detect Active Class, Spec and Talent Archetype (cached per session)
+local _cachedClass = nil
+local _cachedSpecIndex = nil
+local _cachedWeights = nil
+
 local function GetPlayerSpecInfo()
+    if _cachedClass and _cachedWeights then
+        return _cachedClass, _cachedSpecIndex, _cachedWeights
+    end
+
     local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
     if not playerClass then
         local _, c = UnitClass("player")
@@ -148,7 +156,17 @@ local function GetPlayerSpecInfo()
         STRENGTH = 1.0, AGILITY = 1.0, INTELLECT = 1.0, STAMINA = 0.5
     }
 
+    _cachedClass = playerClass
+    _cachedSpecIndex = specIndex
+    _cachedWeights = weights
+
     return playerClass, specIndex, weights
+end
+
+function Scores.InvalidateClassFitCache()
+    _cachedClass = nil
+    _cachedSpecIndex = nil
+    _cachedWeights = nil
 end
 
 -- Check if Rogue is currently playing a Dagger build (either Assassination spec or wielding a Dagger in Main Hand)

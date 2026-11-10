@@ -19,8 +19,12 @@ local DUNGEON_TAGS = { [81] = true, [62] = true, [23] = true, [26] = true }
 local RAID_TAGS = { [83] = true, [85] = true, [88] = true }
 local GROUP_TAGS = { [1] = true }
 
--- Detect if active class / spec is Melee-focused
+-- Detect if active class / spec is Melee-focused (cached per session)
+local _isMeleeCached = nil
+
 local function IsMeleePlayer()
+    if _isMeleeCached ~= nil then return _isMeleeCached end
+
     local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
     if not playerClass then
         local _, c = UnitClass("player")
@@ -28,27 +32,43 @@ local function IsMeleePlayer()
     end
 
     if playerClass == "WARRIOR" or playerClass == "ROGUE" or playerClass == "DEATHKNIGHT" or playerClass == "DEMONHUNTER" then
+        _isMeleeCached = true
         return true
     elseif playerClass == "PALADIN" then
         if GetNumTalentTabs and GetTalentTabInfo then
             local _, _, holyPoints = GetTalentTabInfo(1) -- Tab 1 = Holy
-            if holyPoints and holyPoints > 5 then return false end
+            if holyPoints and holyPoints > 5 then
+                _isMeleeCached = false
+                return false
+            end
         end
+        _isMeleeCached = true
         return true -- Most leveling paladins are Ret/Prot
     elseif playerClass == "DRUID" then
         -- Check if Feral
         if GetNumTalentTabs and GetTalentTabInfo then
             local _, _, feralPoints = GetTalentTabInfo(2)
-            if feralPoints and feralPoints > 5 then return true end
+            if feralPoints and feralPoints > 5 then
+                _isMeleeCached = true
+                return true
+            end
         end
     elseif playerClass == "SHAMAN" then
         -- Check if Enhancement
         if GetNumTalentTabs and GetTalentTabInfo then
             local _, _, enhPoints = GetTalentTabInfo(2)
-            if enhPoints and enhPoints > 5 then return true end
+            if enhPoints and enhPoints > 5 then
+                _isMeleeCached = true
+                return true
+            end
         end
     end
+    _isMeleeCached = false
     return false
+end
+
+function Scores.InvalidateMeleeCache()
+    _isMeleeCached = nil
 end
 
 -- Difficulty color & delta evaluation

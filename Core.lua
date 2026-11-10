@@ -162,6 +162,10 @@ local function OnEvent(self, event, ...)
             if addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
             if addon.Engine.InvalidateSpecCache then addon.Engine.InvalidateSpecCache() end
         end
+        if addon.Scores then
+            if addon.Scores.InvalidateMeleeCache then addon.Scores.InvalidateMeleeCache() end
+            if addon.Scores.InvalidateClassFitCache then addon.Scores.InvalidateClassFitCache() end
+        end
         DelayedRefresh(0.18)
 
     elseif event == "GET_ITEM_INFO_RECEIVED" then
@@ -170,6 +174,9 @@ local function OnEvent(self, event, ...)
         end
         if addon.ClearSafeGetItemInfoCache then
             addon.ClearSafeGetItemInfoCache()
+        end
+        if addon.Data and addon.Data.InvalidatePayoffMemo then
+            addon.Data.InvalidatePayoffMemo()
         end
         DelayedRefresh(0.18)
 

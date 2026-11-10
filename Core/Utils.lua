@@ -128,6 +128,7 @@ end
 
 -- Safe item info getter: prefers C_Item.GetItemInfo (modern/Forever), falls back to legacy (memoized)
 local _iic = {}
+local _iicSize = 0
 
 function Utils.SafeGetItemInfo(item)
     if not item then return nil end
@@ -143,15 +144,17 @@ function Utils.SafeGetItemInfo(item)
           bindType, expansionID, setID, isCraftingReagent = pcall(fn, item)
     if not ok or not name then return nil end
 
-    local size = 0
-    for _ in pairs(_iic) do size = size + 1; if size >= 200 then break end end
-    if size >= 200 then wipe(_iic) end
+    if _iicSize >= 200 then
+        wipe(_iic)
+        _iicSize = 0
+    end
 
     _iic[item] = {
         name, link, quality, itemLevel, minLevel, itemType, itemSubType,
         maxStack, equipLoc, icon, sellPrice, classID, subClassID,
         bindType, expansionID, setID, isCraftingReagent
     }
+    _iicSize = _iicSize + 1
     return name, link, quality, itemLevel, minLevel, itemType, itemSubType,
            maxStack, equipLoc, icon, sellPrice, classID, subClassID,
            bindType, expansionID, setID, isCraftingReagent
@@ -160,6 +163,7 @@ addon.SafeGetItemInfo = Utils.SafeGetItemInfo
 
 function addon.ClearSafeGetItemInfoCache()
     wipe(_iic)
+    _iicSize = 0
 end
 
 -- Persistent quest rewards cache (item links & vendor values)
@@ -425,9 +429,18 @@ function Utils.NormalizeWeights(wD, wR, wC, wF, wH)
     return d / sum, r / sum, c / sum, f / sum, h / sum
 end
 
--- Safe Quest Title/Level getter across Modern C_QuestLog, Gossip NPCs, and Legacy APIs
+-- Safe Quest Title/Level getter across Modern C_QuestLog, Gossip NPCs, and Legacy APIs (memoized)
+local _basicInfoCache = {}
+
 function Utils.GetQuestBasicInfo(questID)
     if not questID or questID <= 0 then return nil end
+
+    if _basicInfoCache[questID] then
+        local entry = _basicInfoCache[questID]
+        if entry.title and not string.find(entry.title, "^Quest #") then
+            return entry
+        end
+    end
 
     local title, level, isElite, isHeader
 
@@ -519,11 +532,19 @@ function Utils.GetQuestBasicInfo(questID)
         finalLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     end
 
-    return {
+    local res = {
         questID = questID,
         title = title or ("Quest #" .. questID),
         level = finalLevel,
         isElite = isElite or false,
         isHeader = isHeader or false,
     }
+
+    _basicInfoCache[questID] = res
+    return res
 end
+
+function Utils.ClearQuestBasicInfoCache()
+    wipe(_basicInfoCache)
+end
+addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache

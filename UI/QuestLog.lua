@@ -234,6 +234,7 @@ local function ResolveButtonQuestID(button, rawText)
             end
 
             if not isH and candidateID and candidateID > 0 and qTitle and qTitle ~= "" then
+                local title = qTitle
                 local normQ = NormalizeQuestTitle(qTitle)
                 local clean = Utils.CleanQuestTitle(rawText)
                 local titleNoLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
@@ -897,24 +898,42 @@ end
 local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
     if not block then return nil end
 
+    -- Fast path: cached on block
+    if block._worthItQuestID and block._worthItQuestID > 0 then
+        local raw = currentText or ""
+        if raw ~= "" and block._worthItQuestTitle and block._worthItQuestTitle == raw then
+            return block._worthItQuestID
+        end
+    end
+
     -- 1. Direct properties on the block (in QuestObjectiveTracker, block.id or block.questID IS the questID)
     if block.questID and type(block.questID) == "number" and block.questID > 0 then
+        block._worthItQuestID = block.questID
+        block._worthItQuestTitle = currentText or ""
         return block.questID
     end
     if block.id and type(block.id) == "number" and block.id > 0 then
+        block._worthItQuestID = block.id
+        block._worthItQuestTitle = currentText or ""
         return block.id
     end
     if block.GetQuestID then
         local ok, qid = pcall(block.GetQuestID, block)
         if ok and qid and type(qid) == "number" and qid > 0 then
+            block._worthItQuestID = qid
+            block._worthItQuestTitle = currentText or ""
             return qid
         end
     end
     if block.Header then
         if block.Header.questID and type(block.Header.questID) == "number" and block.Header.questID > 0 then
+            block._worthItQuestID = block.Header.questID
+            block._worthItQuestTitle = currentText or ""
             return block.Header.questID
         end
         if block.Header.id and type(block.Header.id) == "number" and block.Header.id > 0 then
+            block._worthItQuestID = block.Header.id
+            block._worthItQuestTitle = currentText or ""
             return block.Header.id
         end
     end
@@ -923,6 +942,8 @@ local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
     if block.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
         local ok, info = pcall(C_QuestLog.GetInfo, block.questLogIndex)
         if ok and info and not info.isHeader and info.questID and info.questID > 0 then
+            block._worthItQuestID = info.questID
+            block._worthItQuestTitle = currentText or ""
             return info.questID
         end
     end
@@ -943,46 +964,53 @@ local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
         clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
         titleNoLevel = string.gsub(titleNoLevel, "^%s*(.-)%s*$", "%1")
 
+        local matchedID = nil
         if titleToID then
             if norm ~= "" and titleToID[norm] then
-                return titleToID[norm]
-            end
-            if norm ~= "" and titleToID[string.lower(norm)] then
-                return titleToID[string.lower(norm)]
-            end
-            if titleToID[clean] then
-                return titleToID[clean]
-            end
-            if titleToID[titleNoLevel] then
-                return titleToID[titleNoLevel]
+                matchedID = titleToID[norm]
+            elseif norm ~= "" and titleToID[string.lower(norm)] then
+                matchedID = titleToID[string.lower(norm)]
+            elseif titleToID[clean] then
+                matchedID = titleToID[clean]
+            elseif titleToID[titleNoLevel] then
+                matchedID = titleToID[titleNoLevel]
             end
         end
 
         -- Direct fallback scan if titleToID missed
-        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
-                           or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-        for i = 1, numEntries do
-            local qTitle, qid
-            if C_QuestLog and C_QuestLog.GetInfo then
-                local ok, info = pcall(C_QuestLog.GetInfo, i)
-                if ok and info and not info.isHeader then
-                    qTitle = info.title
-                    qid = info.questID
+        if not matchedID then
+            local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                               or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+            for i = 1, numEntries do
+                local qTitle, qid
+                if C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, i)
+                    if ok and info and not info.isHeader then
+                        qTitle = info.title
+                        qid = info.questID
+                    end
+                elseif GetQuestLogTitle then
+                    local ok, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+                    if ok and not h then
+                        qTitle = t
+                        qid = id
+                    end
                 end
-            elseif GetQuestLogTitle then
-                local ok, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
-                if ok and not h then
-                    qTitle = t
-                    qid = id
-                end
-            end
 
-            if qTitle and qid and qid > 0 then
-                local normQ = NormalizeQuestTitle(qTitle)
-                if normQ ~= "" and (normQ == norm or string.lower(normQ) == string.lower(norm)) then
-                    return qid
+                if qTitle and qid and qid > 0 then
+                    local normQ = NormalizeQuestTitle(qTitle)
+                    if normQ ~= "" and (normQ == norm or string.lower(normQ) == string.lower(norm)) then
+                        matchedID = qid
+                        break
+                    end
                 end
             end
+        end
+
+        if matchedID and matchedID > 0 then
+            block._worthItQuestID = matchedID
+            block._worthItQuestTitle = text
+            return matchedID
         end
     end
 
