@@ -15,8 +15,6 @@ local L = addon.L
 
 addon.lastHoveredQuestID = nil
 
-local GOLD_DIVIDER = "|cff705830──────────────────────────────────────|r"
-
 local function GetReasonSummary(b)
     if not b or not b.details then return nil end
     local reasons = {}
@@ -155,7 +153,6 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
     local badge = Utils.FormatBadge(worth, b.isComplete, b.isHard, isBankable)
 
     tooltip:AddLine(" ")
-    tooltip:AddLine(GOLD_DIVIDER)
 
     -- 1. Main Header: Quest Worth [XX%] + Descriptive Status Tag (Matching Zone Advisor)
     local statusDesc
@@ -280,23 +277,23 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         )
     end
 
-    -- 5. Meta-Knowledge: Key Unlock & Payoff details (Zone Advisor Style)
+    -- 5. Meta-Knowledge: Key Unlock & Payoff details
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
     if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin) then
-        tooltip:AddLine(GOLD_DIVIDER)
-        tooltip:AddLine("|TInterface\\OptionsFrame\\UI-OptionsFrame-NewFeatureIcon:13:13:0:0|t |cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
 
         if payoff.chain then
-            tooltip:AddDoubleLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r", "|cffffffff" .. payoff.chain .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+            tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r")
         end
         if payoff.unlock then
-            tooltip:AddDoubleLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r", "|cffffffff" .. payoff.unlock .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+            tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r")
         end
         if payoff.reward then
-            tooltip:AddDoubleLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r", "|cffffffff" .. payoff.reward .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+            tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r")
         end
         if payoff.origin then
-            tooltip:AddDoubleLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r", "|cffffffff" .. payoff.origin .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+            tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r")
         end
         if payoff.note then
             tooltip:AddLine("  |cffcccccc" .. payoff.note .. "|r", 0.9, 0.9, 0.9, true)
@@ -355,16 +352,15 @@ local function AddItemQuestStarterLines(tooltip)
 
     if isStarter then
         tooltip:AddLine(" ")
-        tooltip:AddLine(GOLD_DIVIDER)
-        tooltip:AddLine("|TInterface\\OptionsFrame\\UI-OptionsFrame-NewFeatureIcon:13:13:0:0|t |cffffd100" .. L["ITEM_QUEST_STARTER"] .. "|r")
+        tooltip:AddLine("|cffffd100" .. L["ITEM_QUEST_STARTER"] .. "|r")
         if qID then
             local info = addon.Utils.GetQuestBasicInfo(qID)
             local payoff = addon.Data.GetQuestPayoff(qID)
             if info and info.title then
-                tooltip:AddDoubleLine("  |cff00ffff" .. L["ITEM_STARTS_QUEST"] .. "|r", "|cffffffff" .. info.title .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+                tooltip:AddLine("  |cff00ffff" .. L["ITEM_STARTS_QUEST"] .. "|r |cffffffff" .. info.title .. "|r")
             end
             if payoff and payoff.summary then
-                tooltip:AddDoubleLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r", "|cffffffff" .. payoff.summary .. "|r", 0.9, 0.9, 0.9, 1, 1, 1)
+                tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.summary .. "|r")
             end
         end
         tooltip:AddLine("  |cff00ff00" .. L["ITEM_CLICK_TO_START"] .. "|r")
@@ -418,6 +414,12 @@ function UI.InitializeTooltips()
     end
 
     -- Hook GameTooltip Clear & Hide
+    if GameTooltip and hooksecurefunc then
+        pcall(hooksecurefunc, GameTooltip, "ClearLines", OnTooltipCleared)
+    end
+    if ItemRefTooltip and hooksecurefunc then
+        pcall(hooksecurefunc, ItemRefTooltip, "ClearLines", OnTooltipCleared)
+    end
     if GameTooltip and GameTooltip.HookScript then
         pcall(function()
             GameTooltip:HookScript("OnTooltipCleared", OnTooltipCleared)
@@ -487,12 +489,27 @@ function UI.InitializeTooltips()
     -- Method 4: Hook QuestMapLogTitleButton_OnEnter & QuestLogTitleButton_OnEnter
     if QuestMapLogTitleButton_OnEnter then
         hooksecurefunc("QuestMapLogTitleButton_OnEnter", function(button)
-            local qID = button and (button.questID or (button.GetElementData and button:GetElementData() and ((button:GetElementData().info and button:GetElementData().info.questID) or button:GetElementData().questID)))
+            local qID = UI.ResolveButtonQuestID and UI.ResolveButtonQuestID(button)
+            if not qID and button then
+                qID = button.questID or (button.GetElementData and button:GetElementData() and ((button:GetElementData().info and button:GetElementData().info.questID) or button:GetElementData().questID))
+            end
+            if not qID and button and button.questLogIndex then
+                if C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
+                    if ok and info then qID = info.questID end
+                elseif GetQuestLogTitle then
+                    local ok, _, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, button.questLogIndex)
+                    if ok and not h and id and id > 0 then qID = id end
+                end
+            end
             if not qID and button and button.GetID then
                 local idx = button:GetID()
                 if idx and idx > 0 and C_QuestLog and C_QuestLog.GetInfo then
                     local ok, info = pcall(C_QuestLog.GetInfo, idx)
                     if ok and info then qID = info.questID end
+                elseif GetQuestLogTitle then
+                    local ok, _, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, idx)
+                    if ok and not h and id and id > 0 then qID = id end
                 end
             end
             if qID and qID > 0 then
@@ -504,12 +521,27 @@ function UI.InitializeTooltips()
 
     if QuestLogTitleButton_OnEnter then
         hooksecurefunc("QuestLogTitleButton_OnEnter", function(button)
-            local qID = button and button.questID
+            local qID = UI.ResolveButtonQuestID and UI.ResolveButtonQuestID(button)
+            if not qID and button then
+                qID = button.questID
+            end
+            if not qID and button and button.questLogIndex then
+                if C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
+                    if ok and info then qID = info.questID end
+                elseif GetQuestLogTitle then
+                    local ok, _, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, button.questLogIndex)
+                    if ok and not h and id and id > 0 then qID = id end
+                end
+            end
             if not qID and button and button.GetID then
                 local idx = button:GetID()
                 if idx and idx > 0 and C_QuestLog and C_QuestLog.GetInfo then
                     local ok, info = pcall(C_QuestLog.GetInfo, idx)
                     if ok and info then qID = info.questID end
+                elseif GetQuestLogTitle then
+                    local ok, _, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, idx)
+                    if ok and not h and id and id > 0 then qID = id end
                 end
             end
             if qID and qID > 0 then

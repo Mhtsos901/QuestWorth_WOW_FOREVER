@@ -174,10 +174,18 @@ local function ResolveButtonQuestID(button, rawText)
                 if ed.data and ed.data.questID and type(ed.data.questID) == "number" and ed.data.questID > 0 then
                     return ed.data.questID
                 end
-                if ed.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
-                    local okI, info = pcall(C_QuestLog.GetInfo, ed.questLogIndex)
-                    if okI and info and not info.isHeader and info.questID and info.questID > 0 then
-                        return info.questID
+                if ed.questLogIndex then
+                    if C_QuestLog and C_QuestLog.GetInfo then
+                        local okI, info = pcall(C_QuestLog.GetInfo, ed.questLogIndex)
+                        if okI and info and not info.isHeader and info.questID and info.questID > 0 then
+                            return info.questID
+                        end
+                    end
+                    if GetQuestLogTitle then
+                        local okT, _, _, _, h, _, _, _, qid = pcall(GetQuestLogTitle, ed.questLogIndex)
+                        if okT and not h and qid and qid > 0 then
+                            return qid
+                        end
                     end
                 end
             end
@@ -185,10 +193,18 @@ local function ResolveButtonQuestID(button, rawText)
     end
 
     -- 3. questLogIndex on button
-    if button.questLogIndex and C_QuestLog and C_QuestLog.GetInfo then
-        local okI, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
-        if okI and info and not info.isHeader and info.questID and info.questID > 0 then
-            return info.questID
+    if button.questLogIndex then
+        if C_QuestLog and C_QuestLog.GetInfo then
+            local okI, info = pcall(C_QuestLog.GetInfo, button.questLogIndex)
+            if okI and info and not info.isHeader and info.questID and info.questID > 0 then
+                return info.questID
+            end
+        end
+        if GetQuestLogTitle then
+            local okT, _, _, _, h, _, _, _, qid = pcall(GetQuestLogTitle, button.questLogIndex)
+            if okT and not h and qid and qid > 0 then
+                return qid
+            end
         end
     end
 
@@ -211,7 +227,15 @@ local function ResolveButtonQuestID(button, rawText)
     end
 
     -- 5. Fallback: Match by normalized quest title against active quest log
-    local norm = NormalizeQuestTitle(rawText)
+    local textToMatch = rawText
+    if not textToMatch or textToMatch == "" then
+        local fs = button.Text or button.ButtonText or button.LineText or (button.GetFontString and button:GetFontString())
+        if fs and fs.GetText then
+            textToMatch = fs:GetText()
+        end
+    end
+
+    local norm = NormalizeQuestTitle(textToMatch)
     if norm and norm ~= "" then
         local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
                            or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
@@ -236,7 +260,7 @@ local function ResolveButtonQuestID(button, rawText)
             if not isH and candidateID and candidateID > 0 and qTitle and qTitle ~= "" then
                 local title = qTitle
                 local normQ = NormalizeQuestTitle(qTitle)
-                local clean = Utils.CleanQuestTitle(rawText)
+                local clean = Utils.CleanQuestTitle(textToMatch)
                 local titleNoLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
                 if normQ ~= "" and (normQ == norm or string.lower(normQ) == string.lower(norm) or title == titleNoLevel or title == clean) then
                     return candidateID
@@ -249,6 +273,7 @@ local function ResolveButtonQuestID(button, rawText)
 
     return nil
 end
+UI.ResolveButtonQuestID = ResolveButtonQuestID
 
 -- Hook fontString:SetText on a quest log button so Blizzard's text updates retain their badge synchronously
 local function HookQuestButtonText(button, fontString)
@@ -410,25 +435,10 @@ local function ProcessQuestButton(button, showTag)
     if not button._worthItHoverHooked and button.HookScript then
         button._worthItHoverHooked = true
         button:HookScript("OnEnter", function(self)
-            local id = self.questID
-            if not id and self.GetElementData then
-                local ok, ed = pcall(self.GetElementData, self)
-                if ok and ed and type(ed) == "table" then
-                    id = (ed.info and ed.info.questID) or ed.questID
-                end
-            end
-            if not id and self.GetID then
-                local idx = self:GetID()
-                if idx and idx > 0 and C_QuestLog and C_QuestLog.GetInfo then
-                    local ok, info = pcall(C_QuestLog.GetInfo, idx)
-                    if ok and info then id = info.questID end
-                end
-            end
-            if not id and fontString and fontString.GetText then
-                id = ResolveButtonQuestID(self, fontString:GetText() or "")
-            end
-            if not id and qID then
-                id = qID
+            local currentText = fontString and fontString.GetText and fontString:GetText()
+            local id = ResolveButtonQuestID(self, currentText)
+            if not id and self.questID and type(self.questID) == "number" and self.questID > 0 then
+                id = self.questID
             end
             if id and id > 0 and UI.AddWorthLinesToTooltip then
                 addon.lastHoveredQuestID = id
