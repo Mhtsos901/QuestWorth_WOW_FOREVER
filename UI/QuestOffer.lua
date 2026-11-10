@@ -115,7 +115,7 @@ local function UpdateQuestOfferDialog()
             local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
             local payoffLine = ""
             if payoff and payoff.summary and payoff.summary ~= "" then
-                payoffLine = "\n|cffffd100★ " .. payoff.summary .. "|r"
+                payoffLine = "\n|cffffd100|TInterface\\OptionsFrame\\UI-OptionsFrame-NewFeatureIcon:12:12:0:0|t " .. payoff.summary .. "|r"
             end
             local targetTitle = badge .. " " .. clean .. payoffLine
             if rawTitle ~= targetTitle then
@@ -132,7 +132,7 @@ local function UpdateQuestOfferDialog()
             local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
             local payoffLine = ""
             if payoff and payoff.summary and payoff.summary ~= "" then
-                payoffLine = "\n|cffffd100★ " .. payoff.summary .. "|r"
+                payoffLine = "\n|cffffd100|TInterface\\OptionsFrame\\UI-OptionsFrame-NewFeatureIcon:12:12:0:0|t " .. payoff.summary .. "|r"
             end
             local target = badge .. " " .. clean .. payoffLine
             if raw ~= target then
