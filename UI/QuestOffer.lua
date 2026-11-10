@@ -32,6 +32,16 @@ local function EnsureTitleHoverFrame()
     titleHoverFrame = CreateFrame("Frame", "WorthIt_QuestOfferTitleHover", parent)
     titleHoverFrame:SetAllPoints(QuestInfoTitleHeader)
     titleHoverFrame:EnableMouse(true)
+    if titleHoverFrame.SetMouseClickEnabled then
+        pcall(titleHoverFrame.SetMouseClickEnabled, titleHoverFrame, false)
+    end
+    titleHoverFrame:EnableMouseWheel(true)
+    titleHoverFrame:SetScript("OnMouseWheel", function(self, delta)
+        local scroll = QuestDetailScrollFrame or QuestLogDetailScrollFrame or (QuestFrame and QuestFrame.ScrollFrame)
+        if scroll and scroll.GetScript and scroll:GetScript("OnMouseWheel") then
+            scroll:GetScript("OnMouseWheel")(scroll, delta)
+        end
+    end)
     titleHoverFrame:SetFrameLevel((parent:GetFrameLevel() or 1) + 10)
     titleHoverFrame:SetScript("OnEnter", function(self)
         if self.questID and self.questID > 0 and UI.ShowQuestTooltip then
