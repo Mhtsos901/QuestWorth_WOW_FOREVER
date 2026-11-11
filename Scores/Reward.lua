@@ -102,8 +102,10 @@ function Scores.CalculateReward(questID)
         if rewardXP > 0 then
             xpScore = math.min(1.0, rewardXP / benchmarkQuestXP)
 
-            local xpMax = UnitXPMax("player") or 1
+            local xpMax = UnitXPMax("player")
+            if not xpMax or xpMax <= 0 then xpMax = 1 end
             local currentXP = UnitXP("player") or 0
+            if currentXP < 0 then currentXP = 0 end
             local xpNeeded = math.max(1, xpMax - currentXP)
             if rewardXP >= xpNeeded then
                 xpScore = math.min(1.0, xpScore + 0.05)

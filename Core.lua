@@ -19,10 +19,15 @@ local function ScanCurrentZoneQuestLines()
 end
 
 addon.isUpdatingUI = false
+local _combatDeferred = false
 
 local function RefreshAllUI()
     if addon.isUpdatingUI then return end
-    if InCombatLockdown and InCombatLockdown() then return end
+    if InCombatLockdown and InCombatLockdown() then
+        _combatDeferred = true
+        return
+    end
+    _combatDeferred = false
     if addon.UI then
         if addon.UI.UpdateQuestLog then
             addon.UI.UpdateQuestLog()
@@ -181,7 +186,12 @@ local function OnEvent(self, event, ...)
         DelayedRefresh(0.18)
 
     elseif event == "PLAYER_REGEN_ENABLED" then
-        DelayedRefresh(0.10)
+        if _combatDeferred then
+            _refreshPending = false
+            DelayedRefresh(0.05)
+        else
+            DelayedRefresh(0.10)
+        end
 
     elseif event == "QUEST_DETAIL" or event == "QUEST_PROGRESS" or event == "QUEST_COMPLETE" then
         if addon.UI and addon.UI.UpdateQuestOfferDialog then

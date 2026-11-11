@@ -490,13 +490,21 @@ local RACE_HOME_CONTINENT = {
     ["Troll"]       = 1,
     ["Draenei"]     = 1,
     ["Goblin"]      = 1,
+    ["Skyborne"]    = 1, -- WoW Forever custom race
 }
 
--- Returns the player's home continent based on race
+-- Returns the player's home continent based on race (supports case-insensitivity & safe fallback)
 function Engine.GetHomeContinent(playerRace)
     local race = playerRace or (addon.Player and addon.Player.GetRace and addon.Player.GetRace())
-    if not race then return nil end
-    return RACE_HOME_CONTINENT[race]
+    if not race then return 1 end
+    if RACE_HOME_CONTINENT[race] then return RACE_HOME_CONTINENT[race] end
+    local lower = string.lower(tostring(race))
+    for r, cont in pairs(RACE_HOME_CONTINENT) do
+        if string.lower(r) == lower then
+            return cont
+        end
+    end
+    return 1 -- Safe default fallback continent
 end
 
 -- Resolve faction-specific effective minimum entry level for a zone
@@ -611,7 +619,7 @@ function Engine.GetTravelFrictionPenalty(zoneContinent, playerRace, playerLevel,
     end
 
     local pRace = playerRace or (addon.Player and addon.Player.GetRace and addon.Player.GetRace()) or "Human"
-    local homeCont = RACE_HOME_CONTINENT[pRace]
+    local homeCont = Engine.GetHomeContinent(pRace)
     if homeCont and zoneContinent ~= homeCont then
         return 0.08, "Cross-Continent Travel Friction (Low level before complete FP network)"
     end

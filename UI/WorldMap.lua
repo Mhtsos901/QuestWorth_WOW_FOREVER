@@ -711,11 +711,17 @@ local function CreateZoneAdvisorPanel(parent)
     slider:SetBackdropColor(0.02, 0.02, 0.03, 0.80)
     slider:SetBackdropBorderColor(0.35, 0.30, 0.20, 0.80)
 
-    slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
-    local thumb = slider:GetThumbTexture()
-    thumb:SetSize(14, 20)
+    if slider.SetThumbTexture then
+        slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+    end
+    local thumb = slider.GetThumbTexture and slider:GetThumbTexture()
+    if thumb and thumb.SetSize then
+        thumb:SetSize(14, 20)
+    end
 
-    slider:SetOrientation("VERTICAL")
+    if slider.SetOrientation then
+        slider:SetOrientation("VERTICAL")
+    end
     slider:SetMinMaxValues(0, 100)
     slider:SetValue(0)
     slider:SetScript("OnValueChanged", function(self, val)
@@ -851,20 +857,24 @@ function UI.UpdateZoneAdvisor()
     local homeCont = addon.Engine and addon.Engine.GetHomeContinent and addon.Engine.GetHomeContinent(playerRace)
 
     table.sort(list, function(a, b)
-        if math.abs(a.res.worth - b.res.worth) > 0.005 then
-            return a.res.worth > b.res.worth
+        local aWorth = (a and a.res and a.res.worth) or 0
+        local bWorth = (b and b.res and b.res.worth) or 0
+        if math.abs(aWorth - bWorth) > 0.005 then
+            return aWorth > bWorth
         end
         -- Home continent tie-breaker for low-level travel proximity
-        if homeCont and a.continent ~= b.continent then
+        if homeCont and a and b and a.continent ~= b.continent then
             if a.continent == homeCont then return true end
             if b.continent == homeCont then return false end
         end
-        local aMin = a.res.minLevel or 99
-        local bMin = b.res.minLevel or 99
+        local aMin = (a and a.res and a.res.minLevel) or 99
+        local bMin = (b and b.res and b.res.minLevel) or 99
         if aMin ~= bMin then
             return aMin < bMin
         end
-        return a.name < b.name
+        local aName = (a and a.name) or ""
+        local bName = (b and b.name) or ""
+        return aName < bName
     end)
 
     local rowHeight = 24

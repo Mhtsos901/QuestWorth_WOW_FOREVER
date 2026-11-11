@@ -53,7 +53,9 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
     slider:SetPoint(point, relativeTo, relativePoint, x, y)
     slider:SetMinMaxValues(0, 100)
     slider:SetValueStep(5)
-    slider:SetObeyStepOnDrag(true)
+    if slider.SetObeyStepOnDrag then
+        slider:SetObeyStepOnDrag(true)
+    end
     slider:SetWidth(200)
 
     local lowText = _G[name .. "Low"]
@@ -363,5 +365,10 @@ function UI.InitializeConfig()
     SLASH_WORTHIT2 = "/questworth"
     SLASH_WORTHIT3 = "/qw"
     SlashCmdList["WORTHIT"] = HandleSlashCmd
+
+    SLASH_QUESTWORTH1 = "/questworth"
+    SLASH_QUESTWORTH2 = "/qw"
+    SlashCmdList["QUESTWORTH"] = HandleSlashCmd
+
     CreateOptionsPanel()
 end

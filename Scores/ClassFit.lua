@@ -48,7 +48,9 @@ local tooltipScanner = nil
 local function GetTooltipScanner()
     if not tooltipScanner then
         tooltipScanner = CreateFrame("GameTooltip", "WorthIt_TooltipScanner", nil, "GameTooltipTemplate")
-        tooltipScanner:SetOwner(WorldFrame, "ANCHOR_NONE")
+        if tooltipScanner and tooltipScanner.SetOwner then
+            tooltipScanner:SetOwner(WorldFrame or UIParent or tooltipScanner, "ANCHOR_NONE")
+        end
     end
     return tooltipScanner
 end

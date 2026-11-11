@@ -400,7 +400,11 @@ function addon.Print(msg, ...)
     if select("#", ...) > 0 then
         msg = string.format(msg, ...)
     end
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffWorthIt:|r " .. tostring(msg))
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccffWorthIt:|r " .. tostring(msg))
+    elseif print then
+        print("|cff00ccffWorthIt:|r " .. tostring(msg))
+    end
 end
 
 function addon.Debug(msg, ...)
@@ -408,7 +412,11 @@ function addon.Debug(msg, ...)
     if select("#", ...) > 0 then
         msg = string.format(msg, ...)
     end
-    DEFAULT_CHAT_FRAME:AddMessage("|cff888888[WorthIt Debug]|r " .. tostring(msg))
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff888888[WorthIt Debug]|r " .. tostring(msg))
+    elseif print then
+        print("|cff888888[WorthIt Debug]|r " .. tostring(msg))
+    end
 end
 
 -- Normalize 5 weights (Difficulty, Reward, Chain, ClassFit, Density) to sum to 1.0

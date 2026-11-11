@@ -75,7 +75,7 @@ end
 local function ScanQuestLogClusters()
     -- Manual invalidation only (event-driven, see Scores.InvalidateDensityCache)
     -- Fallback: rescan at most once per 5 seconds if no explicit invalidation happened
-    local now = GetTime()
+    local now = (GetTime and GetTime()) or 0
     if (now - lastScanTime) < 5.0 and next(questZoneMap) then
         return
     end

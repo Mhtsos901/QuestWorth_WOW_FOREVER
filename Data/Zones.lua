@@ -35,6 +35,7 @@ addon.Data.Zones = {
     ["Eastern Plaguelands"] = { min = 53, max = 60, faction = "Contested", continent = 2, mapID = 1423, effectiveMin = 54, allianceMin = 54, hordeMin = 54, undeadHeavy = true },
     ["Deadwind Pass"]       = { min = 55, max = 60, faction = "Contested", continent = 2, mapID = 1430, undeadHeavy = true },
     ["Riverglades"]         = { min = 35, max = 45, faction = "Contested", continent = 2, mapID = 2548, beastHeavy = true, humanoidHeavy = true },
+    ["Riverlands"]          = { min = 35, max = 45, faction = "Contested", continent = 2, mapID = 2548, beastHeavy = true, humanoidHeavy = true },
 
     -- =========================================================================
     -- KALIMDOR
@@ -58,6 +59,8 @@ addon.Data.Zones = {
     ["Winterspring"]        = { min = 53, max = 60, faction = "Contested", continent = 1, mapID = 1452, effectiveMin = 53, allianceMin = 53, hordeMin = 53, beastHeavy = true, humanoidHeavy = true },
     ["Moonglade"]           = { min = 1,  max = 60, faction = "Neutral",   continent = 1, mapID = 1450, class = "DRUID" },
     ["Zephras Isle"]        = { min = 1,  max = 12, faction = "Contested", continent = 1, mapID = 2521 },
+    ["Mount Hyjal"]         = { min = 58, max = 60, faction = "Contested", continent = 1, mapID = 1459, elementalHeavy = true, humanoidHeavy = true },
+    ["Hyjal"]               = { min = 58, max = 60, faction = "Contested", continent = 1, mapID = 1459, elementalHeavy = true, humanoidHeavy = true },
 
     -- =========================================================================
     -- MAJOR CITIES
