@@ -18,13 +18,13 @@ local DEFAULT_SETTINGS = {
     showZoneAdvisor = true,
     zoneAdvisorFilter = "ALL",
     weights = {
-        difficulty = 0.10,
-        reward = 0.35,
-        chain = 0.25,
-        classFit = 0.15,
-        density = 0.15,
+        reward = 0.40,
+        classFit = 0.25,
+        chain = 0.20,
+        density = 0.10,
+        difficulty = 0.05,
     },
-    version = 6,
+    version = 7,
 }
 
 local function CopyDefaults(src, dest)
@@ -92,9 +92,9 @@ function DB.Initialize()
         end
     end
 
-    if not WorthItDB.version or type(WorthItDB.version) ~= "number" or WorthItDB.version < 6 then
+    if not WorthItDB.version or type(WorthItDB.version) ~= "number" or WorthItDB.version < 7 then
         WorthItDB.weights = CopyDefaults(DEFAULT_SETTINGS.weights, {})
-        WorthItDB.version = 6
+        WorthItDB.version = 7
     end
 
     WorthItDB = CopyDefaults(DEFAULT_SETTINGS, WorthItDB)

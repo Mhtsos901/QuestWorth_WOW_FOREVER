@@ -174,25 +174,25 @@ local function CreateOptionsPanel()
     weightHeader:SetPoint("TOPLEFT", cbDebug, "BOTTOMLEFT", 0, -16)
     weightHeader:SetText("|cffffff00Scoring Weights (Sum of 5 is automatically normalized)|r")
 
-    local sD = CreateWeightSlider(panel, L["DIFFICULTY"], "TOPLEFT", weightHeader, "BOTTOMLEFT", 10, -22,
-        function() return addon.db and addon.db.weights and addon.db.weights.difficulty or 0.00 end,
-        function(v) addon.db.weights.difficulty = v end)
-
-    local sR = CreateWeightSlider(panel, L["REWARD"], "TOPLEFT", sD, "BOTTOMLEFT", 0, -26,
+    local sR = CreateWeightSlider(panel, L["REWARD"], "TOPLEFT", weightHeader, "BOTTOMLEFT", 10, -22,
         function() return addon.db and addon.db.weights and addon.db.weights.reward or 0.40 end,
         function(v) addon.db.weights.reward = v end)
 
-    local sC = CreateWeightSlider(panel, L["CHAIN"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -26,
-        function() return addon.db and addon.db.weights and addon.db.weights.chain or 0.30 end,
-        function(v) addon.db.weights.chain = v end)
-
-    local sF = CreateWeightSlider(panel, L["CLASS_FIT"], "TOPLEFT", sC, "BOTTOMLEFT", 0, -26,
-        function() return addon.db and addon.db.weights and addon.db.weights.classFit or 0.15 end,
+    local sF = CreateWeightSlider(panel, L["CLASS_FIT"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -26,
+        function() return addon.db and addon.db.weights and addon.db.weights.classFit or 0.25 end,
         function(v) addon.db.weights.classFit = v end)
 
-    local sH = CreateWeightSlider(panel, L["DENSITY"] or "Hub Density", "TOPLEFT", sF, "BOTTOMLEFT", 0, -26,
-        function() return addon.db and addon.db.weights and addon.db.weights.density or 0.15 end,
+    local sC = CreateWeightSlider(panel, L["CHAIN"], "TOPLEFT", sF, "BOTTOMLEFT", 0, -26,
+        function() return addon.db and addon.db.weights and addon.db.weights.chain or 0.20 end,
+        function(v) addon.db.weights.chain = v end)
+
+    local sH = CreateWeightSlider(panel, L["DENSITY"] or "Hub Density", "TOPLEFT", sC, "BOTTOMLEFT", 0, -26,
+        function() return addon.db and addon.db.weights and addon.db.weights.density or 0.10 end,
         function(v) addon.db.weights.density = v end)
+
+    local sD = CreateWeightSlider(panel, L["DIFFICULTY"], "TOPLEFT", sH, "BOTTOMLEFT", 0, -26,
+        function() return addon.db and addon.db.weights and addon.db.weights.difficulty or 0.05 end,
+        function(v) addon.db.weights.difficulty = v end)
 
     local function SyncPanelControls()
         if not addon.db then return end
@@ -203,11 +203,11 @@ local function CreateOptionsPanel()
         cbTracker:SetChecked(addon.db.showInTracker)
         cbWorldMap:SetChecked(addon.db.showInWorldMap ~= false)
         cbDebug:SetChecked(addon.db.debug)
-        sD:SyncValue()
         sR:SyncValue()
-        sC:SyncValue()
         sF:SyncValue()
+        sC:SyncValue()
         sH:SyncValue()
+        sD:SyncValue()
     end
 
     panel:SetScript("OnShow", SyncPanelControls)

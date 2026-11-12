@@ -247,23 +247,26 @@ function Engine.CalculateWorth(questID)
     local isMaxLevel = (playerLevel >= maxLevel)
     local weights = (db and db.weights) or {}
 
-    local rawD = weights.difficulty or 0.10
-    local rawR = weights.reward or 0.35
-    local rawC = weights.chain or 0.25
-    local rawF = weights.classFit or 0.15
-    local rawH = weights.density or 0.15
+    local rawD = weights.difficulty or 0.05
+    local rawR = weights.reward or 0.40
+    local rawC = weights.chain or 0.20
+    local rawF = weights.classFit or 0.25
+    local rawH = weights.density or 0.10
 
-    -- Modernize legacy default weights (difficulty 0.00) during leveling
-    if not isMaxLevel and _approxEq(rawD, 0.00) and _approxEq(rawR, 0.40) and _approxEq(rawC, 0.30) then
-        rawD, rawR, rawC, rawF, rawH = 0.10, 0.35, 0.25, 0.15, 0.15
+    -- Modernize legacy default weights during leveling
+    if not isMaxLevel and (
+        (_approxEq(rawD, 0.00) and _approxEq(rawR, 0.40) and _approxEq(rawC, 0.30)) or
+        (_approxEq(rawD, 0.10) and _approxEq(rawR, 0.35) and _approxEq(rawC, 0.25))
+    ) then
+        rawD, rawR, rawC, rawF, rawH = 0.05, 0.40, 0.20, 0.25, 0.10
     end
 
     -- If player is max level and using default weights, adapt to endgame weights
     if isMaxLevel
-        and _approxEq(rawD, 0.10) and _approxEq(rawR, 0.35)
-        and _approxEq(rawC, 0.25) and _approxEq(rawF, 0.15)
-        and _approxEq(rawH, 0.15) then
-        rawD, rawR, rawC, rawF, rawH = 0.00, 0.50, 0.25, 0.15, 0.10
+        and _approxEq(rawD, 0.05) and _approxEq(rawR, 0.40)
+        and _approxEq(rawC, 0.20) and _approxEq(rawF, 0.25)
+        and _approxEq(rawH, 0.10) then
+        rawD, rawR, rawC, rawF, rawH = 0.00, 0.45, 0.20, 0.25, 0.10
     end
 
     -- 2. Individual Scores (Safe pcall wrapped)
@@ -814,18 +817,18 @@ function Engine.PrintBreakdown(questID)
     local scoreColorHex = Utils.GetScoreColorHex(worth)
     local skullPrefix = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t " or ""
     DEFAULT_CHAT_FRAME:AddMessage(string.format(L["DEBUG_BREAKDOWN_HEADER"], questID, info.title))
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("  |cffffff00Total Worth:|r %s|cff%s%.1f%%|r (Weights: D=%.0f%% R=%.0f%% C=%.0f%% F=%.0f%% H=%.0f%%)",
-        skullPrefix, scoreColorHex, worth * 100, b.wD * 100, b.wR * 100, b.wC * 100, b.wF * 100, b.wH * 100))
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (D): %s |cff888888(Weight: %.0f%%)|r",
-        L["DIFFICULTY"], Utils.FormatScore(b.d), b.wD * 100))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  |cffffff00Total Worth:|r %s|cff%s%.1f%%|r (Weights: R=%.0f%% F=%.0f%% C=%.0f%% H=%.0f%% D=%.0f%%)",
+        skullPrefix, scoreColorHex, worth * 100, b.wR * 100, b.wF * 100, b.wC * 100, b.wH * 100, b.wD * 100))
     DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (R): %s |cff888888(Weight: %.0f%%)|r",
         L["REWARD"], Utils.FormatScore(b.r), b.wR * 100))
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (C): %s |cff888888(Weight: %.0f%%)|r",
-        L["CHAIN"], Utils.FormatScore(b.c), b.wC * 100))
     DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (F): %s |cff888888(Weight: %.0f%%)|r",
         L["CLASS_FIT"], Utils.FormatScore(b.f), b.wF * 100))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (C): %s |cff888888(Weight: %.0f%%)|r",
+        L["CHAIN"], Utils.FormatScore(b.c), b.wC * 100))
     DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (H): %s |cff888888(Weight: %.0f%%)|r",
         L["DENSITY"] or "Hub Density", Utils.FormatScore(b.h), b.wH * 100))
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  * %s (D): %s |cff888888(Weight: %.0f%%)|r",
+        L["DIFFICULTY"], Utils.FormatScore(b.d), b.wD * 100))
 
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID, info.title)
     if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note) then

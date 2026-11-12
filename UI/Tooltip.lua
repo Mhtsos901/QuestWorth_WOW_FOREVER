@@ -251,18 +251,8 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         end
 
         tooltip:AddDoubleLine(
-            "|cff00ccff" .. L["DIFFICULTY"] .. ":|r",
-            diffText,
-            0.85, 0.85, 0.85, 1, 1, 1
-        )
-        tooltip:AddDoubleLine(
             "|cff00ccff" .. L["REWARD"] .. ":|r",
             Utils.FormatScore(b.r) .. rNote,
-            0.85, 0.85, 0.85, 1, 1, 1
-        )
-        tooltip:AddDoubleLine(
-            "|cff00ccff" .. L["CHAIN"] .. ":|r",
-            Utils.FormatScore(b.c) .. cNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
         tooltip:AddDoubleLine(
@@ -271,8 +261,18 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             0.85, 0.85, 0.85, 1, 1, 1
         )
         tooltip:AddDoubleLine(
+            "|cff00ccff" .. L["CHAIN"] .. ":|r",
+            Utils.FormatScore(b.c) .. cNote,
+            0.85, 0.85, 0.85, 1, 1, 1
+        )
+        tooltip:AddDoubleLine(
             "|cff00ccff" .. (L["DENSITY"] or "Hub Density") .. ":|r",
             Utils.FormatScore(b.h or 0.5) .. hNote,
+            0.85, 0.85, 0.85, 1, 1, 1
+        )
+        tooltip:AddDoubleLine(
+            "|cff00ccff" .. L["DIFFICULTY"] .. ":|r",
+            diffText,
             0.85, 0.85, 0.85, 1, 1, 1
         )
     end
