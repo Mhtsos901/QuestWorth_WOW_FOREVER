@@ -13,6 +13,7 @@ Core/Database.lua
 Data/ClassStats.lua
 Data/ArmorTypes.lua
 Data/Chains.lua
+Data/Tips.lua
 Data/Zones.lua
 Scores/Difficulty.lua
 Scores/Reward.lua

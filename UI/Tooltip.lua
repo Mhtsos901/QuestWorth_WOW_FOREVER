@@ -279,25 +279,31 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         end
     end
 
-    -- 5. Meta-Knowledge: Key Unlock & Payoff details
+    -- 5. Meta-Knowledge: Key Unlock, Quest Tip & Payoff details
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
-    if payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin) then
+    local questTip = addon.Data and addon.Data.GetQuestTip and addon.Data.GetQuestTip(questID)
+    local tipText = (payoff and payoff.tip) or questTip
+
+    if (payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin or payoff.tip)) or (tipText and tipText ~= "") then
         tooltip:AddLine(" ")
         tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
 
-        if payoff.chain then
+        if payoff and payoff.chain then
             tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r")
         end
-        if payoff.unlock then
+        if payoff and payoff.unlock then
             tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r")
         end
-        if payoff.reward then
+        if payoff and payoff.reward then
             tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r")
         end
-        if payoff.origin then
+        if payoff and payoff.origin then
             tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r")
         end
-        if payoff.note then
+        if tipText and tipText ~= "" then
+            tooltip:AddLine("  |cff1aff4d" .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. tipText .. "|r", 0.9, 0.9, 0.9, true)
+        end
+        if payoff and payoff.note and payoff.note ~= tipText then
             tooltip:AddLine("  |cffcccccc" .. payoff.note .. "|r", 0.9, 0.9, 0.9, true)
         end
     end

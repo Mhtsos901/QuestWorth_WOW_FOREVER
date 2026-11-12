@@ -929,6 +929,7 @@ function Data.GetQuestPayoff(questID, questTitle)
             unlock = entry.unlock,
             reward = entry.reward,
             chain = entry.chain,
+            tip = entry.tip,
             note = entry.note,
             origin = entry.origin,
             summary = entry.summary,
@@ -955,6 +956,7 @@ function Data.GetQuestPayoff(questID, questTitle)
                 unlock = entry.unlock,
                 reward = entry.reward,
                 chain = entry.chain,
+                tip = entry.tip,
                 note = entry.note,
                 origin = entry.origin,
                 summary = entry.summary,
@@ -1053,6 +1055,13 @@ function Data.GetQuestPayoff(questID, questTitle)
         payoff = {}
     end
 
+    -- 4. Query dedicated Quest Tips & Sourcing Guide
+    local questTip = Data.GetQuestTip and Data.GetQuestTip(targetID, rawTitle)
+    if questTip and questTip ~= "" then
+        if not payoff then payoff = {} end
+        payoff.tip = payoff.tip or questTip
+    end
+
     if payoff then
         payoff.unlock = payoff.unlock or detectedUnlock
         payoff.reward = payoff.reward or detectedReward
@@ -1068,6 +1077,7 @@ function Data.GetQuestPayoff(questID, questTitle)
             if payoff.unlock then table.insert(parts, payoff.unlock) end
             if payoff.reward then table.insert(parts, payoff.reward) end
             if #parts == 0 and payoff.chain then table.insert(parts, payoff.chain) end
+            if #parts == 0 and payoff.tip then table.insert(parts, payoff.tip) end
             if #parts > 0 then
                 payoff.summary = table.concat(parts, " • ")
             end

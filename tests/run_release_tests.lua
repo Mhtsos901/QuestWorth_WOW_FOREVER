@@ -349,6 +349,7 @@ local files = {
     "Data/ClassStats.lua",
     "Data/ArmorTypes.lua",
     "Data/Chains.lua",
+    "Data/Tips.lua",
     "Data/Zones.lua",
     "Scores/Difficulty.lua",
     "Scores/Reward.lua",
@@ -560,6 +561,34 @@ assert_true(wc.isDungeon == true, "Wailing Caverns has isDungeon == true")
 local customDung = addonTable.Engine.CalculateWorldMapZoneWorth("Hall of Thanes")
 assert_not_nil(customDung, "WoW Forever custom dungeon 'Hall of Thanes' recognized")
 assert_true(customDung.isDungeon == true, "Hall of Thanes has isDungeon == true")
+
+-- 3E: Cryptic & Item Sourcing Quest Tips
+print(" [3E] Cryptic, Hidden Object & Item Sourcing Quest Tips:")
+local valorPayoff = addonTable.Data.GetQuestPayoff(226, "The Valor Family")
+assert_not_nil(valorPayoff, "Payoff retrieved for The Valor Family")
+assert_not_nil(valorPayoff.tip, "The Valor Family has actionable tip")
+assert_true(string.find(valorPayoff.tip, "Raven Hill Tome") ~= nil, "The Valor Family tip mentions Raven Hill Tome: " .. tostring(valorPayoff.tip))
+
+local kabobPayoff = addonTable.Data.GetQuestPayoff(93, "Seasoned Wolf Kabobs")
+assert_not_nil(kabobPayoff, "Payoff retrieved for Seasoned Wolf Kabobs")
+assert_not_nil(kabobPayoff.tip, "Seasoned Wolf Kabobs has actionable tip")
+assert_true(string.find(kabobPayoff.tip, "Lean Wolf Flank") ~= nil, "Seasoned Wolf Kabobs tip mentions Lean Wolf Flanks: " .. tostring(kabobPayoff.tip))
+
+local starsTip = addonTable.Data.GetQuestTip(174, "Look to the Stars")
+assert_not_nil(starsTip, "Look to the Stars tip found")
+assert_true(string.find(starsTip, "Bronze Tube") ~= nil, "Look to the Stars tip mentions Bronze Tube: " .. tostring(starsTip))
+
+local blanchyTip = addonTable.Data.GetQuestTip(151, "Poor Old Blanchy")
+assert_not_nil(blanchyTip, "Poor Old Blanchy tip found")
+assert_true(string.find(blanchyTip, "Oats") ~= nil, "Blanchy tip mentions Oats: " .. tostring(blanchyTip))
+
+local cluckTip = addonTable.Data.GetQuestTip(106, "Cluck!")
+assert_not_nil(cluckTip, "Cluck! chicken quest tip found")
+assert_true(string.find(cluckTip, "Chicken Feed") ~= nil, "Cluck! tip mentions chicken feed: " .. tostring(cluckTip))
+
+local itemTip = addonTable.Data.ObjectiveItemTips["soothing spices"]
+assert_not_nil(itemTip, "Soothing Spices vendor tip indexed")
+assert_true(string.find(itemTip, "Cooking Supplies") ~= nil, "Soothing Spices tip points to cooking vendors")
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST
