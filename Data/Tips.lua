@@ -254,8 +254,8 @@ function Data.GetQuestTip(questID, questTitle)
     if targetID and targetID > 0 and GetNumQuestLogEntries and GetQuestLogTitle and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
         local numEntries = GetNumQuestLogEntries() or 0
         for qIndex = 1, numEntries do
-            local _, _, _, _, isHeader, _, _, _, qID = GetQuestLogTitle(qIndex)
-            if not isHeader and (qID == targetID or (cleanTitle and cleanTitle ~= "" and CleanKey(GetQuestLogTitle(qIndex)) == cleanTitle)) then
+            local okTitle, title, _, _, isHeader, _, _, _, qID = pcall(GetQuestLogTitle, qIndex)
+            if okTitle and not isHeader and (qID == targetID or (cleanTitle and cleanTitle ~= "" and CleanKey(title) == cleanTitle)) then
                 local numLeaderBoards = GetNumQuestLeaderBoards(qIndex) or 0
                 for objIndex = 1, numLeaderBoards do
                     local objText, objType = GetQuestLogLeaderBoard(objIndex, qIndex)

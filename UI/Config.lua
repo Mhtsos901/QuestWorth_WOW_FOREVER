@@ -202,6 +202,7 @@ local function CreateOptionsPanel()
         cbQuestLog:SetChecked(addon.db.showInQuestLog)
         cbTracker:SetChecked(addon.db.showInTracker)
         cbWorldMap:SetChecked(addon.db.showInWorldMap ~= false)
+        cbZoneAdvisor:SetChecked(addon.db.showZoneAdvisor ~= false)
         cbDebug:SetChecked(addon.db.debug)
         sR:SyncValue()
         sF:SyncValue()
@@ -304,7 +305,7 @@ local function HandleSlashCmd(msg)
         local r = tonumber(args[3])
         local c = tonumber(args[4])
         local f = tonumber(args[5])
-        local h = tonumber(args[6]) or 0.15
+        local h = tonumber(args[6]) or 0.10
 
         if not d or not r or not c or not f then
             addon.Print(L["WEIGHTS_ERROR"])

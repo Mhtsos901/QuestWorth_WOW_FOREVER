@@ -302,7 +302,7 @@ _G.C_QuestLog = {
         return false
     end,
     GetQuestRewardXP = function(qID)
-        local q = mockQuestDB[qID]
+        local q = mockQuestDB[qID] or mockQuestDB[tonumber(qID)]
         return q and q.xp or 1200
     end,
     GetQuestRewardMoney = function(qID)
@@ -589,6 +589,46 @@ assert_true(string.find(cluckTip, "Chicken Feed") ~= nil, "Cluck! tip mentions c
 local itemTip = addonTable.Data.ObjectiveItemTips["soothing spices"]
 assert_not_nil(itemTip, "Soothing Spices vendor tip indexed")
 assert_true(string.find(itemTip, "Cooking Supplies") ~= nil, "Soothing Spices tip points to cooking vendors")
+
+-- 3F: Logic Edge Cases, Zero-Difficulty Guarantee & Dungeon Guidance
+print(" [3F] Deep Logic Audit: Zero-Difficulty Guarantee & Dungeon Advisor Guidance:")
+local prevLvl = mockPlayerState.level
+
+-- Test 1: Zero-Difficulty Guarantee (wD == 0.00 even after dynamic weight redistribution)
+local noGearWorth, noGearBreak = addonTable.Engine.CalculateWorth(7001)
+assert_not_nil(noGearWorth, "Standalone quest 7001 evaluated")
+assert_eq(noGearBreak.wD, 0.00, "Difficulty weight remains strictly 0.00 after dynamic redistribution")
+assert_true(noGearBreak.wR > 0.40, "Reward weight absorbed released weight (Reward weight: " .. tostring(noGearBreak.wR) .. ")")
+
+-- Test 2: Dungeon status at level 16 (Upcoming Dungeon prequest guidance)
+mockPlayerState.level = 16
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+local dm16 = addonTable.Engine.CalculateWorldMapZoneWorth("The Deadmines")
+assert_not_nil(dm16, "The Deadmines evaluated for level 16")
+assert_true(string.find(dm16.status, "Upcoming Dungeon") ~= nil, "Deadmines at level 16 indicates Upcoming Dungeon: " .. tostring(dm16.status))
+assert_true(string.find(dm16.recommendation, "prequests") ~= nil, "Deadmines recommendation guides player to prepare prequests")
+
+-- Test 3: Dungeon status at level 20 (Recommended 5-player instance)
+mockPlayerState.level = 20
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+local dm20 = addonTable.Engine.CalculateWorldMapZoneWorth("The Deadmines")
+assert_not_nil(dm20, "The Deadmines evaluated for level 20")
+assert_true(dm20.status == "Recommended Dungeon" or dm20.status == "Ready for Dungeon!", "Deadmines at level 20 status is Recommended Dungeon: " .. tostring(dm20.status))
+assert_true(string.find(dm20.recommendation, "5-player") ~= nil, "Deadmines at level 20 recommendation notes 5-player instance")
+
+-- Test 4: High-XP Quest with 0 vendor copper achieves High XP (>= 0.85)
+mockPlayerState.level = 25
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+mockQuestDB[8899] = { xp = 6000, money = 0, uncached = false }
+local rScore, rDetails = addonTable.Scores.CalculateReward(8899)
+assert_true(rScore >= 0.85, "High XP quest with 0 money achieves High XP score (>= 0.85): " .. tostring(rScore))
+
+mockPlayerState.level = prevLvl
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST

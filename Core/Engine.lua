@@ -80,6 +80,9 @@ function Engine.InvalidateCache()
     wipe(Engine.CompletionCache)
     Engine._completionScanned = false
     wipe(Engine.WorldMapZoneCache)
+    if addon.Scores and addon.Scores.InvalidateRewardCache then
+        addon.Scores.InvalidateRewardCache()
+    end
     addon.Debug("Evaluation cache invalidated.")
 end
 
@@ -303,32 +306,34 @@ function Engine.CalculateWorth(questID)
     -- 3. Dynamic Weight Redistribution
     local isMajorChain = (cDetails and (cDetails.isClassOrProfession or cDetails.isCap or (cDetails.totalSteps and cDetails.totalSteps >= 3) or (cScore and cScore >= 0.60)))
     local hasNoGear = (okF == false) or (fDetails and fDetails.hasItems == false)
+    local isZeroDiff = (rawD <= 0.001)
 
     local wD, wR, wC, wF, wH
     if hasNoGear and not isMajorChain then
         -- Standalone / XP / Hub quests without gear rewards:
-        -- Shift unused ClassFit and excess Chain weight primarily into Difficulty and Density!
+        -- Shift unused ClassFit and excess Chain weight into Reward and Density (and Difficulty if user active)
         local effC = math.min(rawC, 0.06)
         local released = rawF + (rawC - effC)
-        local effD = rawD + (released * 0.45)
-        local effH = rawH + (released * 0.35)
-        local effR = rawR + (released * 0.20)
+        local effD = isZeroDiff and 0.00 or (rawD + (released * 0.45))
+        local effH = rawH + (released * (isZeroDiff and 0.45 or 0.35))
+        local effR = rawR + (released * (isZeroDiff and 0.55 or 0.20))
         local effF = 0.00
         wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, effC, effF, effH)
     elseif hasNoGear and isMajorChain then
         -- Major chain quest offering no gear rewards (XP/story starter):
         local released = rawF
-        local effD = rawD + (released * 0.30)
-        local effH = rawH + (released * 0.30)
-        local effR = rawR + (released * 0.40)
+        local effD = isZeroDiff and 0.00 or (rawD + (released * 0.30))
+        local effH = rawH + (released * (isZeroDiff and 0.40 or 0.30))
+        local effR = rawR + (released * (isZeroDiff and 0.60 or 0.40))
         wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, rawC, 0.00, effH)
     elseif not hasNoGear and not isMajorChain and cScore <= 0.20 then
-        -- Standalone quest with gear: shift excess Chain weight to ClassFit (gear upgrade) & Difficulty
+        -- Standalone quest with gear: shift excess Chain weight to ClassFit (gear upgrade) & Reward (or Difficulty if user active)
         local effC = math.min(rawC, 0.05)
         local released = rawC - effC
         local effF = rawF + (released * 0.65)
-        local effD = rawD + (released * 0.35)
-        wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, rawR, effC, effF, rawH)
+        local effD = isZeroDiff and 0.00 or (rawD + (released * 0.35))
+        local effR = isZeroDiff and (rawR + (released * 0.35)) or rawR
+        wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, effC, effF, rawH)
     else
         wD, wR, wC, wF, wH = Utils.NormalizeWeights(rawD, rawR, rawC, rawF, rawH)
     end
@@ -699,58 +704,94 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
             recommendation = "Few or no friendly quests available."
         end
     else
-        -- Level bracket suitability evaluation using effectiveMin & smooth curve
-        if effectiveMin and playerLevel < effectiveMin then
-            local diff = effectiveMin - playerLevel
-            if diff == 1 then
-                bracketScore = 0.82
-                status = string.format("Upcoming Zone (%d+)", effectiveMin)
-                recommendation = string.format("Challenging entry quests. Unlocks optimal leveling soon at level %d.", effectiveMin)
-            elseif diff == 2 then
-                bracketScore = 0.70
-                status = string.format("Upcoming Zone (%d+)", effectiveMin)
-                recommendation = string.format("Few intro quests available. Main quest hubs open at level %d.", effectiveMin)
-            elseif diff == 3 then
-                bracketScore = 0.40
-                status = string.format("High Level Entry (%d+)", effectiveMin)
-                if zoneName == "Hillsbrad Foothills" and playerFaction == "Alliance" then
-                    recommendation = "Alliance quests in Southshore start at level 22-24 (Tarren Mill has earlier quests). Return at level 23+."
+        local isDungeon = (zoneInfo and zoneInfo.isDungeon) or false
+        if isDungeon then
+            -- Dungeon instance bracket suitability & prequest guidance
+            if effectiveMin and playerLevel < effectiveMin then
+                local diff = effectiveMin - playerLevel
+                if diff <= 2 then
+                    bracketScore = 0.75
+                    status = string.format("Upcoming Dungeon (%d+)", effectiveMin)
+                    recommendation = string.format("Prepare dungeon prequests. Recommended for 5-player groups at level %d+.", effectiveMin)
                 else
-                    recommendation = string.format("Most quests are currently red/orange. Recommended level %d+.", effectiveMin)
+                    local smoothScore = math.max(0.05, 0.40 - (diff - 2) * 0.10)
+                    bracketScore = smoothScore
+                    status = string.format("High Level Dungeon (%d+)", effectiveMin)
+                    recommendation = string.format("Dangerous instance enemies. Gather group & prequests at level %d+.", effectiveMin)
                 end
+            elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
+                if activeCount and activeCount > 0 then
+                    bracketScore = 1.00
+                    status = "Ready for Dungeon!"
+                    recommendation = string.format("5-player instance (%d-%d) with %d active quests in log. Form group and clear!", minLevel, maxLevel, activeCount)
+                else
+                    bracketScore = 0.82
+                    status = "Recommended Dungeon"
+                    recommendation = string.format("5-player instance (%d-%d). Gather dungeon quests and group up before entering!", minLevel, maxLevel)
+                end
+            elseif maxLevel and playerLevel <= (maxLevel + 4) then
+                bracketScore = 0.40
+                status = "Low Level Dungeon"
+                recommendation = "Instance outleveled. Good for fast quest clears or helping friends."
             else
-                local smoothScore = math.max(0.05, 0.40 - (diff - 3) * 0.10)
-                bracketScore = smoothScore
-                status = "Too High Level"
-                recommendation = string.format("Dangerous enemies. Recommended to return at level %d+.", effectiveMin)
+                bracketScore = 0.15
+                status = "Outleveled Dungeon"
+                recommendation = "Trivial content. Instance mobs grant minimal or gray XP."
             end
-        elseif zoneName == "Redridge Mountains" and (playerLevel == 20 or playerLevel == 21) then
-            -- Redridge mid-bracket dip: solo lakeshore quests are done, remaining quests are 21-25 Blackrock / Elite
-            bracketScore = 0.65
-            status = "Elite / Group Quests"
-            recommendation = "Solo lakeshore quests outleveled. Remaining quests are difficult level 21-25 Blackrock and Elite group challenges."
-        elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
-            if playerLevel <= (effectiveMin + 3) then
-                bracketScore = 1.00
-                status = "Peak Leveling Bracket"
-                recommendation = "Ideal entry level! Maximum XP rewards and gear upgrades."
-            elseif playerLevel <= (maxLevel - 2) then
-                bracketScore = 0.90
-                status = "Optimal Level"
-                recommendation = "Great zone pacing and solid XP per hour."
-            else
-                bracketScore = 0.75
-                status = "Late Bracket"
-                recommendation = "Finishing bracket. Good for completing remaining quest chains."
-            end
-        elseif maxLevel and playerLevel <= (maxLevel + 3) then
-            bracketScore = 0.40
-            status = "Low Level"
-            recommendation = "Declining XP rewards. Mobs are mostly green."
         else
-            bracketScore = 0.15
-            status = "Outleveled"
-            recommendation = "Trivial content. Quests grant minimal or gray XP."
+            -- Level bracket suitability evaluation using effectiveMin & smooth curve for outdoor zones
+            if effectiveMin and playerLevel < effectiveMin then
+                local diff = effectiveMin - playerLevel
+                if diff == 1 then
+                    bracketScore = 0.82
+                    status = string.format("Upcoming Zone (%d+)", effectiveMin)
+                    recommendation = string.format("Challenging entry quests. Unlocks optimal leveling soon at level %d.", effectiveMin)
+                elseif diff == 2 then
+                    bracketScore = 0.70
+                    status = string.format("Upcoming Zone (%d+)", effectiveMin)
+                    recommendation = string.format("Few intro quests available. Main quest hubs open at level %d.", effectiveMin)
+                elseif diff == 3 then
+                    bracketScore = 0.40
+                    status = string.format("High Level Entry (%d+)", effectiveMin)
+                    if zoneName == "Hillsbrad Foothills" and playerFaction == "Alliance" then
+                        recommendation = "Alliance quests in Southshore start at level 22-24 (Tarren Mill has earlier quests). Return at level 23+."
+                    else
+                        recommendation = string.format("Most quests are currently red/orange. Recommended level %d+.", effectiveMin)
+                    end
+                else
+                    local smoothScore = math.max(0.05, 0.40 - (diff - 3) * 0.10)
+                    bracketScore = smoothScore
+                    status = "Too High Level"
+                    recommendation = string.format("Dangerous enemies. Recommended to return at level %d+.", effectiveMin)
+                end
+            elseif zoneName == "Redridge Mountains" and (playerLevel == 20 or playerLevel == 21) then
+                -- Redridge mid-bracket dip: solo lakeshore quests are done, remaining quests are 21-25 Blackrock / Elite
+                bracketScore = 0.65
+                status = "Elite / Group Quests"
+                recommendation = "Solo lakeshore quests outleveled. Remaining quests are difficult level 21-25 Blackrock and Elite group challenges."
+            elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
+                if playerLevel <= (effectiveMin + 3) then
+                    bracketScore = 1.00
+                    status = "Peak Leveling Bracket"
+                    recommendation = "Ideal entry level! Maximum XP rewards and gear upgrades."
+                elseif playerLevel <= (maxLevel - 2) then
+                    bracketScore = 0.90
+                    status = "Optimal Level"
+                    recommendation = "Great zone pacing and solid XP per hour."
+                else
+                    bracketScore = 0.75
+                    status = "Late Bracket"
+                    recommendation = "Finishing bracket. Good for completing remaining quest chains."
+                end
+            elseif maxLevel and playerLevel <= (maxLevel + 3) then
+                bracketScore = 0.40
+                status = "Low Level"
+                recommendation = "Declining XP rewards. Mobs are mostly green."
+            else
+                bracketScore = 0.15
+                status = "Outleveled"
+                recommendation = "Trivial content. Quests grant minimal or gray XP."
+            end
         end
     end
 

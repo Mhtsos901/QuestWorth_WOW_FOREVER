@@ -189,7 +189,13 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
     elseif b.isHard then
         adviceText = "|cffff5533Bring Group / Elite Mob|r"
     elseif worth < 0.35 then
-        adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
+        local dColor = b.details and b.details.difficulty and b.details.difficulty.colorName
+        local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
+        if dColor == "red" or (dDelta and dDelta >= 4) then
+            adviceText = "|cffff3333Too High Level (Skip for Now)|r"
+        else
+            adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
+        end
     else
         adviceText = "|cffffcc00Standard Leveling|r"
     end

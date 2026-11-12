@@ -421,20 +421,21 @@ end
 
 -- Normalize 5 weights (Difficulty, Reward, Chain, ClassFit, Density) to sum to 1.0
 function Utils.NormalizeWeights(wD, wR, wC, wF, wH)
-    local d = math.max(0, (wD ~= nil and tonumber(wD)) or 0.00)
+    local isZeroDiff = (wD ~= nil and tonumber(wD) or 0.00) <= 0.001
+    local d = isZeroDiff and 0.00 or math.max(0, tonumber(wD) or 0.00)
     local r = math.max(0, (wR ~= nil and tonumber(wR)) or 0.40)
-    local c = math.max(0, (wC ~= nil and tonumber(wC)) or 0.30)
-    local f = math.max(0, (wF ~= nil and tonumber(wF)) or 0.15)
-    local h = math.max(0, (wH ~= nil and tonumber(wH)) or 0.15)
+    local c = math.max(0, (wC ~= nil and tonumber(wC)) or 0.25)
+    local f = math.max(0, (wF ~= nil and tonumber(wF)) or 0.25)
+    local h = math.max(0, (wH ~= nil and tonumber(wH)) or 0.10)
 
     local sum = d + r + c + f + h
     if sum <= 0 then
-        if wF == 0 then
-            return 0.00, 0.47, 0.35, 0.00, 0.18
+        if isZeroDiff then
+            return 0.00, 0.40, 0.25, 0.25, 0.10
         end
-        return 0.00, 0.40, 0.30, 0.15, 0.15
+        return 0.00, 0.40, 0.25, 0.25, 0.10
     end
-    return d / sum, r / sum, c / sum, f / sum, h / sum
+    return isZeroDiff and 0.00 or (d / sum), r / sum, c / sum, f / sum, h / sum
 end
 
 -- Safe Quest Title/Level getter across Modern C_QuestLog, Gossip NPCs, and Legacy APIs (memoized)

@@ -11,6 +11,12 @@ local Utils = addon.Utils
 local _xpCache = {}
 local _moneyCache = {}
 
+function Scores.InvalidateRewardCache()
+    wipe(_xpCache)
+    wipe(_moneyCache)
+end
+addon.InvalidateRewardCache = Scores.InvalidateRewardCache
+
 -- Safe helper to fetch XP reward for a quest
 local function GetQuestXP(questID)
     if _xpCache[questID] and _xpCache[questID] > 0 then
@@ -131,7 +137,16 @@ function Scores.CalculateReward(questID)
     if isMaxLevel then
         finalScore = moneyScore
     else
-        finalScore = (xpScore * 0.75) + (moneyScore * 0.25)
+        -- Leveling priority: If quest offers exceptional XP, ensure lack of vendor copper doesn't suppress it
+        if xpScore >= 0.85 or (benchmarkQuestXP > 0 and rewardXP >= benchmarkQuestXP) then
+            finalScore = (xpScore * 0.88) + (moneyScore * 0.12)
+            if benchmarkQuestXP > 0 and rewardXP > benchmarkQuestXP then
+                local bonus = math.min(0.12, ((rewardXP - benchmarkQuestXP) / benchmarkQuestXP) * 0.20)
+                finalScore = math.min(1.0, finalScore + bonus)
+            end
+        else
+            finalScore = (xpScore * 0.75) + (moneyScore * 0.25)
+        end
     end
 
     finalScore = math.max(0.05, math.min(1.0, finalScore))
