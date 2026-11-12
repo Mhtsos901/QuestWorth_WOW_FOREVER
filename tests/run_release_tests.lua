@@ -377,7 +377,7 @@ for _, relPath in ipairs(files) do
     end
     print(string.format("  Loaded: %s", relPath))
 end
-print("All 19 files successfully loaded.\n")
+print(string.format("All %d files successfully loaded.\n", #files))
 
 local eventFrame = _G["WorthIt_EventFrame"]
 assert_not_nil(eventFrame, "Event frame 'WorthIt_EventFrame' registered")
