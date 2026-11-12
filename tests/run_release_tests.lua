@@ -189,16 +189,20 @@ _G.CreateFrame = function(frameType, name, parent, template)
     function f:CreateTexture(tName, layer, fo)
         local tex = {
             SetTexture = function(self, t) self.tex = t end,
+            GetTexture = function(self) return self.tex end,
+            SetAtlas = function(self, a) self.atlas = a; self.tex = "Atlas:" .. tostring(a) end,
+            GetAtlas = function(self) return self.atlas end,
             SetColorTexture = function(self, ...) end,
             SetAllPoints = function(self, ...) end,
             SetPoint = function(self, ...) end,
-            SetSize = function(self, ...) end,
-            SetHeight = function(self, ...) end,
-            SetWidth = function(self, ...) end,
+            SetSize = function(self, w, h) self.w = w; self.h = h end,
+            SetHeight = function(self, h) self.h = h end,
+            SetWidth = function(self, w) self.w = w end,
             SetAlpha = function(self, ...) end,
             SetTexCoord = function(self, ...) end,
-            Show = function(self) end,
-            Hide = function(self) end,
+            Show = function(self) self.shown = true end,
+            Hide = function(self) self.shown = false end,
+            IsShown = function(self) return self.shown ~= false end,
         }
         if tName then _G[tName] = tex end
         return tex
@@ -540,6 +544,22 @@ assert_true(hyjal.minLevel == 58 and hyjal.maxLevel == 60, "Mount Hyjal bracket 
 
 local fakeZone = addonTable.Engine.CalculateWorldMapZoneWorth("NonExistentZone999")
 assert_true(fakeZone == nil or fakeZone.worth ~= nil, "Non-existent zone handled safely without crash")
+
+-- 3D: Dungeon Detection & Advisor Dungeon Icon
+print(" [3D] Classic & WoW Forever Dungeon Zone Detection & Icons:")
+local deadmines = addonTable.Engine.CalculateWorldMapZoneWorth("The Deadmines")
+assert_not_nil(deadmines, "The Deadmines dungeon recognized in database")
+assert_true(deadmines.isDungeon == true, "The Deadmines has isDungeon == true")
+assert_eq(deadmines.minLevel, 18, "Deadmines min level is 18")
+assert_eq(deadmines.maxLevel, 23, "Deadmines max level is 23")
+
+local wc = addonTable.Engine.CalculateWorldMapZoneWorth("Wailing Caverns")
+assert_not_nil(wc, "Wailing Caverns dungeon recognized in database")
+assert_true(wc.isDungeon == true, "Wailing Caverns has isDungeon == true")
+
+local customDung = addonTable.Engine.CalculateWorldMapZoneWorth("Hall of Thanes")
+assert_not_nil(customDung, "WoW Forever custom dungeon 'Hall of Thanes' recognized")
+assert_true(customDung.isDungeon == true, "Hall of Thanes has isDungeon == true")
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST

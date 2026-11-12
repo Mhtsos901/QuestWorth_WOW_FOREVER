@@ -13,9 +13,11 @@ local L = addon.L
 
 local mapBanner = nil
 
--- Helper to return inline texture markup for continent faction symbols
-local function GetContinentMarkup(continent)
-    if continent == 1 then
+-- Helper to return inline texture markup for continent faction symbols or dungeon icon
+local function GetContinentMarkup(continent, isDungeon)
+    if isDungeon then
+        return "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
+    elseif continent == 1 then
         -- Kalimdor -> Horde Crest
         return "|TInterface\\TargetingFrame\\UI-PVP-Horde:14:14:0:0:64:64:3:38:3:38|t"
     elseif continent == 2 then
@@ -25,10 +27,34 @@ local function GetContinentMarkup(continent)
     return ""
 end
 
--- Helper to update a row's continent faction icon texture (Kalimdor = Horde, Eastern Kingdoms = Alliance)
-local function UpdateRowContinentIcon(icon, continent)
+-- Helper to update a row's continent faction or dungeon icon texture
+-- (Dungeon = Dungeon Portal/Eye, Kalimdor = Horde Crest, Eastern Kingdoms = Alliance Crest)
+local function UpdateRowContinentIcon(icon, continent, isDungeon)
     if not icon then return end
-    if continent == 1 then
+
+    if isDungeon then
+        local set = false
+        if icon.SetAtlas then
+            local ok = pcall(icon.SetAtlas, icon, "groupfinder-icon-dungeon")
+            if ok and icon:GetTexture() then set = true end
+            if not set then
+                ok = pcall(icon.SetAtlas, icon, "dungeon")
+                if ok and icon:GetTexture() then set = true end
+            end
+            if not set then
+                ok = pcall(icon.SetAtlas, icon, "Dungeon")
+                if ok and icon:GetTexture() then set = true end
+            end
+        end
+        if not set then
+            icon:SetTexture("Interface\\LFGFrame\\LFG-Eye")
+            icon:SetTexCoord(0, 0.125, 0, 0.25)
+        else
+            icon:SetTexCoord(0, 1, 0, 1)
+        end
+        icon:SetSize(16, 16)
+        icon:Show()
+    elseif continent == 1 then
         -- Kalimdor -> Horde Crest Symbol
         local set = false
         if icon.SetAtlas then
@@ -62,6 +88,41 @@ local function UpdateRowContinentIcon(icon, continent)
         icon:SetSize(0.001, 16)
         icon:Hide()
     end
+end
+
+local DUNGEON_SET = {
+    ["the deadmines"] = true, ["deadmines"] = true,
+    ["wailing caverns"] = true,
+    ["shadowfang keep"] = true,
+    ["blackfathom deeps"] = true,
+    ["the stockade"] = true, ["stockade"] = true,
+    ["gnomeregan"] = true,
+    ["razorfen kraul"] = true,
+    ["scarlet monastery"] = true,
+    ["razorfen downs"] = true,
+    ["uldaman"] = true,
+    ["zul'farrak"] = true,
+    ["maraudon"] = true,
+    ["sunken temple"] = true, ["the temple of atal'hakkar"] = true, ["temple of atal'hakkar"] = true,
+    ["blackrock depths"] = true,
+    ["lower blackrock spire"] = true, ["upper blackrock spire"] = true, ["blackrock spire"] = true,
+    ["dire maul"] = true,
+    ["scholomance"] = true,
+    ["stratholme"] = true,
+    ["ragefire chasm"] = true,
+    ["hall of thanes"] = true,
+    ["ruins of lordaeron"] = true,
+}
+
+local function IsDungeonZone(name)
+    if not name then return false end
+    local zInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(name)
+    if zInfo and zInfo.isDungeon then return true end
+    local lower = string.lower(name)
+    if DUNGEON_SET[lower] then return true end
+    local noThe = string.gsub(lower, "^the%s+", "")
+    if DUNGEON_SET[noThe] then return true end
+    return false
 end
 
 -- Resolve geographical leveling zone name even when zoomed into towns, areas, or sub-zones
@@ -202,6 +263,15 @@ local function CreateWorldMapBanner()
         end
 
         -- Territory / Faction
+        if self.isDungeon or (d and d.isDungeon) or IsDungeonZone(d.zoneName) then
+            local dungIcon = "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
+            GameTooltip:AddDoubleLine(
+                "|cff00ccffZone Type:|r",
+                dungIcon .. " |cffffd100Dungeon Instance|r",
+                0.9, 0.9, 0.9, 1, 1, 1
+            )
+        end
+
         local fColor = (d.faction == "Alliance" and "|cff0070dd") or (d.faction == "Horde" and "|cffc41f3b") or "|cffffff00"
         GameTooltip:AddDoubleLine(
             "|cff00ccffTerritory:|r",
@@ -492,6 +562,15 @@ local function CreateAdvisorRow(index, parent)
             )
         end
 
+        if self.isDungeon or (d and d.isDungeon) or IsDungeonZone(d.zoneName) then
+            local dungIcon = "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
+            GameTooltip:AddDoubleLine(
+                "|cff00ccffZone Type:|r",
+                dungIcon .. " |cffffd100Dungeon Instance|r",
+                0.9, 0.9, 0.9, 1, 1, 1
+            )
+        end
+
         local fColor = (d.faction == "Alliance" and "|cff0070dd") or (d.faction == "Horde" and "|cffc41f3b") or "|cffffff00"
         GameTooltip:AddDoubleLine(
             "|cff00ccffTerritory:|r",
@@ -777,6 +856,7 @@ function UI.UpdateZoneAdvisor()
             local isCity = zData.isCity
             local reqClass = zData.class
             local faction = zData.faction
+            local isDung = zData.isDungeon or IsDungeonZone(name)
 
             local skip = false
             -- 1. Never show major cities in Zone Advisor (cities are hubs/economy, not leveling zones)
@@ -792,6 +872,18 @@ function UI.UpdateZoneAdvisor()
                 local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(name)
                 if not quests or #quests == 0 then
                     skip = true
+                end
+            end
+            -- 4. For dungeons: if no active quests in log, only show if within player's level bracket
+            if isDung then
+                local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(name)
+                if not quests or #quests == 0 then
+                    local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+                    local minL = zData.min or 1
+                    local maxL = zData.max or 60
+                    if pLevel < (minL - 2) or pLevel > (maxL + 2) then
+                        skip = true
+                    end
                 end
             end
 
@@ -811,6 +903,7 @@ function UI.UpdateZoneAdvisor()
                             res = res,
                             mapID = zData.mapID,
                             continent = zData.continent,
+                            isDungeon = isDung,
                         }
                     end
                 end
@@ -825,6 +918,7 @@ function UI.UpdateZoneAdvisor()
                 local zInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(zName)
                 local isCity = zInfo and zInfo.isCity
                 local reqClass = zInfo and zInfo.class
+                local isDung = (zInfo and zInfo.isDungeon) or IsDungeonZone(zName)
                 local skip = isCity or (reqClass and reqClass ~= playerClass)
 
                 if not skip then
@@ -840,6 +934,7 @@ function UI.UpdateZoneAdvisor()
                                 res = res,
                                 mapID = nil,
                                 continent = zInfo and zInfo.continent,
+                                isDungeon = isDung,
                             }
                         end
                     end
@@ -884,6 +979,7 @@ function UI.UpdateZoneAdvisor()
         local row = advisorRows[i] or CreateAdvisorRow(i, child)
         row.data = item.res
         row.mapID = item.mapID
+        row.isDungeon = item.isDungeon
 
         local badge = Utils.FormatBadge(item.res.worth, false)
         row.Badge:SetText(badge)
@@ -892,9 +988,9 @@ function UI.UpdateZoneAdvisor()
         local nameColor = (item.res.worth >= 0.70 and "|cffffd100") or (item.res.worth >= 0.50 and "|cffffffff") or "|cffaaaaaa"
         row.Name:SetText(nameColor .. item.name .. "|r")
 
-        -- Update continent faction symbol (Kalimdor = Horde, Eastern Kingdoms = Alliance)
+        -- Update continent faction or dungeon symbol (Dungeon = Portal/Eye, Kalimdor = Horde, Eastern Kingdoms = Alliance)
         local cont = item.continent or (item.res and item.res.continent)
-        UpdateRowContinentIcon(row.ContinentIcon, cont)
+        UpdateRowContinentIcon(row.ContinentIcon, cont, item.isDungeon)
 
         if item.res.activeCount and item.res.activeCount > 0 then
             row.RightTag:SetText(string.format("|cffffcc00[%dQ]|r", item.res.activeCount))

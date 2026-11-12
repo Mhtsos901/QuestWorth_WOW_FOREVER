@@ -782,6 +782,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         isCity = isCity,
         reqClass = reqClass,
         continent = continent,
+        isDungeon = (zoneInfo and zoneInfo.isDungeon) or false,
         status = status,
         recommendation = recommendation,
         activeCount = activeCount or 0,

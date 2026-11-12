@@ -71,6 +71,36 @@ addon.Data.Zones = {
     ["Orgrimmar"]           = { min = 1,  max = 60, faction = "Horde",     continent = 1, mapID = 1454, isCity = true },
     ["Thunder Bluff"]       = { min = 1,  max = 60, faction = "Horde",     continent = 1, mapID = 1456, isCity = true },
     ["Undercity"]           = { min = 1,  max = 60, faction = "Horde",     continent = 2, mapID = 1458, isCity = true },
+
+    -- =========================================================================
+    -- DUNGEONS & INSTANCES
+    -- =========================================================================
+    -- Eastern Kingdoms Dungeons (Continent 2)
+    ["The Deadmines"]             = { min = 18, max = 23, faction = "Contested", continent = 2, isDungeon = true },
+    ["Shadowfang Keep"]           = { min = 22, max = 30, faction = "Contested", continent = 2, isDungeon = true },
+    ["The Stockade"]              = { min = 24, max = 32, faction = "Alliance",  continent = 2, isDungeon = true },
+    ["Gnomeregan"]                = { min = 29, max = 38, faction = "Contested", continent = 2, isDungeon = true },
+    ["Scarlet Monastery"]         = { min = 34, max = 45, faction = "Contested", continent = 2, isDungeon = true },
+    ["Uldaman"]                   = { min = 41, max = 51, faction = "Contested", continent = 2, isDungeon = true },
+    ["Sunken Temple"]             = { min = 50, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["The Temple of Atal'Hakkar"] = { min = 50, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["Blackrock Depths"]          = { min = 52, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["Lower Blackrock Spire"]     = { min = 55, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["Upper Blackrock Spire"]     = { min = 58, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["Scholomance"]               = { min = 58, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["Stratholme"]                = { min = 58, max = 60, faction = "Contested", continent = 2, isDungeon = true },
+    ["Hall of Thanes"]            = { min = 13, max = 20, faction = "Contested", continent = 2, isDungeon = true },
+    ["Ruins of Lordaeron"]        = { min = 15, max = 25, faction = "Contested", continent = 2, isDungeon = true },
+
+    -- Kalimdor Dungeons (Continent 1)
+    ["Ragefire Chasm"]            = { min = 13, max = 18, faction = "Horde",     continent = 1, isDungeon = true },
+    ["Wailing Caverns"]           = { min = 17, max = 24, faction = "Contested", continent = 1, isDungeon = true },
+    ["Blackfathom Deeps"]         = { min = 24, max = 32, faction = "Contested", continent = 1, isDungeon = true },
+    ["Razorfen Kraul"]            = { min = 29, max = 38, faction = "Contested", continent = 1, isDungeon = true },
+    ["Razorfen Downs"]            = { min = 37, max = 46, faction = "Contested", continent = 1, isDungeon = true },
+    ["Zul'Farrak"]                = { min = 44, max = 54, faction = "Contested", continent = 1, isDungeon = true },
+    ["Maraudon"]                  = { min = 46, max = 55, faction = "Contested", continent = 1, isDungeon = true },
+    ["Dire Maul"]                 = { min = 55, max = 60, faction = "Contested", continent = 1, isDungeon = true },
 }
 
 -- Helper function to lookup zone info by name (supports flexible casing and aliases)
