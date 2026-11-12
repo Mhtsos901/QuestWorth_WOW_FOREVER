@@ -247,26 +247,27 @@ function Engine.CalculateWorth(questID)
     local isMaxLevel = (playerLevel >= maxLevel)
     local weights = (db and db.weights) or {}
 
-    local rawD = weights.difficulty or 0.05
+    local rawD = weights.difficulty or 0.00
     local rawR = weights.reward or 0.40
-    local rawC = weights.chain or 0.20
+    local rawC = weights.chain or 0.25
     local rawF = weights.classFit or 0.25
     local rawH = weights.density or 0.10
 
     -- Modernize legacy default weights during leveling
     if not isMaxLevel and (
         (_approxEq(rawD, 0.00) and _approxEq(rawR, 0.40) and _approxEq(rawC, 0.30)) or
-        (_approxEq(rawD, 0.10) and _approxEq(rawR, 0.35) and _approxEq(rawC, 0.25))
+        (_approxEq(rawD, 0.10) and _approxEq(rawR, 0.35) and _approxEq(rawC, 0.25)) or
+        (_approxEq(rawD, 0.05) and _approxEq(rawR, 0.40) and _approxEq(rawC, 0.20))
     ) then
-        rawD, rawR, rawC, rawF, rawH = 0.05, 0.40, 0.20, 0.25, 0.10
+        rawD, rawR, rawC, rawF, rawH = 0.00, 0.40, 0.25, 0.25, 0.10
     end
 
     -- If player is max level and using default weights, adapt to endgame weights
     if isMaxLevel
-        and _approxEq(rawD, 0.05) and _approxEq(rawR, 0.40)
-        and _approxEq(rawC, 0.20) and _approxEq(rawF, 0.25)
+        and _approxEq(rawD, 0.00) and _approxEq(rawR, 0.40)
+        and _approxEq(rawC, 0.25) and _approxEq(rawF, 0.25)
         and _approxEq(rawH, 0.10) then
-        rawD, rawR, rawC, rawF, rawH = 0.00, 0.45, 0.20, 0.25, 0.10
+        rawD, rawR, rawC, rawF, rawH = 0.00, 0.45, 0.25, 0.20, 0.10
     end
 
     -- 2. Individual Scores (Safe pcall wrapped)

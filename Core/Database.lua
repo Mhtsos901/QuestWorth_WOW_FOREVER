@@ -20,11 +20,11 @@ local DEFAULT_SETTINGS = {
     weights = {
         reward = 0.40,
         classFit = 0.25,
-        chain = 0.20,
+        chain = 0.25,
         density = 0.10,
-        difficulty = 0.05,
+        difficulty = 0.00,
     },
-    version = 7,
+    version = 8,
 }
 
 local function CopyDefaults(src, dest)
@@ -92,9 +92,9 @@ function DB.Initialize()
         end
     end
 
-    if not WorthItDB.version or type(WorthItDB.version) ~= "number" or WorthItDB.version < 7 then
+    if not WorthItDB.version or type(WorthItDB.version) ~= "number" or WorthItDB.version < 8 then
         WorthItDB.weights = CopyDefaults(DEFAULT_SETTINGS.weights, {})
-        WorthItDB.version = 7
+        WorthItDB.version = 8
     end
 
     WorthItDB = CopyDefaults(DEFAULT_SETTINGS, WorthItDB)

@@ -270,11 +270,13 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             Utils.FormatScore(b.h or 0.5) .. hNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
-        tooltip:AddDoubleLine(
-            "|cff00ccff" .. L["DIFFICULTY"] .. ":|r",
-            diffText,
-            0.85, 0.85, 0.85, 1, 1, 1
-        )
+        if (b.wD and b.wD > 0.001) or b.isHard then
+            tooltip:AddDoubleLine(
+                "|cff00ccff" .. L["DIFFICULTY"] .. ":|r",
+                diffText,
+                0.85, 0.85, 0.85, 1, 1, 1
+            )
+        end
     end
 
     -- 5. Meta-Knowledge: Key Unlock & Payoff details
