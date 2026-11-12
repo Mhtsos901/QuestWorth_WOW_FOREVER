@@ -207,26 +207,68 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         if reasons and #reasons > 0 then
             tooltip:AddDoubleLine(
                 "|cff00ccff" .. (L["HIGHLIGHTS"] or "Highlights") .. ":|r",
-                table.concat(reasons, " • "),
+                table.concat(reasons, " |cff666666•|r "),
                 0.9, 0.9, 0.9,
                 1, 1, 1
             )
         end
     end
 
-    -- 4. 5-Factor Score Breakdown (Zone Advisor Style)
-    if not b.isComplete and addon.db.showBreakdown then
-        local diffText
-        if b.wD and b.wD <= 0.001 then
-            diffText = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:11:11:0:0|t |cffff3333Hard|r" or "|cff00ff00Normal|r"
-        else
-            local deltaStr = (b.details and b.details.difficulty and b.details.difficulty.levelDelta) and string.format(" (%+d)", b.details.difficulty.levelDelta) or ""
-            diffText = Utils.FormatScore(b.d) .. "|cff888888" .. deltaStr .. "|r"
+    -- 4. Meta-Knowledge: Key Unlock, Quest Tip & Payoff details (Displayed right after Verdict!)
+    local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
+    local questTip = addon.Data and addon.Data.GetQuestTip and addon.Data.GetQuestTip(questID)
+    local tipText = (payoff and payoff.tip) or questTip
+
+    if (payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin or payoff.tip)) or (tipText and tipText ~= "") then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
+
+        -- 1. Quest Tip / Objective Guide (Prominent & immediately visible!)
+        if tipText and tipText ~= "" then
+            tooltip:AddLine("  |cff1aff4d★ " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. tipText .. "|r", 0.9, 0.9, 0.9, true)
         end
+
+        -- 2. Chain details
+        if payoff and payoff.chain then
+            tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r")
+        end
+
+        -- 3. Key / Dungeon Unlocks
+        if payoff and payoff.unlock then
+            tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r")
+        end
+
+        -- 4. Top Reward
+        if payoff and payoff.reward then
+            tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r")
+        end
+
+        -- 5. Quest Origin / Type
+        if payoff and payoff.origin then
+            tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r")
+        end
+
+        -- 6. Lore / Notes
+        if payoff and payoff.note and payoff.note ~= tipText then
+            tooltip:AddLine("  |cffcccccc" .. payoff.note .. "|r", 0.85, 0.85, 0.85, true)
+        end
+    end
+
+    -- 5. 5-Factor Score Breakdown (Clean, muted labels with prominent values)
+    if not b.isComplete and addon.db.showBreakdown then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cff888888" .. L["BREAKDOWN"] .. ":|r")
 
         local rNote = ""
         if b.details and b.details.reward and b.details.reward.rewardXP and b.details.reward.rewardXP > 0 then
             rNote = string.format(" |cff888888(%d XP)|r", b.details.reward.rewardXP)
+        end
+
+        local fNote = ""
+        if b.details and b.details.classFit and b.details.classFit.hasItems then
+            fNote = (b.f >= 0.80) and " |cff1aff4d(Upgrade)|r" or " |cff888888(Vendor)|r"
+        else
+            fNote = " |cff888888(No Gear)|r"
         end
 
         local cNote = ""
@@ -238,73 +280,45 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             end
         end
 
-        local fNote = ""
-        if b.details and b.details.classFit and b.details.classFit.hasItems then
-            fNote = (b.f >= 0.80) and " |cff1aff4d(Upgrade)|r" or " |cff888888(Vendor)|r"
-        else
-            fNote = " |cff888888(No Gear)|r"
-        end
-
         local hNote = ""
         if b.details and b.details.density and b.details.density.clusterCount then
             hNote = string.format(" |cff888888(%d in zone)|r", b.details.density.clusterCount)
         end
 
+        local diffText
+        if b.wD and b.wD <= 0.001 then
+            diffText = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:11:11:0:0|t |cffff3333Hard|r" or "|cff00ff00Normal|r"
+        else
+            local deltaStr = (b.details and b.details.difficulty and b.details.difficulty.levelDelta) and string.format(" (%+d)", b.details.difficulty.levelDelta) or ""
+            diffText = Utils.FormatScore(b.d) .. "|cff888888" .. deltaStr .. "|r"
+        end
+
         tooltip:AddDoubleLine(
-            "|cff00ccff" .. L["REWARD"] .. ":|r",
+            "  |cffa0a0a0" .. L["REWARD"] .. ":|r",
             Utils.FormatScore(b.r) .. rNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
         tooltip:AddDoubleLine(
-            "|cff00ccff" .. L["CLASS_FIT"] .. ":|r",
+            "  |cffa0a0a0" .. L["CLASS_FIT"] .. ":|r",
             Utils.FormatScore(b.f) .. fNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
         tooltip:AddDoubleLine(
-            "|cff00ccff" .. L["CHAIN"] .. ":|r",
+            "  |cffa0a0a0" .. L["CHAIN"] .. ":|r",
             Utils.FormatScore(b.c) .. cNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
         tooltip:AddDoubleLine(
-            "|cff00ccff" .. (L["DENSITY"] or "Hub Density") .. ":|r",
+            "  |cffa0a0a0" .. (L["DENSITY"] or "Hub Density") .. ":|r",
             Utils.FormatScore(b.h or 0.5) .. hNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
         if (b.wD and b.wD > 0.001) or b.isHard then
             tooltip:AddDoubleLine(
-                "|cff00ccff" .. L["DIFFICULTY"] .. ":|r",
+                "  |cffa0a0a0" .. L["DIFFICULTY"] .. ":|r",
                 diffText,
                 0.85, 0.85, 0.85, 1, 1, 1
             )
-        end
-    end
-
-    -- 5. Meta-Knowledge: Key Unlock, Quest Tip & Payoff details
-    local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
-    local questTip = addon.Data and addon.Data.GetQuestTip and addon.Data.GetQuestTip(questID)
-    local tipText = (payoff and payoff.tip) or questTip
-
-    if (payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin or payoff.tip)) or (tipText and tipText ~= "") then
-        tooltip:AddLine(" ")
-        tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
-
-        if payoff and payoff.chain then
-            tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r")
-        end
-        if payoff and payoff.unlock then
-            tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r")
-        end
-        if payoff and payoff.reward then
-            tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r")
-        end
-        if payoff and payoff.origin then
-            tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r")
-        end
-        if tipText and tipText ~= "" then
-            tooltip:AddLine("  |cff1aff4d" .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. tipText .. "|r", 0.9, 0.9, 0.9, true)
-        end
-        if payoff and payoff.note and payoff.note ~= tipText then
-            tooltip:AddLine("  |cffcccccc" .. payoff.note .. "|r", 0.9, 0.9, 0.9, true)
         end
     end
 
@@ -360,18 +374,20 @@ local function AddItemQuestStarterLines(tooltip)
 
     if isStarter then
         tooltip:AddLine(" ")
-        tooltip:AddLine("|cffffd100" .. L["ITEM_QUEST_STARTER"] .. "|r")
+        tooltip:AddLine("|cffffd100★ " .. L["ITEM_QUEST_STARTER"] .. "|r")
         if qID then
             local info = addon.Utils.GetQuestBasicInfo(qID)
             local payoff = addon.Data.GetQuestPayoff(qID)
             if info and info.title then
-                tooltip:AddLine("  |cff00ffff" .. L["ITEM_STARTS_QUEST"] .. "|r |cffffffff" .. info.title .. "|r")
+                tooltip:AddLine("  |cff00ccff" .. L["ITEM_STARTS_QUEST"] .. "|r |cffffffff" .. info.title .. "|r")
             end
-            if payoff and payoff.summary then
+            if payoff and payoff.tip then
+                tooltip:AddLine("  |cff1aff4d★ " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. payoff.tip .. "|r", 0.9, 0.9, 0.9, true)
+            elseif payoff and payoff.summary then
                 tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.summary .. "|r")
             end
         end
-        tooltip:AddLine("  |cff00ff00" .. L["ITEM_CLICK_TO_START"] .. "|r")
+        tooltip:AddLine("  |cff1aff4d" .. L["ITEM_CLICK_TO_START"] .. "|r")
         tooltip._worthItAddedItemID = itemID
         if tooltip.Show then tooltip:Show() end
     end

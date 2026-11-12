@@ -124,7 +124,9 @@ local function UpdateQuestOfferDialog()
             local clean = Utils.CleanQuestTitle(rawTitle)
             local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
             local payoffLine = ""
-            if payoff and payoff.summary and payoff.summary ~= "" then
+            if payoff and payoff.tip and payoff.tip ~= "" then
+                payoffLine = "\n|cff1aff4d• Tip: " .. payoff.tip .. "|r"
+            elseif payoff and payoff.summary and payoff.summary ~= "" then
                 payoffLine = "\n|cffffd100• " .. payoff.summary .. "|r"
             end
             local targetTitle = badge .. " " .. clean .. payoffLine
@@ -141,7 +143,9 @@ local function UpdateQuestOfferDialog()
             local clean = Utils.CleanQuestTitle(raw)
             local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
             local payoffLine = ""
-            if payoff and payoff.summary and payoff.summary ~= "" then
+            if payoff and payoff.tip and payoff.tip ~= "" then
+                payoffLine = "\n|cff1aff4d• Tip: " .. payoff.tip .. "|r"
+            elseif payoff and payoff.summary and payoff.summary ~= "" then
                 payoffLine = "\n|cffffd100• " .. payoff.summary .. "|r"
             end
             local target = badge .. " " .. clean .. payoffLine
