@@ -1216,6 +1216,21 @@ end
 _G.QuestObjectiveTracker = nil
 addonTable.db.showInTracker = savedShowTracker3M
 
+-- 4. Level-scaled XP benchmark differentiates Lvl 32 Foothills (1500 XP) vs Arathi (2500 XP)
+local savedLvl3M = mockPlayerState.level
+mockPlayerState.level = 32
+addonTable.Player.Update()
+addonTable.Scores.InvalidateRewardCache()
+mockQuestDB[9301] = { title = "Foothills Kill Quest", level = 26, xp = 1500, money = 0 }
+mockQuestDB[9302] = { title = "Arathi Kill Quest", level = 32, xp = 2500, money = 0 }
+local rFoothills, dFoothills = addonTable.Scores.CalculateReward(9301)
+local rArathi, dArathi = addonTable.Scores.CalculateReward(9302)
+assert_true(rArathi >= 0.85, "Level 32 Arathi 2500 XP quest achieves High XP reward score (>= 0.85): " .. tostring(rArathi))
+assert_true(rFoothills <= 0.65, "Level 32 Foothills 1500 XP quest scores moderate reward (<= 0.65): " .. tostring(rFoothills))
+assert_true((rArathi - rFoothills) >= 0.30, string.format("Clear reward gap between 2500 XP (%.0f%%) and 1500 XP (%.0f%%)", rArathi * 100, rFoothills * 100))
+mockPlayerState.level = savedLvl3M
+addonTable.Player.Update()
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

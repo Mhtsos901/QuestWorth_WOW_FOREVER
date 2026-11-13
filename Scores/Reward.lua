@@ -22,6 +22,17 @@ function Scores.InvalidateRewardCache(questID)
 end
 addon.InvalidateRewardCache = Scores.InvalidateRewardCache
 
+-- Dynamic Classic WoW quest XP multiplier by level:
+-- Scales from ~7.2x mobXP at Lvl 1 (8.6x at Lvl 10, 10.3x at Lvl 20)
+-- to 12.2x at Lvl 32 (~2,501 XP) and 16.8x at Lvl 60 (~5,778 XP).
+local function GetBenchmarkMultiplier(level, isTalkTo)
+    if isTalkTo then
+        return 3.5 -- Talk-to breadcrumbs award ~30-40% XP with zero combat
+    end
+    local lvl = math.max(1, math.min(60, tonumber(level) or 1))
+    return 7.0 + (lvl * 0.1625)
+end
+
 -- Safe helper to fetch XP reward for a quest
 local function GetQuestXP(questID)
     if not Utils.IsValidQuestID(questID) then return 0 end
@@ -84,7 +95,7 @@ local function GetQuestXP(questID)
     local effectiveLevel = (qLevel and qLevel > 0) and qLevel or playerLevel
     local qMobXP = math.max(50, (effectiveLevel * 5) + 45)
     local isTalkTo = (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
-    local mult = isTalkTo and 3.5 or 8.5
+    local mult = GetBenchmarkMultiplier(effectiveLevel, isTalkTo)
     local delta = effectiveLevel - playerLevel
     local levelFactor = 1.0
     if delta < -5 then
@@ -159,7 +170,7 @@ function Scores.CalculateReward(questID)
     local isTalkTo = (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
 
     local mobXP = math.max(50, (playerLevel * 5) + 45)
-    local mobMultiplier = isTalkTo and 3.5 or 8.5 -- Talk-to breadcrumbs award ~40% XP with zero combat
+    local mobMultiplier = GetBenchmarkMultiplier(playerLevel, isTalkTo)
     local benchmarkQuestXP = mobXP * mobMultiplier
 
     local rewardXP = GetQuestXP(questID)
