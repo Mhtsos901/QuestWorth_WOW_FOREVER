@@ -175,6 +175,207 @@ local function ResolveZoneName(mapID)
     return name, mapInfo
 end
 
+-- Shared helper to populate rich Zone Breakdown & Leveling Guide tooltips (for Map Banner & Advisor Rows)
+local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showClickHint)
+    if not tooltip or not d then return end
+
+    local colorHex = Utils.GetScoreColorHex(d.worth)
+    local levelText = (d.minLevel and d.maxLevel) and string.format(" |cff888888(Level %d - %d)|r", d.minLevel, d.maxLevel) or ""
+    tooltip:AddDoubleLine(
+        string.format("|cffffffff%s|r%s", d.zoneName, levelText),
+        string.format("|cff%sZone Worth: %.0f%%|r", colorHex, d.worth * 100),
+        1, 1, 1, 1, 1, 1
+    )
+
+    local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+    if rankIndex and d.worth >= 0.70 then
+        if rankIndex == 1 then
+            tooltip:AddLine(string.format("|cffffd100* #1 Best Leveling Choice for Level %d|r", pLevel), 1, 0.85, 0)
+        else
+            tooltip:AddLine(string.format("|cff00ccffRanked #%d Optimal Zone for Level %d|r", rankIndex, pLevel), 0.5, 0.9, 1)
+        end
+    end
+
+    tooltip:AddLine(" ")
+
+    -- Suitability & Sweet Spot
+    local statusColor = (d.worth >= 0.70 and "|cff00ff00") or (d.worth >= 0.50 and "|cffffff00") or "|cffff3333"
+    local sweetInfo = (d.sweetMin and d.sweetMax) and string.format(" |cff888888(Sweet Spot: %d-%d)|r", d.sweetMin, d.sweetMax) or ""
+    tooltip:AddDoubleLine(
+        "|cff00ccffSuitability:|r",
+        string.format("%s%s|r%s", statusColor, d.status, sweetInfo),
+        0.9, 0.9, 0.9, 1, 1, 1
+    )
+
+    -- Effective Minimum Entry (if different from raw bracket min)
+    if d.effectiveMin and d.minLevel and d.effectiveMin ~= d.minLevel then
+        tooltip:AddDoubleLine(
+            "|cff00ccffEffective Entry:|r",
+            string.format("|cffffcc00Level %d+|r |cff888888(%s Hubs)|r", d.effectiveMin, d.faction == "Contested" and "Faction" or d.faction),
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    end
+
+    -- Faction Quest Hubs & Density Tier
+    if d.hubName and d.hubName ~= "" then
+        tooltip:AddDoubleLine(
+            "|cff00ccffQuest Hubs:|r",
+            "|cffffffff" .. d.hubName .. "|r",
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    end
+
+    if d.densityLabel then
+        local dColor = "|cffffff00"
+        if d.densityLabel == "Very High" or d.densityLabel == "High" then
+            dColor = "|cff00ff00"
+        elseif d.densityLabel == "Low" or d.densityLabel == "Sparse" then
+            dColor = "|cffff6644"
+        end
+        tooltip:AddDoubleLine(
+            "|cff00ccffQuest Density:|r",
+            dColor .. d.densityLabel .. "|r",
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    end
+
+    -- Zone Score Breakdown
+    tooltip:AddLine(" ")
+    tooltip:AddLine("|cff888888Zone Score Breakdown:|r", 0.7, 0.7, 0.7)
+
+    local brkPct = (d.bracketScore or 0.5) * 100
+    local brkColor = (brkPct >= 85 and "|cff00ff00") or (brkPct >= 70 and "|cffffff00") or "|cffff6644"
+    tooltip:AddDoubleLine(
+        "  |cffa0a0a0Level Sweet-Spot:|r",
+        string.format("%s%.0f%%|r |cff888888(Lvl %d)|r", brkColor, brkPct, pLevel),
+        0.8, 0.8, 0.8, 1, 1, 1
+    )
+
+    if d.hubMod and d.hubMod ~= 0 then
+        local sign = d.hubMod > 0 and "+" or ""
+        local col = d.hubMod > 0 and "|cff00ff00" or "|cffff4444"
+        tooltip:AddDoubleLine(
+            "  |cffa0a0a0Hub Richness:|r",
+            string.format("%s%s%.0f%%|r |cff888888(%s)|r", col, sign, d.hubMod * 100, d.densityLabel or "Density"),
+            0.8, 0.8, 0.8, 1, 1, 1
+        )
+    end
+
+    if d.classModifier and d.classModifier ~= 0 then
+        local modSign = d.classModifier > 0 and "+" or ""
+        local modColor = d.classModifier > 0 and "|cff00ff00" or "|cffff4444"
+        local reasonText = (d.classModifierReason and d.classModifierReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.classModifierReason) or ""
+        tooltip:AddDoubleLine(
+            "  |cffa0a0a0Class & Terrain:|r",
+            string.format("%s%s%.0f%%%s|r", modColor, modSign, d.classModifier * 100, reasonText),
+            0.8, 0.8, 0.8, 1, 1, 1
+        )
+    end
+
+    if d.territoryBonus and d.territoryBonus > 0 then
+        tooltip:AddDoubleLine(
+            "  |cffa0a0a0Territory Safety:|r",
+            string.format("|cff00ff00+%.0f%%|r |cff888888(%s Hub)|r", d.territoryBonus * 100, d.faction or "Friendly"),
+            0.8, 0.8, 0.8, 1, 1, 1
+        )
+    end
+
+    if d.travelPenalty and d.travelPenalty > 0 then
+        local reasonText = (d.travelReason and d.travelReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.travelReason) or " |cffaaaaaa(Cross-Continent)|r"
+        tooltip:AddDoubleLine(
+            "  |cffa0a0a0Travel Friction:|r",
+            string.format("|cffff8844-%.0f%%%s|r", d.travelPenalty * 100, reasonText),
+            0.8, 0.8, 0.8, 1, 1, 1
+        )
+    end
+
+    if d.activeBonus and d.activeBonus > 0 then
+        tooltip:AddDoubleLine(
+            "  |cffa0a0a0Active Log Synergy:|r",
+            string.format("|cff00ff00+%.0f%%|r |cff888888(%d Qs in Log)|r", d.activeBonus * 100, d.activeCount or 0),
+            0.8, 0.8, 0.8, 1, 1, 1
+        )
+    end
+
+    -- Territory & Continent
+    tooltip:AddLine(" ")
+    if isDungeonHint or (d and d.isDungeon) or IsDungeonZone(d.zoneName) then
+        local dungIcon = "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
+        tooltip:AddDoubleLine(
+            "|cff00ccffZone Type:|r",
+            dungIcon .. " |cffffd100Dungeon Instance|r",
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    end
+
+    local fColor = (d.faction == "Alliance" and "|cff0070dd") or (d.faction == "Horde" and "|cffc41f3b") or "|cffffff00"
+    tooltip:AddDoubleLine(
+        "|cff00ccffTerritory:|r",
+        fColor .. (d.faction or "Contested") .. "|r",
+        0.9, 0.9, 0.9, 1, 1, 1
+    )
+
+    local cont = d.continent or (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(d.zoneName) and addon.Data.GetZoneInfo(d.zoneName).continent)
+    if cont == 1 then
+        local hordeIcon = "|TInterface\\TargetingFrame\\UI-PVP-Horde:14:14:0:0:64:64:3:38:3:38|t"
+        tooltip:AddDoubleLine(
+            "|cff00ccffContinent:|r",
+            hordeIcon .. " |cffc41f3bKalimdor|r",
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    elseif cont == 2 then
+        local allianceIcon = "|TInterface\\TargetingFrame\\UI-PVP-Alliance:14:14:0:0:64:64:3:38:3:38|t"
+        tooltip:AddDoubleLine(
+            "|cff00ccffContinent:|r",
+            allianceIcon .. " |cff0070ddEastern Kingdoms|r",
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    end
+
+    -- Active Quests in Log
+    if d.activeCount and d.activeCount > 0 then
+        local qColorHex = Utils.GetScoreColorHex(d.activeWorth or 0.5)
+        tooltip:AddDoubleLine(
+            "|cff00ccffActive Quests in Log:|r",
+            string.format("|cff%s%d Quests (%.0f%% Avg)|r", qColorHex, d.activeCount, (d.activeWorth or 0) * 100),
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+        local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(d.zoneName)
+        if quests and #quests > 0 then
+            for _, qID in ipairs(quests) do
+                local qWorth, qBreak = addon.Engine.CalculateWorth(qID)
+                local info = Utils.GetQuestBasicInfo(qID)
+                if info and qWorth then
+                    local badge = Utils.FormatBadge(qWorth, qBreak and qBreak.isComplete, qBreak and qBreak.isHard, qBreak and qBreak.isBankable)
+                    tooltip:AddLine(string.format("  * %s %s", badge, info.title), 0.8, 0.8, 0.8)
+                end
+            end
+        end
+    elseif showClickHint == false then
+        tooltip:AddDoubleLine(
+            "|cff00ccffActive Quests in Log:|r",
+            "|cff8888880 Quests (Evaluated by Zone Bracket & Hubs)|r",
+            0.9, 0.9, 0.9, 1, 1, 1
+        )
+    end
+
+    -- Curated Zone Summary & Recommendation
+    local guideText = d.recommendation or d.zoneSummary
+    if guideText and guideText ~= "" then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cff00ff00Why Choose This Zone:|r", 1, 1, 1)
+        tooltip:AddLine(string.format("  |cffcccccc%s|r", guideText), 0.9, 0.9, 0.9, true)
+        if d.zoneSummary and d.zoneSummary ~= "" and d.zoneSummary ~= guideText then
+            tooltip:AddLine(string.format("  |cff99ccff%s|r", d.zoneSummary), 0.8, 0.9, 1.0, true)
+        end
+    end
+
+    if showClickHint then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("|cff00ccffClick to view this zone on the map.|r", 0.7, 0.9, 1)
+    end
+end
+
 local function CreateWorldMapBanner()
     if mapBanner then return mapBanner end
     if not WorldMapFrame then return nil end
@@ -210,129 +411,9 @@ local function CreateWorldMapBanner()
     -- Rich hover tooltip with full zone breakdown
     frame:SetScript("OnEnter", function(self)
         if not self.data then return end
-        local d = self.data
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM", 0, -4)
         GameTooltip:ClearLines()
-
-        local colorHex = Utils.GetScoreColorHex(d.worth)
-        local levelText = (d.minLevel and d.maxLevel) and string.format(" |cff888888(Level %d - %d)|r", d.minLevel, d.maxLevel) or ""
-        GameTooltip:AddDoubleLine(
-            string.format("|cffffffff%s|r%s", d.zoneName, levelText),
-            string.format("|cff%sZone Worth: %.0f%%|r", colorHex, d.worth * 100),
-            1, 1, 1, 1, 1, 1
-        )
-        GameTooltip:AddLine(" ")
-
-        -- Suitability / Level Bracket Status
-        local statusColor = (d.worth >= 0.70 and "|cff00ff00") or (d.worth >= 0.50 and "|cffffff00") or "|cffff3333"
-        GameTooltip:AddDoubleLine(
-            "|cff00ccffSuitability:|r",
-            string.format("%s%s|r", statusColor, d.status),
-            0.9, 0.9, 0.9, 1, 1, 1
-        )
-
-        -- Effective Minimum Entry (if different from raw bracket min)
-        if d.effectiveMin and d.minLevel and d.effectiveMin ~= d.minLevel then
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffEffective Entry:|r",
-                string.format("|cffffcc00Level %d+|r |cff888888(%s Hubs)|r", d.effectiveMin, d.faction == "Contested" and "Faction" or d.faction),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Class Mob Synergy / Penalty
-        if d.classModifier and d.classModifier ~= 0 then
-            local modSign = d.classModifier > 0 and "+" or ""
-            local modColor = d.classModifier > 0 and "|cff00ff00" or "|cffff4444"
-            local reasonText = (d.classModifierReason and d.classModifierReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.classModifierReason) or ""
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffClass Mob Synergy:|r",
-                string.format("%s%s%.0f%%%s|r", modColor, modSign, d.classModifier * 100, reasonText),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Travel Friction
-        if d.travelPenalty and d.travelPenalty > 0 then
-            local reasonText = (d.travelReason and d.travelReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.travelReason) or " |cffaaaaaa(Cross-Continent)|r"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffTravel Friction:|r",
-                string.format("|cffff8844-%.0f%%%s|r", d.travelPenalty * 100, reasonText),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Territory / Faction
-        if self.isDungeon or (d and d.isDungeon) or IsDungeonZone(d.zoneName) then
-            local dungIcon = "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffZone Type:|r",
-                dungIcon .. " |cffffd100Dungeon Instance|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        local fColor = (d.faction == "Alliance" and "|cff0070dd") or (d.faction == "Horde" and "|cffc41f3b") or "|cffffff00"
-        GameTooltip:AddDoubleLine(
-            "|cff00ccffTerritory:|r",
-            fColor .. d.faction .. "|r",
-            0.9, 0.9, 0.9, 1, 1, 1
-        )
-
-        -- Continent (Kalimdor = Horde, Eastern Kingdoms = Alliance)
-        local cont = d.continent or (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(d.zoneName) and addon.Data.GetZoneInfo(d.zoneName).continent)
-        if cont == 1 then
-            local hordeIcon = "|TInterface\\TargetingFrame\\UI-PVP-Horde:14:14:0:0:64:64:3:38:3:38|t"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffContinent:|r",
-                hordeIcon .. " |cffc41f3bKalimdor|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        elseif cont == 2 then
-            local allianceIcon = "|TInterface\\TargetingFrame\\UI-PVP-Alliance:14:14:0:0:64:64:3:38:3:38|t"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffContinent:|r",
-                allianceIcon .. " |cff0070ddEastern Kingdoms|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Active Quests in Log vs General Zone
-        if d.activeCount and d.activeCount > 0 then
-            local qColorHex = Utils.GetScoreColorHex(d.activeWorth or 0.5)
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffActive Quests in Log:|r",
-                string.format("|cff%s%d Quests (%.0f%% Avg)|r", qColorHex, d.activeCount, (d.activeWorth or 0) * 100),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-
-            -- List individual active quests in this zone
-            local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(d.zoneName)
-            if quests and #quests > 0 then
-                for _, qID in ipairs(quests) do
-                    local qWorth, qBreak = addon.Engine.CalculateWorth(qID)
-                    local info = Utils.GetQuestBasicInfo(qID)
-                    if info and qWorth then
-                        local badge = Utils.FormatBadge(qWorth, qBreak and qBreak.isComplete, qBreak and qBreak.isHard, qBreak and qBreak.isBankable)
-                        GameTooltip:AddLine(string.format("  * %s %s", badge, info.title), 0.8, 0.8, 0.8)
-                    end
-                end
-            end
-        else
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffActive Quests in Log:|r",
-                "|cff8888880 Quests (Zone evaluation based on Level Bracket)|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Recommendation
-        if d.recommendation then
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("|cff00ff00Leveling Advice:|r", 1, 1, 1)
-            GameTooltip:AddLine(string.format("  |cffcccccc%s|r", d.recommendation), 0.9, 0.9, 0.9, true)
-        end
-
+        PopulateZoneTooltip(GameTooltip, self.data, self.isDungeon, nil, false)
         GameTooltip:Show()
     end)
 
@@ -473,8 +554,8 @@ end
 
 local function CreateAdvisorRow(index, parent)
     local row = CreateFrame("Button", "WorthItAdvisorRow" .. index, parent, "BackdropTemplate")
-    row:SetHeight(24)
-    row:SetWidth(236)
+    row:SetHeight(34)
+    row:SetWidth(250)
     if row.SetClipsChildren then
         row:SetClipsChildren(true)
     end
@@ -491,14 +572,14 @@ local function CreateAdvisorRow(index, parent)
     local stripe = row:CreateTexture(nil, "BACKGROUND")
     stripe:SetAllPoints(row)
     if index % 2 == 0 then
-        stripe:SetColorTexture(1, 1, 1, 0.025)
+        stripe:SetColorTexture(1, 1, 1, 0.03)
     else
-        stripe:SetColorTexture(0, 0, 0, 0.20)
+        stripe:SetColorTexture(0, 0, 0, 0.22)
     end
     row.Stripe = stripe
 
     local badgeFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    badgeFS:SetPoint("LEFT", row, "LEFT", 4, 0)
+    badgeFS:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -4)
     badgeFS:SetWidth(42)
     badgeFS:SetJustifyH("LEFT")
     row.Badge = badgeFS
@@ -509,7 +590,7 @@ local function CreateAdvisorRow(index, parent)
     row.ContinentIcon = icon
 
     local rightFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    rightFS:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    rightFS:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -4)
     rightFS:SetWidth(52)
     rightFS:SetJustifyH("RIGHT")
     row.RightTag = rightFS
@@ -521,123 +602,19 @@ local function CreateAdvisorRow(index, parent)
     nameFS:SetWordWrap(false)
     row.Name = nameFS
 
+    -- Line 2: Clear 1-line explanation of why the zone got this score
+    local subFS = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    subFS:SetPoint("TOPLEFT", row, "TOPLEFT", 48, -19)
+    subFS:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    subFS:SetJustifyH("LEFT")
+    subFS:SetWordWrap(false)
+    row.SubText = subFS
+
     row:SetScript("OnEnter", function(self)
         if not self.data then return end
-        local d = self.data
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 4, 0)
         GameTooltip:ClearLines()
-
-        local colorHex = Utils.GetScoreColorHex(d.worth)
-        local levelText = (d.minLevel and d.maxLevel) and string.format(" |cff888888(Level %d - %d)|r", d.minLevel, d.maxLevel) or ""
-        GameTooltip:AddDoubleLine(
-            string.format("|cffffffff%s|r%s", d.zoneName, levelText),
-            string.format("|cff%sZone Worth: %.0f%%|r", colorHex, d.worth * 100),
-            1, 1, 1, 1, 1, 1
-        )
-        GameTooltip:AddLine(" ")
-
-        local statusColor = (d.worth >= 0.70 and "|cff00ff00") or (d.worth >= 0.50 and "|cffffff00") or "|cffff3333"
-        GameTooltip:AddDoubleLine(
-            "|cff00ccffSuitability:|r",
-            string.format("%s%s|r", statusColor, d.status),
-            0.9, 0.9, 0.9, 1, 1, 1
-        )
-
-        -- Effective Minimum Entry (if different from raw bracket min)
-        if d.effectiveMin and d.minLevel and d.effectiveMin ~= d.minLevel then
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffEffective Entry:|r",
-                string.format("|cffffcc00Level %d+|r |cff888888(%s Hubs)|r", d.effectiveMin, d.faction == "Contested" and "Faction" or d.faction),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Class Mob Synergy / Penalty
-        if d.classModifier and d.classModifier ~= 0 then
-            local modSign = d.classModifier > 0 and "+" or ""
-            local modColor = d.classModifier > 0 and "|cff00ff00" or "|cffff4444"
-            local reasonText = (d.classModifierReason and d.classModifierReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.classModifierReason) or ""
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffClass Mob Synergy:|r",
-                string.format("%s%s%.0f%%%s|r", modColor, modSign, d.classModifier * 100, reasonText),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        -- Travel Friction
-        if d.travelPenalty and d.travelPenalty > 0 then
-            local reasonText = (d.travelReason and d.travelReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.travelReason) or " |cffaaaaaa(Cross-Continent)|r"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffTravel Friction:|r",
-                string.format("|cffff8844-%.0f%%%s|r", d.travelPenalty * 100, reasonText),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        if self.isDungeon or (d and d.isDungeon) or IsDungeonZone(d.zoneName) then
-            local dungIcon = "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffZone Type:|r",
-                dungIcon .. " |cffffd100Dungeon Instance|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        local fColor = (d.faction == "Alliance" and "|cff0070dd") or (d.faction == "Horde" and "|cffc41f3b") or "|cffffff00"
-        GameTooltip:AddDoubleLine(
-            "|cff00ccffTerritory:|r",
-            fColor .. d.faction .. "|r",
-            0.9, 0.9, 0.9, 1, 1, 1
-        )
-
-        local cont = d.continent or (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(d.zoneName) and addon.Data.GetZoneInfo(d.zoneName).continent)
-        if cont == 1 then
-            local hordeIcon = "|TInterface\\TargetingFrame\\UI-PVP-Horde:14:14:0:0:64:64:3:38:3:38|t"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffContinent:|r",
-                hordeIcon .. " |cffc41f3bKalimdor|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        elseif cont == 2 then
-            local allianceIcon = "|TInterface\\TargetingFrame\\UI-PVP-Alliance:14:14:0:0:64:64:3:38:3:38|t"
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffContinent:|r",
-                allianceIcon .. " |cff0070ddEastern Kingdoms|r",
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-        end
-
-        if d.activeCount and d.activeCount > 0 then
-            local qColorHex = Utils.GetScoreColorHex(d.activeWorth or 0.5)
-            GameTooltip:AddDoubleLine(
-                "|cff00ccffActive Quests in Log:|r",
-                string.format("|cff%s%d Quests (%.0f%% Avg)|r", qColorHex, d.activeCount, (d.activeWorth or 0) * 100),
-                0.9, 0.9, 0.9, 1, 1, 1
-            )
-            local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(d.zoneName)
-            if quests and #quests > 0 then
-                for _, qID in ipairs(quests) do
-                    local qWorth, qBreak = addon.Engine.CalculateWorth(qID)
-                    local info = Utils.GetQuestBasicInfo(qID)
-                    if info and qWorth then
-                        local badge = Utils.FormatBadge(qWorth, qBreak and qBreak.isComplete, qBreak and qBreak.isHard, qBreak and qBreak.isBankable)
-                        GameTooltip:AddLine(string.format("  * %s %s", badge, info.title), 0.8, 0.8, 0.8)
-                    end
-                end
-            end
-        end
-
-        if d.recommendation then
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("|cff00ff00Leveling Advice:|r", 1, 1, 1)
-            GameTooltip:AddLine(string.format("  |cffcccccc%s|r", d.recommendation), 0.9, 0.9, 0.9, true)
-        end
-
-        if self.mapID and self.mapID > 0 then
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("|cff00ccffClick to view this zone on the map.|r", 0.7, 0.9, 1)
-        end
-
+        PopulateZoneTooltip(GameTooltip, self.data, self.isDungeon, self.rankIndex, self.mapID and self.mapID > 0)
         GameTooltip:Show()
     end)
 
@@ -663,7 +640,7 @@ local function CreateZoneAdvisorPanel(parent)
     if not parent then return nil end
 
     local panel = CreateFrame("Frame", "WorthItZoneAdvisorPanel", parent, "BackdropTemplate")
-    panel:SetWidth(272)
+    panel:SetWidth(286)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -25)
     panel:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 22)
     panel:SetFrameStrata("HIGH")
@@ -690,7 +667,7 @@ local function CreateZoneAdvisorPanel(parent)
     -- Subtle sub-label
     local subTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     subTitle:SetPoint("LEFT", title, "RIGHT", 6, 0)
-    subTitle:SetText("|cff888888Leveling Guide|r")
+    subTitle:SetText("|cff888888Ranked by Efficiency|r")
 
     -- Blizzard Close Button
     local closeBtn = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
@@ -721,8 +698,8 @@ local function CreateZoneAdvisorPanel(parent)
     end
 
     SetupFilterBtn(filterAll, "All", 54)
-    SetupFilterBtn(filterOpt, "Optimal (70%+)", 116)
-    SetupFilterBtn(filterQ,   "In Log", 72)
+    SetupFilterBtn(filterOpt, "Optimal (70%+)", 122)
+    SetupFilterBtn(filterQ,   "In Log", 78)
 
     filterAll:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -34)
     filterOpt:SetPoint("LEFT", filterAll, "RIGHT", 4, 0)
@@ -784,7 +761,7 @@ local function CreateZoneAdvisorPanel(parent)
     scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -16, 4)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetWidth(236)
+    scrollChild:SetWidth(250)
     scrollChild:SetHeight(200)
     scrollFrame:SetScrollChild(scrollChild)
 
@@ -870,7 +847,7 @@ function UI.UpdateZoneAdvisor()
             local faction = zData.faction
             local isDung = zData.isDungeon or IsDungeonZone(name)
 
-            local skip = false
+            local skip = zData.isAlias and true or false
             -- 1. Never show major cities in Zone Advisor (cities are hubs/economy, not leveling zones)
             if isCity then
                 skip = true
@@ -984,7 +961,7 @@ function UI.UpdateZoneAdvisor()
         return aName < bName
     end)
 
-    local rowHeight = 24
+    local rowHeight = 34
     local child = advisorPanel.scrollChild
     for i = 1, #list do
         local item = list[i]
@@ -992,13 +969,27 @@ function UI.UpdateZoneAdvisor()
         row.data = item.res
         row.mapID = item.mapID
         row.isDungeon = item.isDungeon
+        row.rankIndex = i
 
         local badge = Utils.FormatBadge(item.res.worth, false)
         row.Badge:SetText(badge)
 
         -- Dynamic text hierarchy matching Quest Log styling (Gold for optimal, White for standard, Silver for low)
         local nameColor = (item.res.worth >= 0.70 and "|cffffd100") or (item.res.worth >= 0.50 and "|cffffffff") or "|cffaaaaaa"
-        row.Name:SetText(nameColor .. item.name .. "|r")
+        local prefix = (i == 1 and item.res.worth >= 0.70) and "|cff00ff00#1 |r" or ""
+        row.Name:SetText(prefix .. nameColor .. item.name .. "|r")
+
+        -- Line 2 explanation right inside the sidebar row
+        if row.SubText then
+            local reason = item.res.shortReason or item.res.status or ""
+            if i == 1 and item.res.worth >= 0.70 then
+                row.SubText:SetText("|cff88ff88Best Pick: " .. reason .. "|r")
+            elseif item.res.worth >= 0.70 then
+                row.SubText:SetText("|cffb0b0b0" .. reason .. "|r")
+            else
+                row.SubText:SetText("|cff808080" .. reason .. "|r")
+            end
+        end
 
         -- Update continent faction or dungeon symbol (Dungeon = Portal/Eye, Kalimdor = Horde, Eastern Kingdoms = Alliance)
         local cont = item.continent or (item.res and item.res.continent)

@@ -585,7 +585,7 @@ function Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effecti
     -- Group 1: Physical Bleed & Poison Classes (ROGUE, WARRIOR, DRUID, HUNTER)
     if pClass == "ROGUE" or pClass == "WARRIOR" or pClass == "DRUID" or pClass == "HUNTER" then
         if isUnderleveled and (zoneInfo.undeadHeavy or zoneInfo.elementalHeavy or zoneInfo.mechanicalHeavy) then
-            local penalty = (pClass == "ROGUE") and -0.15 or -0.10
+            local penalty = (pClass == "ROGUE") and -0.12 or -0.08
             mod = mod + penalty
             if zoneInfo.undeadHeavy then
                 table.insert(reasons, "Undead (Immune to Bleeds/Poisons, High Armor)")
@@ -596,10 +596,10 @@ function Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effecti
             end
         elseif (not isBelowMin) and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
             if pClass == "ROGUE" then
-                mod = mod + 0.08
+                mod = mod + 0.05
                 table.insert(reasons, "Humanoid/Beast Synergy (Pick Pocket & 100% Bleed/Poison)")
             else
-                mod = mod + 0.05
+                mod = mod + 0.04
                 table.insert(reasons, "Humanoid/Beast Synergy (100% Bleed Efficiency)")
             end
         end
@@ -607,69 +607,76 @@ function Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effecti
     -- Group 2: Anti-Undead & Holy Classes (PALADIN, PRIEST)
     elseif pClass == "PALADIN" or pClass == "PRIEST" then
         if zoneInfo.undeadHeavy then
-            mod = mod + 0.10
+            mod = mod + 0.06
             if pClass == "PALADIN" then
                 table.insert(reasons, "Holy Synergy (Exorcism, Turn Undead & Holy Wrath)")
             else
                 table.insert(reasons, "Holy Synergy (Shackle Undead & Holy Damage)")
             end
+        elseif (not isBelowMin) and zoneInfo.humanoidHeavy then
+            mod = mod + 0.02
+            table.insert(reasons, "Humanoid Mob Pacing")
         end
 
     -- Group 3: AoE & Ranged Kiting Classes (MAGE, WARLOCK)
     elseif pClass == "MAGE" or pClass == "WARLOCK" then
         if (not isBelowMin) and zoneInfo.openTerrain and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
-            mod = mod + 0.08
+            mod = mod + 0.05
             table.insert(reasons, "Open Terrain Kiting & AoE Farm")
+        elseif (not isBelowMin) and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
+            mod = mod + 0.02
+            table.insert(reasons, "Standard Ranged Grinding")
         end
         if isUnderleveled and zoneInfo.denseCaves then
-            mod = mod - 0.10
+            mod = mod - 0.08
             table.insert(reasons, "Confined Caves (High Line-of-Sight & Add Risk)")
         end
 
     -- Group 4: SHAMAN
     elseif pClass == "SHAMAN" then
         if isUnderleveled and zoneInfo.elementalHeavy then
-            mod = mod - 0.10
+            mod = mod - 0.08
             table.insert(reasons, "Elemental Resistance Penalty (Fire/Nature Resists)")
         elseif (not isBelowMin) and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
-            mod = mod + 0.05
+            mod = mod + 0.04
             table.insert(reasons, "Melee/Caster Totem Synergy")
         end
     end
 
     -- Additional check for Hunter open-terrain kiting:
     if (not isBelowMin) and pClass == "HUNTER" and zoneInfo.openTerrain and (zoneInfo.humanoidHeavy or zoneInfo.beastHeavy) then
-        mod = mod + 0.05
+        mod = mod + 0.03
         table.insert(reasons, "Open Range Kiting Synergy")
     end
 
-    mod = math.max(-0.20, math.min(0.15, mod))
+    mod = math.max(-0.15, math.min(0.10, mod))
     local reasonStr = (#reasons > 0) and table.concat(reasons, "; ") or nil
     return mod, reasonStr
 end
 
--- Universal Race / Home Continent Travel Friction (Low-Level Tie-Breaker)
--- Applies -8% penalty when playerLevel <= 24 to opposite continent UNLESS player has active quests in zone
+-- Universal Race / Home Continent Travel Friction
+-- Applies -8% when playerLevel <= 24 on opposite continent (no flight paths), or -2% above 24 when 0 quests in zone
 function Engine.GetTravelFrictionPenalty(zoneContinent, playerRace, playerLevel, activeCount)
     if not zoneContinent then return 0, nil end
-    local pLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or 1
-    if pLevel > 24 then return 0, nil end
-
-    -- If player already has active quests in this zone, travel friction is waived
     if activeCount and activeCount > 0 then
         return 0, nil
     end
 
+    local pLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or 1
     local pRace = playerRace or (addon.Player and addon.Player.GetRace and addon.Player.GetRace()) or "Human"
     local homeCont = Engine.GetHomeContinent(pRace)
     if homeCont and zoneContinent ~= homeCont then
-        return 0.08, "Cross-Continent Travel Friction (Low level before complete FP network)"
+        if pLevel <= 24 then
+            return 0.08, "Cross-Continent Travel Friction (Low level before complete FP network)"
+        else
+            return 0.02, "Cross-Continent Travel (Boat / Zeppelin required)"
+        end
     end
 
     return 0, nil
 end
 
--- Calculate comprehensive World Map Zone Worth (combining zone level bracket and active quests)
+-- Calculate comprehensive World Map Zone Worth (sweet-spot level curve, hub density, class fit, travel & log synergy)
 function Engine.CalculateWorldMapZoneWorth(zoneName)
     if type(zoneName) ~= "string" or zoneName == "" then return nil end
 
@@ -698,6 +705,18 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         return nil
     end
 
+    local readyCount = 0
+    if activeCount and activeCount > 0 and addon.Scores and addon.Scores.GetQuestsForZone then
+        local zQuests = addon.Scores.GetQuestsForZone(zoneName)
+        if zQuests then
+            for _, qID in ipairs(zQuests) do
+                if Engine.IsQuestComplete(qID) then
+                    readyCount = readyCount + 1
+                end
+            end
+        end
+    end
+
     local minLevel = zoneInfo and zoneInfo.min or nil
     local maxLevel = zoneInfo and zoneInfo.max or nil
     local effectiveMin = Engine.GetEffectiveMinLevel(zoneInfo, playerFaction) or minLevel
@@ -706,12 +725,25 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     end
     local faction = zoneInfo and zoneInfo.faction or "Contested"
     local isCity = zoneInfo and zoneInfo.isCity or false
+    local isDungeon = (zoneInfo and zoneInfo.isDungeon) or false
     local reqClass = zoneInfo and zoneInfo.class or nil
     local continent = zoneInfo and zoneInfo.continent or nil
+    local densityLabel = (zoneInfo and zoneInfo.density) or "Medium"
+    local rawHubMod = (zoneInfo and zoneInfo.hubMod) or 0.00
+    local hubName = zoneInfo and (
+        (playerFaction == "Alliance" and zoneInfo.allianceHub)
+        or (playerFaction == "Horde" and zoneInfo.hordeHub)
+        or zoneInfo.hub
+        or zoneInfo.allianceHub
+        or zoneInfo.hordeHub
+    ) or nil
+    local zoneSummary = zoneInfo and zoneInfo.summary or nil
 
     local bracketScore = 0.50
     local status = "Neutral Zone"
-    local recommendation = "Standard questing zone."
+    local recommendation = zoneSummary or "Standard questing zone."
+    local sweetMin, sweetMax = effectiveMin, maxLevel
+    local applyHubMod = false
 
     if not zoneInfo then
         bracketScore = activeWorth or 0.50
@@ -726,7 +758,6 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         status = string.format("Class Restricted (%s)", reqClass)
         recommendation = string.format("Dedicated to %s class quests only. No leveling content for %s.", reqClass, playerClass)
     elseif faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction then
-        -- Faction territory check
         if minLevel and minLevel <= 10 then
             bracketScore = 0.05
             status = "Hostile Territory"
@@ -736,108 +767,166 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
             status = "Enemy Territory"
             recommendation = "Few or no friendly quests available."
         end
-    else
-        local isDungeon = (zoneInfo and zoneInfo.isDungeon) or false
-        if isDungeon then
-            -- Dungeon instance bracket suitability & prequest guidance
-            if effectiveMin and playerLevel < effectiveMin then
-                local diff = effectiveMin - playerLevel
-                if diff <= 2 then
-                    bracketScore = 0.75
-                    status = string.format("Upcoming Dungeon (%d+)", effectiveMin)
-                    recommendation = string.format("Prepare dungeon prequests. Recommended for 5-player groups at level %d+.", effectiveMin)
-                else
-                    local smoothScore = math.max(0.05, 0.40 - (diff - 2) * 0.10)
-                    bracketScore = smoothScore
-                    status = string.format("High Level Dungeon (%d+)", effectiveMin)
-                    recommendation = string.format("Dangerous instance enemies. Gather group & prequests at level %d+.", effectiveMin)
-                end
-            elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
-                if activeCount and activeCount > 0 then
-                    bracketScore = 1.00
-                    status = "Ready for Dungeon!"
-                    recommendation = string.format("5-player instance (%d-%d) with %d active quests in log. Form group and clear!", minLevel, maxLevel, activeCount)
-                else
-                    bracketScore = 0.82
-                    status = "Recommended Dungeon"
-                    recommendation = string.format("5-player instance (%d-%d). Gather dungeon quests and group up before entering!", minLevel, maxLevel)
-                end
-            elseif maxLevel and playerLevel <= (maxLevel + 4) then
-                bracketScore = 0.40
-                status = "Low Level Dungeon"
-                recommendation = "Instance outleveled. Good for fast quest clears or helping friends."
+    elseif isDungeon then
+        -- Dungeon instance bracket suitability & prequest guidance
+        if effectiveMin and playerLevel < effectiveMin then
+            local diff = effectiveMin - playerLevel
+            if diff <= 2 then
+                bracketScore = 0.76 - (diff - 1) * 0.06
+                status = string.format("Upcoming Dungeon (%d+)", effectiveMin)
+                recommendation = string.format("Prepare dungeon prequests. Recommended for 5-player groups at level %d+.", effectiveMin)
             else
-                bracketScore = 0.15
-                status = "Outleveled Dungeon"
-                recommendation = "Trivial content. Instance mobs grant minimal or gray XP."
+                bracketScore = math.max(0.05, 0.40 - (diff - 2) * 0.10)
+                status = string.format("High Level Dungeon (%d+)", effectiveMin)
+                recommendation = string.format("Dangerous instance enemies. Gather group & prequests at level %d+.", effectiveMin)
             end
+        elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
+            local mid = math.floor((effectiveMin + maxLevel) * 0.5)
+            local dist = math.abs(playerLevel - mid)
+            bracketScore = math.max(0.76, 0.87 - dist * 0.02)
+            applyHubMod = true
+            if activeCount and activeCount > 0 then
+                status = "Ready for Dungeon!"
+                recommendation = string.format("5-player instance (%d-%d) with %d active quests in log. Form group and clear!", minLevel, maxLevel, activeCount)
+            else
+                status = "Recommended Dungeon"
+                recommendation = string.format("5-player instance (%d-%d). Gather dungeon quests before entering!", minLevel, maxLevel)
+            end
+        elseif maxLevel and playerLevel <= (maxLevel + 4) then
+            bracketScore = 0.40
+            status = "Low Level Dungeon"
+            recommendation = "Instance outleveled. Good for fast quest clears or helping friends."
         else
-            -- Level bracket suitability evaluation using effectiveMin & smooth curve for outdoor zones
-            if effectiveMin and playerLevel < effectiveMin then
-                local diff = effectiveMin - playerLevel
-                if diff == 1 then
-                    bracketScore = 0.82
-                    status = string.format("Upcoming Zone (%d+)", effectiveMin)
-                    recommendation = string.format("Challenging entry quests. Unlocks optimal leveling soon at level %d.", effectiveMin)
-                elseif diff == 2 then
-                    bracketScore = 0.70
-                    status = string.format("Upcoming Zone (%d+)", effectiveMin)
-                    recommendation = string.format("Few intro quests available. Main quest hubs open at level %d.", effectiveMin)
-                elseif diff == 3 then
-                    bracketScore = 0.40
-                    status = string.format("High Level Entry (%d+)", effectiveMin)
-                    if zoneName == "Hillsbrad Foothills" and playerFaction == "Alliance" then
-                        recommendation = "Alliance quests in Southshore start at level 22-24 (Tarren Mill has earlier quests). Return at level 23+."
-                    else
-                        recommendation = string.format("Most quests are currently red/orange. Recommended level %d+.", effectiveMin)
-                    end
-                else
-                    local smoothScore = math.max(0.05, 0.40 - (diff - 3) * 0.10)
-                    bracketScore = smoothScore
-                    status = "Too High Level"
-                    recommendation = string.format("Dangerous enemies. Recommended to return at level %d+.", effectiveMin)
-                end
-            elseif zoneName == "Redridge Mountains" and (playerLevel == 20 or playerLevel == 21) then
-                -- Redridge mid-bracket dip: solo lakeshore quests are done, remaining quests are 21-25 Blackrock / Elite
-                bracketScore = 0.65
-                status = "Elite / Group Quests"
-                recommendation = "Solo lakeshore quests outleveled. Remaining quests are difficult level 21-25 Blackrock and Elite group challenges."
-            elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
-                if playerLevel <= (effectiveMin + 3) then
-                    bracketScore = 1.00
-                    status = "Peak Leveling Bracket"
-                    recommendation = "Ideal entry level! Maximum XP rewards and gear upgrades."
-                elseif playerLevel <= (maxLevel - 2) then
-                    bracketScore = 0.90
-                    status = "Optimal Level"
-                    recommendation = "Great zone pacing and solid XP per hour."
-                else
-                    bracketScore = 0.75
-                    status = "Late Bracket"
-                    recommendation = "Finishing bracket. Good for completing remaining quest chains."
-                end
-            elseif maxLevel and playerLevel <= (maxLevel + 3) then
-                bracketScore = 0.40
+            bracketScore = 0.15
+            status = "Outleveled Dungeon"
+            recommendation = "Trivial content. Instance mobs grant minimal or gray XP."
+        end
+    else
+        -- Granular Outdoor Zone Sweet-Spot Curve
+        if effectiveMin and maxLevel and effectiveMin == 1 and maxLevel <= 12 then
+            sweetMin, sweetMax = 1, 8
+            if playerLevel <= 6 then
+                bracketScore = 0.88 - (playerLevel - 1) * 0.005
+                status = "Peak Starter Zone"
+                applyHubMod = true
+                recommendation = zoneSummary or "Fast starter quest chain for levels 1-6."
+            elseif playerLevel <= maxLevel then
+                bracketScore = math.max(0.72, 0.85 - (playerLevel - 6) * 0.03)
+                status = "Optimal Starter Zone"
+                applyHubMod = true
+                recommendation = zoneSummary or "Great XP finishing starter hub before moving to a 10-20 zone."
+            elseif playerLevel <= (maxLevel + 3) then
+                bracketScore = math.max(0.32, 0.50 - (playerLevel - maxLevel) * 0.08)
                 status = "Low Level"
-                recommendation = "Declining XP rewards. Mobs are mostly green."
+                recommendation = "Declining XP rewards. Consider moving to a 10-20 leveling zone."
             else
-                bracketScore = 0.15
+                bracketScore = 0.12
                 status = "Outleveled"
-                recommendation = "Trivial content. Quests grant minimal or gray XP."
+                recommendation = "Trivial starter zone. Mobs grant minimal or gray XP."
             end
+        elseif effectiveMin and playerLevel < effectiveMin then
+            local diff = effectiveMin - playerLevel
+            if diff == 1 then
+                bracketScore = 0.78
+                status = string.format("Upcoming (%d+)", effectiveMin)
+                recommendation = string.format("Challenging entry quests now; hits sweet spot at level %d-%d.", effectiveMin, math.min(maxLevel or effectiveMin + 4, effectiveMin + 4))
+            elseif diff == 2 then
+                bracketScore = 0.66
+                status = string.format("Upcoming (%d+)", effectiveMin)
+                recommendation = string.format("Only early intro quests viable. Main quest hubs open cleanly at level %d.", effectiveMin)
+            elseif diff == 3 then
+                bracketScore = 0.42
+                status = string.format("High Entry (%d+)", effectiveMin)
+                if zoneName == "Hillsbrad Foothills" and playerFaction == "Alliance" then
+                    recommendation = "Alliance quests in Southshore start at level 22-24 (Tarren Mill has earlier quests). Return at level 23+."
+                else
+                    recommendation = string.format("Most quests are red/orange. Recommended level %d+.", effectiveMin)
+                end
+            else
+                bracketScore = math.max(0.05, 0.40 - (diff - 3) * 0.09)
+                status = "Too High Level"
+                recommendation = string.format("Dangerous enemies. Recommended to return at level %d+.", effectiveMin)
+            end
+        elseif zoneName == "Redridge Mountains" and (playerLevel == 20 or playerLevel == 21) then
+            bracketScore = 0.65
+            status = "Mid-Bracket Dip (Elites)"
+            recommendation = "Solo Lakeshire quests outleveled. Remaining quests are challenging lvl 21-25 Blackrock & Elite group chains."
+        elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
+            local span = math.max(4, maxLevel - effectiveMin)
+            sweetMin = effectiveMin + 1
+            local sweetPeak = effectiveMin + math.min(3, math.max(1, math.floor(span * 0.25)))
+            sweetMax = effectiveMin + math.max(3, math.floor(span * 0.55))
+            applyHubMod = true
+
+            if playerLevel == effectiveMin then
+                bracketScore = 0.85
+                status = string.format("Early Entry (%d+)", effectiveMin)
+                recommendation = zoneSummary or string.format("Good entry level; quests stack rapidly through level %d.", sweetMax)
+            elseif playerLevel >= sweetMin and playerLevel <= sweetMax then
+                local dist = math.abs(playerLevel - sweetPeak)
+                bracketScore = 0.89 - (dist * 0.015)
+                status = (dist <= 1) and "Sweet Spot (Peak XP)" or "Optimal Sweet Spot"
+                recommendation = zoneSummary or "Prime solo questing level with ideal yellow mobs and fast XP/hour."
+            elseif playerLevel <= (maxLevel - 2) then
+                local stepsPast = playerLevel - sweetMax
+                bracketScore = math.max(0.76, 0.85 - (stepsPast * 0.025))
+                status = "Mid-Late Bracket"
+                recommendation = zoneSummary or "Still solid XP and dungeon/chain payoffs before transitioning."
+            else
+                bracketScore = (playerLevel == maxLevel) and 0.70 or 0.74
+                status = "Late Bracket (Wrap-Up)"
+                recommendation = "Finishing bracket; wrap up high-payoff chains or dungeons, then transition up."
+            end
+        elseif maxLevel and playerLevel <= (maxLevel + 3) then
+            local over = playerLevel - maxLevel
+            bracketScore = math.max(0.32, 0.52 - (over - 1) * 0.09)
+            status = "Low Level"
+            recommendation = "Declining XP rewards; mobs are mostly green. Transition to a higher bracket soon."
+        else
+            local over = (maxLevel and (playerLevel - maxLevel)) or 5
+            bracketScore = math.max(0.10, 0.25 - math.max(0, over - 3) * 0.04)
+            status = "Outleveled"
+            recommendation = "Trivial content. Quests grant minimal or gray XP."
         end
     end
 
-    -- Universal Class mob modifier & continent travel friction
+    -- Zone Hub Density modifier
+    local hubMod = 0.00
+    if applyHubMod or (rawHubMod < 0 and effectiveMin and playerLevel >= (effectiveMin - 1)) then
+        hubMod = rawHubMod
+    end
+
+    -- Class mob modifier, friendly territory comfort bonus & continent travel friction
     local classMod, classModReason = Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effectiveMin)
+    if isCity or (reqClass and reqClass ~= playerClass) or (faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction) then
+        classMod = 0
+        classModReason = nil
+    end
+
     local travelPenalty, travelReason = Engine.GetTravelFrictionPenalty(continent, playerRace, playerLevel, activeCount)
+    if bracketScore <= 0.15 then
+        travelPenalty = 0
+    end
 
-    local baseZoneScore = math.min(1.0, bracketScore + classMod) - travelPenalty
-    baseZoneScore = math.max(0.05, math.min(1.0, baseZoneScore))
+    local territoryBonus = 0
+    if zoneInfo and not isCity and not isDungeon and faction == playerFaction and (not maxLevel or playerLevel <= maxLevel) then
+        territoryBonus = 0.02
+    end
 
+    local baseZoneScore = bracketScore + hubMod + classMod + territoryBonus - travelPenalty
+    baseZoneScore = math.max(0.05, math.min(0.98, baseZoneScore))
+
+    -- Active Quest Log Synergy: active quests in an appropriate zone BOOST its worth (never penalize it!)
+    local activeBonus = 0
     local finalWorth
     if zoneInfo and activeWorth and activeCount and activeCount > 0 then
-        finalWorth = (0.50 * activeWorth) + (0.50 * baseZoneScore)
+        if baseZoneScore >= 0.55 then
+            activeBonus = math.min(0.10, (activeCount * 0.022) * (0.50 + 0.50 * activeWorth) + (readyCount * 0.02))
+            finalWorth = math.min(1.00, baseZoneScore + activeBonus)
+        else
+            finalWorth = math.max(baseZoneScore, (0.55 * activeWorth) + (0.45 * baseZoneScore))
+            activeBonus = math.max(0, finalWorth - baseZoneScore)
+        end
     elseif activeWorth and activeCount and activeCount > 0 then
         finalWorth = activeWorth
     else
@@ -846,21 +935,49 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
 
     finalWorth = math.max(0.0, math.min(1.0, finalWorth))
 
+    -- Concise 1-line explanation for Zone Advisor sidebar rows
+    local shortReason
+    if activeCount and activeCount > 0 then
+        if readyCount > 0 then
+            shortReason = string.format("%d in Log (%d Ready) • %s", activeCount, readyCount, hubName or status)
+        else
+            shortReason = string.format("%d in Log (%.0f%%) • %s", activeCount, (activeWorth or 0) * 100, hubName or status)
+        end
+    elseif isDungeon then
+        shortReason = string.format("5-Man Instance • %s", hubName or status)
+    elseif rawHubMod <= -0.07 then
+        shortReason = string.format("%s Quests • %s", densityLabel, hubName or status)
+    elseif hubName then
+        shortReason = string.format("%s • %s", status, hubName)
+    else
+        shortReason = string.format("%s • %s Quests", status, densityLabel)
+    end
+
     local result = {
         zoneName = zoneName,
         worth = finalWorth,
         minLevel = minLevel,
         maxLevel = maxLevel,
         effectiveMin = effectiveMin,
+        sweetMin = sweetMin,
+        sweetMax = sweetMax,
         faction = faction,
         isCity = isCity,
         reqClass = reqClass,
         continent = continent,
-        isDungeon = (zoneInfo and zoneInfo.isDungeon) or false,
+        isDungeon = isDungeon,
         status = status,
+        shortReason = shortReason,
         recommendation = recommendation,
+        zoneSummary = zoneSummary,
+        hubName = hubName,
+        densityLabel = densityLabel,
+        hubMod = hubMod,
+        territoryBonus = territoryBonus,
         activeCount = activeCount or 0,
+        readyCount = readyCount,
         activeWorth = activeWorth,
+        activeBonus = activeBonus,
         bracketScore = bracketScore,
         baseZoneScore = baseZoneScore,
         classModifier = classMod,

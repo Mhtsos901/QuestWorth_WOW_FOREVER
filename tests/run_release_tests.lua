@@ -1057,6 +1057,84 @@ mockPlayerState.level = savedLvl3K
 addonTable.Player.Update()
 addonTable.Engine.InvalidateCache()
 
+-- 3L: Zone Advisor Differentiation, Active Quest Synergy & Breakdown Verification
+print(" [3L] Zone Advisor Differentiation, Active Quest Synergy & Breakdown Verification:")
+local savedLvl3L = mockPlayerState.level
+local savedRace3L = mockPlayerState.race
+local savedRaceToken3L = mockPlayerState.raceToken
+local savedFaction3L = mockPlayerState.faction
+local savedClass3L = mockPlayerState.class
+local savedClassToken3L = mockPlayerState.classToken
+local savedLog3L = mockQuestLog
+
+mockPlayerState.level = 32
+mockPlayerState.race = "Human"
+mockPlayerState.raceToken = "Human"
+mockPlayerState.faction = "Alliance"
+mockPlayerState.class = "Warrior"
+mockPlayerState.classToken = "WARRIOR"
+mockQuestLog = {}
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+addonTable.Scores.InvalidateDensityCache()
+
+local stv32 = addonTable.Engine.CalculateWorldMapZoneWorth("Stranglethorn Vale")
+local arathi32 = addonTable.Engine.CalculateWorldMapZoneWorth("Arathi Highlands")
+local needles32 = addonTable.Engine.CalculateWorldMapZoneWorth("Thousand Needles")
+local desolace32 = addonTable.Engine.CalculateWorldMapZoneWorth("Desolace")
+local alterac32 = addonTable.Engine.CalculateWorldMapZoneWorth("Alterac Mountains")
+
+assert_not_nil(stv32, "Stranglethorn Vale evaluated for lvl 32")
+assert_not_nil(arathi32, "Arathi Highlands evaluated for lvl 32")
+assert_not_nil(needles32, "Thousand Needles evaluated for lvl 32")
+assert_not_nil(desolace32, "Desolace evaluated for lvl 32")
+assert_not_nil(alterac32, "Alterac Mountains evaluated for lvl 32")
+
+local allTieAt100 = (stv32.worth >= 0.995 and arathi32.worth >= 0.995 and needles32.worth >= 0.995 and desolace32.worth >= 0.995 and alterac32.worth >= 0.995)
+assert_true(not allTieAt100, string.format("Zones do NOT flat-tie at 100%% (STV=%.0f%%, Arathi=%.0f%%, Needles=%.0f%%, Desolace=%.0f%%, Alterac=%.0f%%)",
+    stv32.worth * 100, arathi32.worth * 100, needles32.worth * 100, desolace32.worth * 100, alterac32.worth * 100))
+assert_true(stv32.worth > alterac32.worth, "Rich Stranglethorn Vale scores strictly higher than sparse Alterac Mountains")
+assert_true(arathi32.worth > alterac32.worth, "Standard Arathi Highlands scores strictly higher than sparse Alterac Mountains")
+assert_not_nil(stv32.shortReason, "Zone result provides concise 1-line shortReason")
+assert_not_nil(stv32.hubName, "Zone result provides faction-specific hubName")
+assert_eq(stv32.densityLabel, "Very High", "Stranglethorn Vale density tier is Very High")
+assert_not_nil(stv32.zoneSummary, "Zone result provides curated zoneSummary")
+
+-- Active quests in an appropriate zone must BOOST worth (not penalize it)
+mockQuestLog = {
+    { title = "Stranglethorn Vale (2)", isHeader = true, isCollapsed = false },
+    { title = "Welcome to the Jungle", questID = 583, level = 30, isHeader = false, isComplete = 1 },
+    { title = "Raptor Mastery", questID = 194, level = 34, isHeader = false, isComplete = 0 },
+}
+mockQuestDB[583] = { title = "Welcome to the Jungle", level = 30, xp = 1200, money = 0 }
+mockQuestDB[194] = { title = "Raptor Mastery", level = 34, xp = 2550, money = 0 }
+addonTable.Scores.InvalidateDensityCache()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+
+local stv32WithQuests = addonTable.Engine.CalculateWorldMapZoneWorth("Stranglethorn Vale")
+assert_true(stv32WithQuests.worth > stv32.worth, string.format("Active quests in STV boost worth (%.0f%% -> %.0f%%)", stv32.worth * 100, stv32WithQuests.worth * 100))
+assert_true((stv32WithQuests.activeBonus or 0) > 0, "activeBonus populated when quests are in log")
+
+-- Duplicate zone aliases flagged so Advisor omits duplicate rows
+assert_true(addonTable.Data.Zones["Riverglades"].isAlias == true, "Riverglades marked as alias")
+assert_true(addonTable.Data.Zones["Hyjal"].isAlias == true, "Hyjal marked as alias")
+assert_true(addonTable.Data.Zones["The Temple of Atal'Hakkar"].isAlias == true, "The Temple of Atal'Hakkar marked as alias")
+
+-- Restore state before Scenario 4
+mockPlayerState.level = savedLvl3L
+mockPlayerState.race = savedRace3L
+mockPlayerState.raceToken = savedRaceToken3L
+mockPlayerState.faction = savedFaction3L
+mockPlayerState.class = savedClass3L
+mockPlayerState.classToken = savedClassToken3L
+mockQuestLog = savedLog3L
+addonTable.Player.Update()
+addonTable.Scores.InvalidateDensityCache()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST
 -- ============================================================================
