@@ -73,8 +73,27 @@ function Engine.InvalidateSpecCache()
     _cachedSpecID = nil
 end
 
--- Invalidate calculation cache
-function Engine.InvalidateCache()
+-- Invalidate calculation cache (single questID or full wipe)
+function Engine.InvalidateCache(questID)
+    if questID then
+        Engine.Cache[questID] = nil
+        Engine.CompletionCache[questID] = nil
+        wipe(Engine.WorldMapZoneCache)
+        if addon.Scores and addon.Scores.InvalidateRewardCache then
+            addon.Scores.InvalidateRewardCache(questID)
+        end
+        if addon.Utils and addon.Utils.ClearTalkToCache then
+            addon.Utils.ClearTalkToCache(questID)
+        end
+        if addon.Utils and addon.Utils.ClearQuestBasicInfoCache then
+            addon.Utils.ClearQuestBasicInfoCache(questID)
+        end
+        if addon.Data and addon.Data.InvalidatePayoffMemo then
+            addon.Data.InvalidatePayoffMemo(questID)
+        end
+        return
+    end
+
     wipe(Engine.Cache)
     Engine.CacheSize = 0
     wipe(Engine.CompletionCache)
@@ -85,6 +104,9 @@ function Engine.InvalidateCache()
     end
     if addon.Utils and addon.Utils.ClearTalkToCache then
         addon.Utils.ClearTalkToCache()
+    end
+    if addon.Utils and addon.Utils.ClearQuestBasicInfoCache then
+        addon.Utils.ClearQuestBasicInfoCache()
     end
     if addon.Data and addon.Data.InvalidatePayoffMemo then
         addon.Data.InvalidatePayoffMemo()
@@ -170,7 +192,7 @@ end
 
 -- Helper to determine if a quest is complete / ready for turn-in (ultra-fast cached lookup)
 function Engine.IsQuestComplete(questID)
-    if not questID or questID <= 0 then return false end
+    if not Utils.IsValidQuestID(questID) then return false end
 
     -- Fast path: already known in current cache generation
     if Engine.CompletionCache[questID] ~= nil then
@@ -202,7 +224,7 @@ end
 
 -- Main entry point: Calculate Worth for a questID
 function Engine.CalculateWorth(questID)
-    if not questID or questID <= 0 then
+    if not Utils.IsValidQuestID(questID) then
         return nil, nil
     end
 
@@ -459,7 +481,7 @@ end
 
 -- Calculate composite Worth for an entire geographical zone
 function Engine.CalculateZoneWorth(zoneName)
-    if not zoneName or zoneName == "" then return nil end
+    if type(zoneName) ~= "string" or zoneName == "" then return nil end
     if addon.Scores and addon.Scores.IsNonZoneHeader and addon.Scores.IsNonZoneHeader(zoneName) then
         return nil
     end
@@ -649,7 +671,7 @@ end
 
 -- Calculate comprehensive World Map Zone Worth (combining zone level bracket and active quests)
 function Engine.CalculateWorldMapZoneWorth(zoneName)
-    if not zoneName or zoneName == "" then return nil end
+    if type(zoneName) ~= "string" or zoneName == "" then return nil end
 
     -- Fast path: cached zone evaluation
     if Engine.WorldMapZoneCache and Engine.WorldMapZoneCache[zoneName] then

@@ -1100,6 +1100,124 @@ print(string.format("  Memory before: %.2f KB, Memory after: %.2f KB (Delta: %.2
 assert_true(memDelta < 250, "Memory delta after 1,000 events + GC is within healthy bound (< 250 KB)")
 
 -- ============================================================================
+-- SCENARIO 5: PERFORMANCE & ERROR RESILIENCE SUITE
+-- ============================================================================
+print("\n--- SCENARIO 5: Performance & Error Resilience Suite ---")
+
+-- 5A: Hostile Input & Error Resilience Fuzz Test
+print(" [5A] Hostile Input & Error Resilience Fuzz Test:")
+local nanVal = 0 / 0
+local hostileInputs = {
+    { name = "nil", val = nil },
+    { name = "zero", val = 0 },
+    { name = "negative", val = -999 },
+    { name = "string", val = "not_a_number" },
+    { name = "nan", val = nanVal },
+    { name = "huge", val = math.huge },
+    { name = "table", val = {} },
+}
+
+local fuzzTargets = {
+    { name = "Engine.CalculateWorth", fn = function(v) return addonTable.Engine.CalculateWorth(v) end },
+    { name = "Engine.CalculateZoneWorth", fn = function(v) return addonTable.Engine.CalculateZoneWorth(v) end },
+    { name = "Engine.CalculateWorldMapZoneWorth", fn = function(v) return addonTable.Engine.CalculateWorldMapZoneWorth(v) end },
+    { name = "Scores.CalculateDifficulty", fn = function(v) return addonTable.Scores.CalculateDifficulty(v) end },
+    { name = "Scores.CalculateReward", fn = function(v) return addonTable.Scores.CalculateReward(v) end },
+    { name = "Scores.CalculateChain", fn = function(v) return addonTable.Scores.CalculateChain(v) end },
+    { name = "Scores.CalculateClassFit", fn = function(v) return addonTable.Scores.CalculateClassFit(v) end },
+    { name = "Scores.CalculateDensity", fn = function(v) return addonTable.Scores.CalculateDensity(v) end },
+    { name = "Utils.GetQuestBasicInfo", fn = function(v) return addonTable.Utils.GetQuestBasicInfo(v) end },
+    { name = "Utils.IsTalkToQuest", fn = function(v) return addonTable.Utils.IsTalkToQuest(v) end },
+    { name = "Utils.FormatScore", fn = function(v) return addonTable.Utils.FormatScore(v) end },
+    { name = "Utils.FormatBadge", fn = function(v) return addonTable.Utils.FormatBadge(v) end },
+    { name = "Utils.CleanQuestTitle", fn = function(v) return addonTable.Utils.CleanQuestTitle(v) end },
+    { name = "Data.GetQuestPayoff", fn = function(v) return addonTable.Data.GetQuestPayoff(v, v) end },
+    { name = "Data.GetQuestTip", fn = function(v) return addonTable.Data.GetQuestTip(v, v) end },
+    { name = "UI.ShowQuestTooltip", fn = function(v) return addonTable.UI.ShowQuestTooltip(GameTooltip, v) end },
+    { name = "UI.UpdateQuestLog", fn = function(v) return addonTable.UI.UpdateQuestLog(v) end },
+    { name = "UI.UpdateObjectiveTracker", fn = function(v) return addonTable.UI.UpdateObjectiveTracker(v) end },
+    { name = "UI.UpdateWorldMapBanner", fn = function(v) return addonTable.UI.UpdateWorldMapBanner(v) end },
+    { name = "UI.UpdateZoneAdvisor", fn = function(v) return addonTable.UI.UpdateZoneAdvisor(v) end },
+}
+
+local fuzzErrors = 0
+local fuzzCalls = 0
+for _, target in ipairs(fuzzTargets) do
+    for _, inp in ipairs(hostileInputs) do
+        fuzzCalls = fuzzCalls + 1
+        local ok, err = pcall(target.fn, inp.val)
+        if not ok then
+            fuzzErrors = fuzzErrors + 1
+            fail(string.format("Fuzz %s(%s)", target.name, inp.name), err)
+        end
+    end
+end
+assert_eq(fuzzErrors, 0, string.format("Hostile input fuzz suite: %d/%d calls succeeded with zero Lua errors", fuzzCalls - fuzzErrors, fuzzCalls))
+
+-- 5B: Throughput & Latency Benchmarks (os.clock())
+print(" [5B] Performance & Latency Benchmarks:")
+addonTable.Engine.InvalidateCache()
+addonTable.Scores.InvalidateDensityCache()
+
+-- Ensure quest 227 is warmed up cleanly before cached benchmark
+mockQuestDB[227] = mockQuestDB[227] or { title = "The Weathered Grave", level = 35, xp = 721, money = 0, objectiveText = "Speak with Sirra Von'Indi in Darkshire." }
+addonTable.Engine.CalculateWorth(227)
+
+-- 1. 10,000 Cached Engine.CalculateWorth lookups
+local t0 = os.clock()
+for i = 1, 10000 do
+    addonTable.Engine.CalculateWorth(227)
+end
+local cachedElapsed = os.clock() - t0
+local cachedOps = math.floor(10000 / math.max(0.0001, cachedElapsed))
+print(string.format("  10,000 Cached CalculateWorth lookups: %.4fs (%d ops/sec)", cachedElapsed, cachedOps))
+assert_true(cachedElapsed < 0.050, string.format("10,000 cached CalculateWorth calls completed in %.4fs (< 0.050s)", cachedElapsed))
+
+-- 2. 1,000 Uncached Full 5-Factor Engine.CalculateWorth calculations
+local t1 = os.clock()
+for i = 1, 1000 do
+    local qid = 5211 + (i % 5)
+    addonTable.Engine.InvalidateCache(qid)
+    addonTable.Engine.CalculateWorth(qid)
+end
+local uncachedElapsed = os.clock() - t1
+local uncachedOps = math.floor(1000 / math.max(0.0001, uncachedElapsed))
+print(string.format("  1,000 Uncached Full 5-Factor CalculateWorth: %.4fs (%d ops/sec)", uncachedElapsed, uncachedOps))
+assert_true(uncachedElapsed < 0.200, string.format("1,000 uncached CalculateWorth calls completed in %.4fs (< 0.200s)", uncachedElapsed))
+
+-- 3. 200 Full World Map Zone Advisor refreshes across all ~68 zones
+WorldMapFrame:Show()
+addonTable.UI.ToggleZoneAdvisor(true)
+local t2 = os.clock()
+for i = 1, 200 do
+    addonTable.Engine.WorldMapZoneCache = {}
+    addonTable.UI.UpdateZoneAdvisor()
+end
+local advisorElapsed = os.clock() - t2
+local advisorOps = math.floor(200 / math.max(0.0001, advisorElapsed))
+print(string.format("  200 Full World Map Zone Advisor refreshes (all zones): %.4fs (%d refreshes/sec)", advisorElapsed, advisorOps))
+assert_true(advisorElapsed < 0.250, string.format("200 Zone Advisor refreshes completed in %.4fs (< 0.250s)", advisorElapsed))
+
+-- 4. 1,000 Full UI Refresh Cycles + GC Memory Delta
+collectgarbage("collect")
+local uiMemBefore = collectgarbage("count")
+local t3 = os.clock()
+for i = 1, 1000 do
+    addonTable.UI.UpdateQuestLog(true)
+    addonTable.UI.UpdateObjectiveTracker(true)
+    addonTable.UI.UpdateWorldMapBanner()
+end
+local uiElapsed = os.clock() - t3
+collectgarbage("collect")
+local uiMemAfter = collectgarbage("count")
+local uiMemDelta = uiMemAfter - uiMemBefore
+print(string.format("  1,000 Full UI Refresh Cycles: %.4fs, Mem Delta: %.2f KB", uiElapsed, uiMemDelta))
+assert_true(uiElapsed < 0.250, string.format("1,000 full UI refresh cycles completed in %.4fs (< 0.250s)", uiElapsed))
+assert_true(uiMemDelta < 100, string.format("UI refresh loop net memory growth %.2f KB is healthy (< 100 KB)", uiMemDelta))
+addonTable.UI.ToggleZoneAdvisor(false)
+WorldMapFrame:Hide()
+
+-- ============================================================================
 -- SUMMARY
 -- ============================================================================
 print("\n======================================================================")

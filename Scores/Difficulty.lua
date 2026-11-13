@@ -125,6 +125,9 @@ local function CalculateBaseDifficulty(questLevel, playerLevel, isMelee)
 end
 
 function Scores.CalculateDifficulty(questID)
+    if not Utils.IsValidQuestID(questID) then
+        return 0.50, { reason = "InvalidID", final = 0.50 }
+    end
     local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local info = Utils.GetQuestBasicInfo(questID)
     local questLevel = (info and info.level and info.level > 0) and info.level or playerLevel

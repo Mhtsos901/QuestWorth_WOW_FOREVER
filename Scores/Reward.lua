@@ -11,14 +11,20 @@ local Utils = addon.Utils
 local _xpCache = {}
 local _moneyCache = {}
 
-function Scores.InvalidateRewardCache()
-    wipe(_xpCache)
-    wipe(_moneyCache)
+function Scores.InvalidateRewardCache(questID)
+    if questID then
+        _xpCache[questID] = nil
+        _moneyCache[questID] = nil
+    else
+        wipe(_xpCache)
+        wipe(_moneyCache)
+    end
 end
 addon.InvalidateRewardCache = Scores.InvalidateRewardCache
 
 -- Safe helper to fetch XP reward for a quest
 local function GetQuestXP(questID)
+    if not Utils.IsValidQuestID(questID) then return 0 end
     if _xpCache[questID] and _xpCache[questID] > 0 then
         return _xpCache[questID]
     end
@@ -90,6 +96,7 @@ end
 
 -- Safe helper to fetch direct Money reward for a quest
 local function GetQuestMoney(questID)
+    if not Utils.IsValidQuestID(questID) then return 0 end
     if _moneyCache[questID] and _moneyCache[questID] > 0 then
         return _moneyCache[questID]
     end
@@ -143,6 +150,9 @@ local function GetQuestVendorPrices(questID)
 end
 
 function Scores.CalculateReward(questID)
+    if not Utils.IsValidQuestID(questID) then
+        return 0.30, { source = "InvalidID", xp = 0, money = 0, itemCopper = 0, final = 0.30 }
+    end
     local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local maxLevel = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (GetMaxPlayerLevel and GetMaxPlayerLevel()) or 60
     local isMaxLevel = (playerLevel >= maxLevel)

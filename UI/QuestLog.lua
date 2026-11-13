@@ -505,11 +505,13 @@ local function CleanObjectiveFrame(frame)
                 fontString._worthItSettingText = false
             end
         end
+        return
     end
-    if frame.GetRegions then
-        local ok, regions = pcall(function() return { frame:GetRegions() } end)
-        if ok and regions then
-            for _, region in ipairs(regions) do
+    if frame.GetRegions and frame.GetNumRegions then
+        local okN, numRegions = pcall(frame.GetNumRegions, frame)
+        if okN and numRegions and numRegions > 0 then
+            for r = 1, numRegions do
+                local region = select(r, frame:GetRegions())
                 if region and region.GetObjectType and region:GetObjectType() == "FontString" and region.GetText and region.SetText then
                     local raw = region:GetText() or ""
                     if raw ~= "" and (string.find(raw, "%[%d+%%%]") or string.find(raw, "%[OK%]")) then
@@ -528,7 +530,7 @@ end
 
 -- Clean any detail/objective FontStrings in QuestInfoFrame / QuestLogDetailFrame
 local function CleanQuestInfoDetails()
-    if QuestInfoObjectivesFrame then
+    if QuestInfoObjectivesFrame and (not QuestInfoObjectivesFrame.IsShown or QuestInfoObjectivesFrame:IsShown()) then
         if QuestInfoObjectivesFrame.Objectives then
             for _, fs in pairs(QuestInfoObjectivesFrame.Objectives) do
                 if fs and fs.GetText and fs.SetText then
@@ -559,7 +561,8 @@ local function CleanQuestInfoDetails()
             end
         end
     end
-    if QuestInfoObjectivesText and QuestInfoObjectivesText.GetText and QuestInfoObjectivesText.SetText then
+    if QuestInfoObjectivesText and QuestInfoObjectivesText.GetText and QuestInfoObjectivesText.SetText
+       and ((not QuestInfoObjectivesFrame) or (not QuestInfoObjectivesFrame.IsShown) or QuestInfoObjectivesFrame:IsShown()) then
         local t = QuestInfoObjectivesText:GetText() or ""
         if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
             local ct = Utils.CleanQuestTitle(t)
@@ -570,27 +573,29 @@ local function CleanQuestInfoDetails()
             end
         end
     end
-    if QuestLogObjectivesText and QuestLogObjectivesText.GetText and QuestLogObjectivesText.SetText then
-        local t = QuestLogObjectivesText:GetText() or ""
-        if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
-            local ct = Utils.CleanQuestTitle(t)
-            if t ~= ct then
-                QuestLogObjectivesText._worthItSettingText = true
-                QuestLogObjectivesText:SetText(ct)
-                QuestLogObjectivesText._worthItSettingText = false
-            end
-        end
-    end
-    for i = 1, 10 do
-        local fs = _G["QuestLogObjective" .. i]
-        if fs and fs.GetText and fs.SetText then
-            local t = fs:GetText() or ""
+    if (not QuestLogDetailScrollFrame) or (not QuestLogDetailScrollFrame.IsShown) or QuestLogDetailScrollFrame:IsShown() then
+        if QuestLogObjectivesText and QuestLogObjectivesText.GetText and QuestLogObjectivesText.SetText then
+            local t = QuestLogObjectivesText:GetText() or ""
             if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
                 local ct = Utils.CleanQuestTitle(t)
                 if t ~= ct then
-                    fs._worthItSettingText = true
-                    fs:SetText(ct)
-                    fs._worthItSettingText = false
+                    QuestLogObjectivesText._worthItSettingText = true
+                    QuestLogObjectivesText:SetText(ct)
+                    QuestLogObjectivesText._worthItSettingText = false
+                end
+            end
+        end
+        for i = 1, 10 do
+            local fs = _G["QuestLogObjective" .. i]
+            if fs and fs.GetText and fs.SetText then
+                local t = fs:GetText() or ""
+                if string.find(t, "%[%d+%%%]") or string.find(t, "%[OK%]") then
+                    local ct = Utils.CleanQuestTitle(t)
+                    if t ~= ct then
+                        fs._worthItSettingText = true
+                        fs:SetText(ct)
+                        fs._worthItSettingText = false
+                    end
                 end
             end
         end
@@ -629,11 +634,13 @@ function UI.UpdateQuestLog(force)
         -- 1. Modern Blizzard & OpenMap QuestScrollFrame / QuestMapFrame
         local scrollBox = (QuestScrollFrame and QuestScrollFrame.ScrollBox)
                           or (QuestMapFrame and QuestMapFrame.QuestsFrame and QuestMapFrame.QuestsFrame.ScrollBox)
+        local handledModernFrames = false
 
         if QuestScrollFrame then
             local pool = QuestScrollFrame.titleFramePool or QuestScrollFrame.TitleFramePool
             if pool and pool.EnumerateActive then
                 for button in pool:EnumerateActive() do
+                    handledModernFrames = true
                     if not IsObjectiveOrDetailFrame(button) then
                         ProcessQuestButton(button, showTag)
                     else
@@ -654,6 +661,7 @@ function UI.UpdateQuestLog(force)
         if scrollBox then
             local function handleScrollFrame(button)
                 if not button or not button:IsShown() then return end
+                handledModernFrames = true
 
                 local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
                 if not isHeader and button.GetElementData then
@@ -701,30 +709,32 @@ function UI.UpdateQuestLog(force)
             end
         end
 
-        -- Contents frame children fallback
-        local contents = (QuestScrollFrame and QuestScrollFrame.Contents)
-                         or (QuestMapFrame and QuestMapFrame.QuestsFrame and QuestMapFrame.QuestsFrame.Contents)
-        if contents and contents.GetChildren then
-            local okC, children = pcall(function() return { contents:GetChildren() } end)
-            if okC and children then
-                for _, button in ipairs(children) do
-                    if button and button:IsShown() then
-                        local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
-                        if not isHeader and button.GetElementData then
-                            local okED, ed = pcall(button.GetElementData, button)
-                            if okED and ed and type(ed) == "table" then
-                                if ed.isHeader or (ed.info and ed.info.isHeader) then
-                                    isHeader = true
+        -- Contents frame children fallback (only if pools/ScrollBox yielded no frames)
+        if not handledModernFrames then
+            local contents = (QuestScrollFrame and QuestScrollFrame.Contents)
+                             or (QuestMapFrame and QuestMapFrame.QuestsFrame and QuestMapFrame.QuestsFrame.Contents)
+            if contents and contents.GetChildren then
+                local okC, children = pcall(function() return { contents:GetChildren() } end)
+                if okC and children then
+                    for _, button in ipairs(children) do
+                        if button and button:IsShown() then
+                            local isHeader = button.isHeader or button.header or (button.info and button.info.isHeader)
+                            if not isHeader and button.GetElementData then
+                                local okED, ed = pcall(button.GetElementData, button)
+                                if okED and ed and type(ed) == "table" then
+                                    if ed.isHeader or (ed.info and ed.info.isHeader) then
+                                        isHeader = true
+                                    end
                                 end
                             end
-                        end
 
-                        if isHeader then
-                            ProcessHeaderButton(button, showTag)
-                        elseif IsObjectiveOrDetailFrame(button) then
-                            CleanObjectiveFrame(button)
-                        else
-                            ProcessQuestButton(button, showTag)
+                            if isHeader then
+                                ProcessHeaderButton(button, showTag)
+                            elseif IsObjectiveOrDetailFrame(button) then
+                                CleanObjectiveFrame(button)
+                            else
+                                ProcessQuestButton(button, showTag)
+                            end
                         end
                     end
                 end
@@ -741,18 +751,19 @@ function UI.UpdateQuestLog(force)
         end
 
         -- 2. Classic QuestLogFrame (QuestLogTitle1..QUESTS_DISPLAYED)
+        local handledClassicQuestLog = false
         if QuestLogFrame and QuestLogFrame:IsShown() then
             local numQuests = QUESTS_DISPLAYED or 25
             local scrollOffset = (FauxScrollFrame_GetOffset and QuestLogScrollFrame and FauxScrollFrame_GetOffset(QuestLogScrollFrame)) or 0
             for i = 1, numQuests do
                 local button = _G["QuestLogTitle" .. i]
                 if button and button:IsShown() then
+                    handledClassicQuestLog = true
                     local questIndex = i + scrollOffset
                     local okT, qTitle, _, _, isHeader, _, isComplete, _, qID = pcall(GetQuestLogTitle, questIndex)
                     local fontString = button.normalText or _G[button:GetName() .. "NormalText"] or (button.GetFontString and button:GetFontString()) or button.Text
                     if fontString and fontString.GetText and fontString.SetText then
                         local rawTitle = fontString:GetText() or ""
-                        local cleanTitle = Utils.CleanQuestTitle(rawTitle)
                         if okT and qTitle and not isHeader then
                             if showTag then
                                 local id = qID
@@ -770,19 +781,33 @@ function UI.UpdateQuestLog(force)
                                         local comp = (breakdown and breakdown.isComplete) or isComplete
                                         local isHard = (breakdown and breakdown.isHard)
                                         local isBankable = (breakdown and breakdown.isBankable)
-                                        local badge = Utils.FormatBadge(worth, comp, isHard, isBankable)
-                                        local targetText = badge .. " " .. cleanTitle
-                                        if rawTitle ~= targetText then
-                                            fontString:SetText(targetText)
+                                        if not (rawTitle == fontString._qwLastTarget and fontString._qwLastID == id
+                                           and fontString._qwLastWorth == worth and fontString._qwLastComp == comp
+                                           and fontString._qwLastHard == isHard and fontString._qwLastBankable == isBankable) then
+                                            local cleanTitle = Utils.CleanQuestTitle(rawTitle)
+                                            local badge = Utils.FormatBadge(worth, comp, isHard, isBankable)
+                                            local targetText = badge .. " " .. cleanTitle
+                                            fontString._qwLastTarget = targetText
+                                            fontString._qwLastID = id
+                                            fontString._qwLastWorth = worth
+                                            fontString._qwLastComp = comp
+                                            fontString._qwLastHard = isHard
+                                            fontString._qwLastBankable = isBankable
+                                            if rawTitle ~= targetText then
+                                                fontString:SetText(targetText)
+                                            end
                                         end
                                     end
                                 end
                             else
+                                local cleanTitle = Utils.CleanQuestTitle(rawTitle)
+                                fontString._qwLastTarget = nil
                                 if rawTitle ~= cleanTitle then
                                     fontString:SetText(cleanTitle)
                                 end
                             end
                         elseif isHeader then
+                            fontString._qwLastTarget = nil
                             ProcessHeaderButton(button, showTag)
                         end
                     end
@@ -791,7 +816,8 @@ function UI.UpdateQuestLog(force)
         end
 
         -- 3. Classic QuestLogListScrollFrame fallback (WotLK / Classic hybrid)
-        if QuestLogListScrollFrame and QuestLogListScrollFrame.buttons then
+        if not handledClassicQuestLog and QuestLogListScrollFrame and QuestLogListScrollFrame.buttons
+           and (not QuestLogListScrollFrame.IsShown or QuestLogListScrollFrame:IsShown()) then
             local scrollOffset = HybridScrollFrame_GetOffset and HybridScrollFrame_GetOffset(QuestLogListScrollFrame) or 0
             local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries()) or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
             for i, button in ipairs(QuestLogListScrollFrame.buttons) do
@@ -1310,33 +1336,35 @@ function UI.UpdateObjectiveTracker(force)
             end
         end
 
-        -- 2. Fallback: Recursive container frame scanning (handles nested modern tracker structures)
-        local containers = {
-            ObjectiveTrackerBlocksFrame,
-            ObjectiveTrackerFrame and ObjectiveTrackerFrame.BlocksFrame,
-            ObjectiveTrackerFrame,
-        }
+        -- 2. Fallback: Recursive container frame scanning (only when module enumeration found no blocks)
+        if not next(processedBlocks) then
+            local containers = {
+                ObjectiveTrackerBlocksFrame,
+                ObjectiveTrackerFrame and ObjectiveTrackerFrame.BlocksFrame,
+                ObjectiveTrackerFrame,
+            }
 
-        local function ScanContainerTree(frame, depth)
-            if not frame or depth > 4 then return end
-            if GetBlockHeaderFontString(frame) then
-                ProcessBlock(frame)
-            end
-            if frame.GetChildren then
-                local okC, kids = pcall(function() return { frame:GetChildren() } end)
-                if okC and kids then
-                    for _, child in ipairs(kids) do
-                        if child and child:IsShown() then
-                            ScanContainerTree(child, depth + 1)
+            local function ScanContainerTree(frame, depth)
+                if not frame or depth > 4 then return end
+                if GetBlockHeaderFontString(frame) then
+                    ProcessBlock(frame)
+                end
+                if frame.GetChildren then
+                    local okC, kids = pcall(function() return { frame:GetChildren() } end)
+                    if okC and kids then
+                        for _, child in ipairs(kids) do
+                            if child and child:IsShown() then
+                                ScanContainerTree(child, depth + 1)
+                            end
                         end
                     end
                 end
             end
-        end
 
-        for _, container in ipairs(containers) do
-            if container then
-                ScanContainerTree(container, 1)
+            for _, container in ipairs(containers) do
+                if container then
+                    ScanContainerTree(container, 1)
+                end
             end
         end
     end)

@@ -166,11 +166,16 @@ function addon.ClearSafeGetItemInfoCache()
     _iicSize = 0
 end
 
+-- Validate that a questID is a finite positive number (guards against nil, NaN, inf, strings, tables)
+function Utils.IsValidQuestID(id)
+    return type(id) == "number" and id == id and id > 0 and id < math.huge
+end
+
 -- Persistent quest rewards cache (item links & vendor values)
 local _questRewardsCache = {}
 
 function Utils.GetQuestRewardData(questID)
-    if not questID or questID <= 0 then
+    if not Utils.IsValidQuestID(questID) then
         return {}, {}, 0, 0
     end
 
@@ -390,7 +395,10 @@ function Utils.FormatBadge(score, isComplete, isHard, isBankable)
 end
 
 function Utils.CleanQuestTitle(title)
-    if not title or title == "" then return "" end
+    if type(title) ~= "string" or title == "" then return "" end
+    if not string.find(title, "[|%[\r\n]") then
+        return title
+    end
     local cleaned = string.gsub(title, "[\r\n].*$", "")
     local changed = true
     local passes = 0
@@ -456,9 +464,10 @@ end
 
 -- Safe Quest Title/Level getter across Modern C_QuestLog, Gossip NPCs, and Legacy APIs (memoized)
 local _basicInfoCache = {}
+local _basicInfoCacheSize = 0
 
 function Utils.GetQuestBasicInfo(questID)
-    if not questID or questID <= 0 then return nil end
+    if not Utils.IsValidQuestID(questID) then return nil end
 
     if _basicInfoCache[questID] then
         local entry = _basicInfoCache[questID]
@@ -576,12 +585,22 @@ function Utils.GetQuestBasicInfo(questID)
         isHeader = isHeader or false,
     }
 
+    if _basicInfoCacheSize >= 500 then
+        wipe(_basicInfoCache)
+        _basicInfoCacheSize = 0
+    end
     _basicInfoCache[questID] = res
+    _basicInfoCacheSize = _basicInfoCacheSize + 1
     return res
 end
 
-function Utils.ClearQuestBasicInfoCache()
-    wipe(_basicInfoCache)
+function Utils.ClearQuestBasicInfoCache(questID)
+    if questID then
+        _basicInfoCache[questID] = nil
+    else
+        wipe(_basicInfoCache)
+        _basicInfoCacheSize = 0
+    end
 end
 addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
 
@@ -593,7 +612,7 @@ addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
 local _talkToCache = {}
 
 function Utils.IsTalkToQuest(questID)
-    if not questID or questID <= 0 then return false end
+    if not Utils.IsValidQuestID(questID) then return false end
     if _talkToCache[questID] ~= nil then
         return _talkToCache[questID]
     end

@@ -500,6 +500,9 @@ local function EvaluateItemFit(itemLink, playerClass, playerLevel, specIndex, st
 end
 
 function Scores.CalculateClassFit(questID)
+    if not Utils.IsValidQuestID(questID) then
+        return 0.50, { reason = "InvalidID", hasUpgrade = false, maxUpgradePct = 0, itemsEvaluated = 0 }
+    end
     local playerClass, specIndex, statWeights = GetPlayerSpecInfo()
     local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
 

@@ -105,7 +105,7 @@ addon.Data.Zones = {
 
 -- Helper function to lookup zone info by name (supports flexible casing and aliases)
 function addon.Data.GetZoneInfo(zoneName)
-    if not zoneName then return nil end
+    if type(zoneName) ~= "string" or zoneName == "" then return nil end
     local clean = string.gsub(zoneName, "^%s*(.-)%s*$", "%1")
     if addon.Data.Zones[clean] then
         return addon.Data.Zones[clean]

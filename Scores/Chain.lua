@@ -15,6 +15,7 @@ local addonName, addon = ...
 addon.Scores = addon.Scores or {}
 local Scores = addon.Scores
 local Data = addon.Data
+local Utils = addon.Utils
 
 -- Check if quest is marked as Class or Profession quest
 local function IsClassOrProfessionQuest(questID)
@@ -76,7 +77,11 @@ local function CheckCQuestLineAPI(questID)
 end
 
 function Scores.CalculateChain(questID)
-    local targetID = tonumber(questID) or questID
+    local numID = tonumber(questID)
+    if not Utils.IsValidQuestID(numID) then
+        return 0.10, { source = "InvalidID", final = 0.10 }
+    end
+    local targetID = numID
 
     -- Priority 1: Class or Profession quest -> 1.00
     if IsClassOrProfessionQuest(targetID) then
@@ -144,8 +149,8 @@ function Scores.CalculateChain(questID)
         return apiScore, details
     end
 
-    -- Priority 4: Fallback KnownChains scan for unaccepted / dialog quests (longest chain wins ties)
-    if Data and Data.KnownChains then
+    -- Priority 4: Fallback KnownChains scan (only if ChainIndex was not built yet)
+    if Data and Data.KnownChains and (not Data.ChainIndex or next(Data.ChainIndex) == nil) then
         local bestMatch = nil
         for chainID, chainData in pairs(Data.KnownChains) do
             local quests = chainData.quests or {}

@@ -225,11 +225,13 @@ end
 
 -- Retrieves a curated tip or applies heuristic sourcing rules
 function Data.GetQuestTip(questID, questTitle)
-    local targetID = tonumber(questID) or questID
-    local cleanTitle = CleanKey(questTitle)
+    local numID = tonumber(questID)
+    local targetID = (numID and numID == numID and numID > 0 and numID < math.huge) and numID or nil
+    local rawTitle = (type(questTitle) == "string" and questTitle ~= "") and questTitle or nil
+    local cleanTitle = CleanKey(rawTitle)
 
     -- If title not provided, attempt to look it up from quest log or basic info
-    if (not cleanTitle or cleanTitle == "") and targetID and targetID > 0 then
+    if (not cleanTitle or cleanTitle == "") and targetID then
         local basic = addon.Utils and addon.Utils.GetQuestBasicInfo and addon.Utils.GetQuestBasicInfo(targetID)
         if basic and basic.title then
             cleanTitle = CleanKey(basic.title)

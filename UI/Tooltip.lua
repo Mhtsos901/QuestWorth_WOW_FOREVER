@@ -417,7 +417,7 @@ end
 
 -- Programmatic Tooltip display for NPC dialogs, gossip, or custom frames
 function UI.ShowQuestTooltip(tooltip, questID, owner)
-    if not tooltip or not questID or questID <= 0 then return end
+    if not tooltip or type(tooltip) ~= "table" or not Utils.IsValidQuestID(questID) then return end
     if owner then
         tooltip:SetOwner(owner, "ANCHOR_RIGHT")
     end

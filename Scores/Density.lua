@@ -15,6 +15,7 @@
 local addonName, addon = ...
 addon.Scores = addon.Scores or {}
 local Scores = addon.Scores
+local Utils = addon.Utils
 
 -- Non-zone quest log categories that should NOT form artificial quest hubs
 local NON_ZONE_HEADERS = {
@@ -144,9 +145,8 @@ end
 
 -- Export active quests list for a zone
 function Scores.GetQuestsForZone(zoneName)
-    if not zoneName or zoneName == "" then return {} end
+    if type(zoneName) ~= "string" or zoneName == "" then return {} end
     ScanQuestLogClusters()
-    PruneZoneQuests()
 
     local clean = string.gsub(zoneName, "^%s*(.-)%s*$", "%1")
     local list = {}
@@ -189,6 +189,9 @@ function Scores.IsNonZoneHeader(headerTitle)
 end
 
 function Scores.CalculateDensity(questID)
+    if not Utils.IsValidQuestID(questID) then
+        return 0.30, { count = 0, zone = "Unknown", final = 0.30 }
+    end
     ScanQuestLogClusters()
 
     local zone = questZoneMap[questID]

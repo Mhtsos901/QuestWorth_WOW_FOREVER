@@ -967,14 +967,19 @@ local DUNGEON_KEYWORDS = {
 -- Memoization cache for computed payoffs
 local _payoffMemo = {}
 
-function Data.InvalidatePayoffMemo()
-    wipe(_payoffMemo)
+function Data.InvalidatePayoffMemo(questID)
+    if questID then
+        _payoffMemo[questID] = nil
+    else
+        wipe(_payoffMemo)
+    end
 end
 
 -- Public API: Retrieve Meta-Knowledge Payoff for any quest (memoized)
 function Data.GetQuestPayoff(questID, questTitle)
-    local targetID = tonumber(questID) or questID
-    if targetID and targetID > 0 and _payoffMemo[targetID] ~= nil then
+    local numID = tonumber(questID)
+    local targetID = (numID and numID == numID and numID > 0 and numID < math.huge) and numID or nil
+    if targetID and _payoffMemo[targetID] ~= nil then
         return _payoffMemo[targetID] or nil
     end
 
@@ -996,8 +1001,8 @@ function Data.GetQuestPayoff(questID, questTitle)
     end
 
     -- 2. Check title lookup in Data.QuestPayoffsByTitle
-    local rawTitle = questTitle
-    if not rawTitle and targetID and targetID > 0 then
+    local rawTitle = (type(questTitle) == "string" and questTitle ~= "") and questTitle or nil
+    if not rawTitle and targetID then
         local basic = addon.Utils and addon.Utils.GetQuestBasicInfo and addon.Utils.GetQuestBasicInfo(targetID)
         if basic and basic.title then rawTitle = basic.title end
     end
