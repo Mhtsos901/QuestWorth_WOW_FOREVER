@@ -395,6 +395,12 @@ function Engine.CalculateWorth(questID)
         totalWorth = math.max(totalWorth, milestoneFloor)
     end
 
+    -- Safe Talk-To / Courier Breadcrumb Floor:
+    -- Zero-combat NPC deliveries at appropriate level are always free XP / reputation / follow-up unlocks
+    if isTalkTo and color ~= "gray" then
+        totalWorth = math.max(totalWorth, 0.80)
+    end
+
     -- Viability Damping & Bankable Calibration (only for real combat / challenge quests, not safe talk-to deliveries!)
     if not isTalkTo then
         if color == "red" or delta >= 5 then
@@ -435,7 +441,7 @@ function Engine.CalculateWorth(questID)
     -- For No-Gear, Non-Chain quests ("Do Now" XP hub quests):
     -- Cap strictly at 0.76 so that the 80% - 100% band remains strictly reserved
     -- for Gear Upgrades, Chain Finales, and Class Quests!
-    if hasNoGear and not isMajorChain then
+    if hasNoGear and not isMajorChain and not isTalkTo then
         totalWorth = math.min(0.76, totalWorth)
     end
 

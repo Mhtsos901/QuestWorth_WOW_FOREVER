@@ -203,8 +203,10 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
         if dColor == "red" or (dDelta and dDelta >= 4) then
             adviceText = "|cffff3333Too High Level (Skip for Now)|r"
-        else
+        elseif dColor == "gray" or (dDelta and dDelta <= -5) then
             adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
+        else
+            adviceText = "|cffaaaaaaLow Reward (Optional)|r"
         end
     else
         adviceText = "|cffffcc00Standard Leveling|r"

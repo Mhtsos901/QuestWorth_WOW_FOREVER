@@ -1286,6 +1286,38 @@ mockPlayerState.level = savedLvlGnome
 mockQuestLog = savedLogGnome
 addonTable.Player.Update()
 
+-- 7. Multi-sentence Talk-To breadcrumb (Friend of the Kirin Tor [33], 270 XP) detected & scored properly
+local savedLvlKirin = mockPlayerState.level
+local savedLogKirin = mockQuestLog
+mockPlayerState.level = 33
+addonTable.Player.Update()
+mockQuestLog = {
+    { title = "Alterac Mountains (1)", isHeader = true, isCollapsed = false },
+    { title = "Friend of the Kirin Tor", questID = 9303, level = 33, isHeader = false, isComplete = 0 },
+}
+mockQuestDB[9303] = {
+    title = "Friend of the Kirin Tor",
+    level = 33,
+    xp = 270,
+    money = 0,
+    objectives = {
+        { text = "I think it's only fair you deliver the good news! Take this note to Archmage Modera.", finished = false, numRequired = 1 }
+    }
+}
+addonTable.Utils.ClearTalkToCache(9303)
+addonTable.Scores.InvalidateRewardCache(9303)
+addonTable.Engine.InvalidateCache()
+addonTable.Scores.InvalidateDensityCache()
+local isKirinTalk = addonTable.Utils.IsTalkToQuest(9303)
+local rKirin = addonTable.Scores.CalculateReward(9303)
+local wKirin = addonTable.Engine.CalculateWorth(9303)
+assert_true(isKirinTalk == true, "Friend of the Kirin Tor multi-sentence delivery recognized as Talk-To")
+assert_true(rKirin >= 0.85, "Friend of the Kirin Tor (270 XP at Lvl 33) scores >= 0.85 Reward as Talk-To: " .. tostring(rKirin))
+assert_true(wKirin >= 0.80, "Friend of the Kirin Tor scores >= 0.80 overall Worth instead of 25%: " .. tostring(wKirin))
+mockPlayerState.level = savedLvlKirin
+mockQuestLog = savedLogKirin
+addonTable.Player.Update()
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

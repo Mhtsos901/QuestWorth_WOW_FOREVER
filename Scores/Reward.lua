@@ -27,7 +27,7 @@ addon.InvalidateRewardCache = Scores.InvalidateRewardCache
 -- to 12.2x at Lvl 32 (~2,501 XP) and 16.8x at Lvl 60 (~5,778 XP).
 local function GetBenchmarkMultiplier(level, isTalkTo)
     if isTalkTo then
-        return 3.5 -- Talk-to breadcrumbs award ~30-40% XP with zero combat
+        return 1.25 -- Breadcrumb / note-delivery / talk-to quests award ~1.25x-3.5x mobXP with zero combat
     end
     local lvl = math.max(1, math.min(60, tonumber(level) or 1))
     return 7.0 + (lvl * 0.1625)

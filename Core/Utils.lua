@@ -692,6 +692,12 @@ function Utils.IsTalkToQuest(questID)
                     table.insert(objectiveTexts, txt)
                 end
             end
+            if #objectiveTexts == 0 and GetQuestText then
+                local okDesc, desc = pcall(GetQuestText)
+                if okDesc and desc and desc ~= "" then
+                    table.insert(objectiveTexts, desc)
+                end
+            end
         end
     end
 
@@ -722,27 +728,38 @@ function Utils.IsTalkToQuest(questID)
                     break
                 end
 
-                -- Positive check: talk-to / courier verbs
+                -- Positive check: talk-to / courier verbs (anywhere in objective text, since negative check already excluded combat/gathering)
                 local isTalkPattern = (
-                    string.find(lower, "^speak with") or
-                    string.find(lower, "^speak to") or
-                    string.find(lower, "^talk to") or
-                    string.find(lower, "^deliver") or
-                    string.find(lower, "^report to") or
-                    string.find(lower, "^return to") or
-                    string.find(lower, "^take .* to") or
-                    string.find(lower, "^give .* to") or
-                    string.find(lower, "^bring .* to") or
-                    string.find(lower, "^ask .* about") or
-                    string.find(lower, "^consult") or
-                    string.find(lower, "^travel to") or
-                    string.find(lower, "^go to") or
-                    string.find(lower, "^visit") or
-                    string.find(lower, "^μιλήστε με") or
-                    string.find(lower, "^μίλησε με") or
-                    string.find(lower, "^παραδώστε") or
-                    string.find(lower, "^αναφέρετε") or
-                    string.find(lower, "^επιστρέψτε")
+                    string.find(lower, "speak with") or
+                    string.find(lower, "speak to") or
+                    string.find(lower, "talk to") or
+                    string.find(lower, "talk with") or
+                    string.find(lower, "deliver ") or
+                    string.find(lower, "report to") or
+                    string.find(lower, "return to") or
+                    string.find(lower, "take .- to ") or
+                    string.find(lower, "give .- to ") or
+                    string.find(lower, "bring .- to ") or
+                    string.find(lower, "hand .- to ") or
+                    string.find(lower, "present .- to ") or
+                    string.find(lower, "show .- to ") or
+                    string.find(lower, "ask .- about") or
+                    string.find(lower, "consult ") or
+                    string.find(lower, "confer with") or
+                    string.find(lower, "check in with") or
+                    string.find(lower, "seek out ") or
+                    string.find(lower, "locate ") or
+                    string.find(lower, "meet with ") or
+                    string.find(lower, "^find ") or
+                    string.find(lower, "^meet ") or
+                    string.find(lower, "travel to") or
+                    string.find(lower, "go to ") or
+                    string.find(lower, "visit ") or
+                    string.find(lower, "μιλήστε με") or
+                    string.find(lower, "μίλησε με") or
+                    string.find(lower, "παραδώστε") or
+                    string.find(lower, "αναφέρετε") or
+                    string.find(lower, "επιστρέψτε")
                 )
 
                 if not isTalkPattern then
