@@ -181,16 +181,16 @@ local function CreateWorldMapBanner()
 
     local scrollContainer = (WorldMapFrame.ScrollContainer) or WorldMapFrame
     local frame = CreateFrame("Button", "WorthItWorldMapBanner", WorldMapFrame, "BackdropTemplate")
-    frame:SetHeight(22)
+    frame:SetHeight(20)
     frame:SetFrameStrata("HIGH")
     frame:SetFrameLevel(WorldMapFrame:GetFrameLevel() + 25)
 
-    -- Anchor directly at the height of the Zones % button (Y = -6 on ScrollContainer)
+    -- Anchor directly at the height of the Zones % button (Y = -1 on ScrollContainer)
     frame:ClearAllPoints()
     if WorldMapFrame.ScrollContainer then
-        frame:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -6)
+        frame:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -1)
     else
-        frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -34)
+        frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
     end
 
     -- Backdrop styling: authentic Blizzard dark slate panel with gold border
@@ -385,12 +385,12 @@ function UI.UpdateWorldMapBanner()
 
     banner.data = res
 
-    -- Keep anchor aligned with Zones button at Y = -6
+    -- Keep anchor aligned with Zones button at Y = -1
     banner:ClearAllPoints()
     if WorldMapFrame.ScrollContainer then
-        banner:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -6)
+        banner:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -1)
     else
-        banner:SetPoint("TOP", WorldMapFrame, "TOP", 0, -34)
+        banner:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
     end
 
     local badge = Utils.FormatBadge(res.worth, false)
@@ -414,7 +414,7 @@ function UI.UpdateWorldMapBanner()
     -- Dynamic width with comfortable padding
     local textWidth = (banner.Text and banner.Text.GetStringWidth and banner.Text:GetStringWidth()) or 180
     banner:SetWidth(math.max(190, textWidth + 24))
-    banner:SetHeight(22)
+    banner:SetHeight(20)
 
     banner:Show()
 end
@@ -441,8 +441,8 @@ local function CreateZoneAdvisorToggle(parent)
     if not parent then return nil end
 
     local btn = CreateFrame("Button", "WorthItAdvisorToggleButton", parent, "UIPanelButtonTemplate")
-    btn:SetSize(106, 22)
-    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -6)
+    btn:SetSize(106, 20)
+    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -1)
     btn:SetFrameStrata("HIGH")
     btn:SetFrameLevel(parent:GetFrameLevel() + 15)
 
@@ -664,7 +664,7 @@ local function CreateZoneAdvisorPanel(parent)
 
     local panel = CreateFrame("Frame", "WorthItZoneAdvisorPanel", parent, "BackdropTemplate")
     panel:SetWidth(272)
-    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -32)
+    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -25)
     panel:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 22)
     panel:SetFrameStrata("HIGH")
     panel:SetFrameLevel(parent:GetFrameLevel() + 25)
