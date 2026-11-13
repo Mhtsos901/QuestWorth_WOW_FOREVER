@@ -75,10 +75,10 @@ end
 local function CalculateBaseDifficulty(questLevel, playerLevel, isMelee)
     local delta = questLevel - playerLevel
 
-    local greenRange = 5
+    local greenRange = 5 + math.floor((tonumber(playerLevel) or 1) / 10)
     if GetQuestGreenRange then
         local okRange, range = pcall(GetQuestGreenRange)
-        if okRange and tonumber(range) then
+        if okRange and tonumber(range) and tonumber(range) > greenRange then
             greenRange = tonumber(range)
         end
     end
@@ -242,6 +242,8 @@ function Scores.CalculateDifficulty(questID)
         baseScore = baseScore,
         penalty = penalty,
         isElite = isElite,
+        isDungeon = isDungeon,
+        isGroup = isGroup,
         isMelee = isMelee,
         final = finalScore,
         reason = reason,

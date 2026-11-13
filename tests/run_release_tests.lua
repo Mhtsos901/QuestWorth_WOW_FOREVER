@@ -1261,6 +1261,31 @@ assert_true(w7848 >= 0.90, "Molten Core attunement 7848 overall Worth >= 0.90 (9
 mockPlayerState.level = savedLvlPreq
 addonTable.Player.Update()
 
+-- 6. Classic greenRange scales by level so Lvl 26-27 Gnomeregan quests at Lvl 33 aren't crushed as gray
+local savedLvlGnome = mockPlayerState.level
+local savedLogGnome = mockQuestLog
+mockPlayerState.level = 33
+addonTable.Player.Update()
+mockQuestLog = {
+    { title = "Gnomeregan (2)", isHeader = true, isCollapsed = false },
+    { title = "Save Techbot's Brain!", questID = 2922, level = 26, isHeader = false, isComplete = 0 },
+    { title = "Gnogaine", questID = 2926, level = 27, isHeader = false, isComplete = 0 },
+}
+mockQuestDB[2922] = { title = "Save Techbot's Brain!", level = 26, xp = 2100, money = 0, isDungeon = true }
+mockQuestDB[2926] = { title = "Gnogaine", level = 27, xp = 3150, money = 0, isDungeon = true }
+addonTable.Engine.InvalidateCache()
+addonTable.Scores.InvalidateDensityCache()
+local w2922, b2922 = addonTable.Engine.CalculateWorth(2922)
+local w2926, b2926 = addonTable.Engine.CalculateWorth(2926)
+assert_true(b2922 and b2922.details and b2922.details.difficulty.levelDelta == -7, "Save Techbot's Brain! (2922) evaluated at delta -7")
+assert_true(b2922 and b2922.details and b2922.details.difficulty.colorName == "deep_green", "Lvl 26 quest at Lvl 33 is deep_green (NOT gray): " .. tostring(b2922 and b2922.details.difficulty.colorName))
+assert_true(b2926 and b2926.details and b2926.details.difficulty.colorName == "deep_green", "Lvl 27 quest at Lvl 33 is deep_green (NOT gray): " .. tostring(b2926 and b2926.details.difficulty.colorName))
+assert_true(w2922 >= 0.90, "Save Techbot's Brain! (2922) at Lvl 33 scores >= 0.90: " .. tostring(w2922))
+assert_true(w2926 >= 0.90, "Gnogaine (2926) at Lvl 33 scores >= 0.90: " .. tostring(w2926))
+mockPlayerState.level = savedLvlGnome
+mockQuestLog = savedLogGnome
+addonTable.Player.Update()
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

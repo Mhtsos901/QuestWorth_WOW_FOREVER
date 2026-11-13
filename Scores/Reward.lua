@@ -97,9 +97,10 @@ local function GetQuestXP(questID)
     local isTalkTo = (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
     local mult = GetBenchmarkMultiplier(effectiveLevel, isTalkTo)
     local delta = effectiveLevel - playerLevel
+    local greenRange = 5 + math.floor((tonumber(playerLevel) or 1) / 10)
     local levelFactor = 1.0
-    if delta < -5 then
-        levelFactor = math.max(0.10, 1.0 + (delta + 5) * 0.20)
+    if delta < -greenRange then
+        levelFactor = math.max(0.10, 1.0 + (delta + greenRange) * 0.20)
     end
     local estimatedXP = math.floor(qMobXP * mult * levelFactor)
     return estimatedXP
