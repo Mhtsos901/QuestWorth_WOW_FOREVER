@@ -90,6 +90,18 @@ function Utils.WithSelectedQuest(questID, callback)
         return callback()
     end
 
+    if C_QuestLog and C_QuestLog.IsOnQuest then
+        local okOn, isOn = pcall(C_QuestLog.IsOnQuest, questID)
+        if okOn and not isOn then
+            return nil
+        end
+    elseif GetQuestLogIndexByID then
+        local okIdx, idx = pcall(GetQuestLogIndexByID, questID)
+        if okIdx and (not idx or idx <= 0) then
+            return nil
+        end
+    end
+
     local currID = C_QuestLog and C_QuestLog.GetSelectedQuest and C_QuestLog.GetSelectedQuest()
     if currID == questID then
         return callback()
@@ -611,6 +623,60 @@ addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
 -- =========================================================================
 local _talkToCache = {}
 
+local function HasCombatOrMultiObjective(text)
+    local lower = string.lower(text or "")
+    if string.find(lower, "slain") or string.find(lower, "kill") or
+       string.find(lower, "defeat") or string.find(lower, "destroy") or
+       string.find(lower, "collect") or string.find(lower, "gather") or
+       string.find(lower, "loot") or string.find(lower, "mine") or
+       string.find(lower, "fish") or string.find(lower, "steal") or
+       string.find(lower, "σκοτώστε") or string.find(lower, "νικήστε") or
+       string.find(lower, "συλλέξτε") or string.find(lower, "μαζέψτε") then
+        return true
+    end
+    local _, maxCount = string.match(lower, "(%d+)%s*/%s*(%d+)")
+    if maxCount and tonumber(maxCount) and tonumber(maxCount) > 1 then
+        return true
+    end
+    return false
+end
+
+local function MatchesTalkToPhrase(lower)
+    return (
+        string.find(lower, "speak with") or
+        string.find(lower, "speak to") or
+        string.find(lower, "talk to") or
+        string.find(lower, "talk with") or
+        string.find(lower, "deliver ") or
+        string.find(lower, "report to") or
+        string.find(lower, "return to") or
+        string.find(lower, "take .- to ") or
+        string.find(lower, "give .- to ") or
+        string.find(lower, "bring .- to ") or
+        string.find(lower, "hand .- to ") or
+        string.find(lower, "present .- to ") or
+        string.find(lower, "show .- to ") or
+        string.find(lower, "ask .- about") or
+        string.find(lower, "consult ") or
+        string.find(lower, "confer with") or
+        string.find(lower, "check in with") or
+        string.find(lower, "seek out ") or
+        string.find(lower, "locate ") or
+        string.find(lower, "meet with ") or
+        string.find(lower, "find ") or
+        string.find(lower, "meet ") or
+        string.find(lower, "inform ") or
+        string.find(lower, "travel to") or
+        string.find(lower, "go to ") or
+        string.find(lower, "visit ") or
+        string.find(lower, "μιλήστε με") or
+        string.find(lower, "μίλησε με") or
+        string.find(lower, "παραδώστε") or
+        string.find(lower, "αναφέρετε") or
+        string.find(lower, "επιστρέψτε")
+    ) ~= nil
+end
+
 function Utils.IsTalkToQuest(questID)
     if not Utils.IsValidQuestID(questID) then return false end
     if _talkToCache[questID] ~= nil then
@@ -642,42 +708,29 @@ function Utils.IsTalkToQuest(questID)
 
     -- 3. Live Objective Text Inspection
     local objectiveTexts = {}
+    local offerDescription = nil
+    local matchesOffer = false
 
-    -- Check modern C_QuestLog objectives
-    if C_QuestLog and C_QuestLog.GetQuestObjectives then
-        local okObjs, objs = pcall(C_QuestLog.GetQuestObjectives, questID)
-        if okObjs and type(objs) == "table" and #objs > 0 then
-            for _, obj in ipairs(objs) do
-                if obj and obj.text then
-                    table.insert(objectiveTexts, obj.text)
-                end
-            end
-        end
+    local isOnQuest = true
+    if C_QuestLog and C_QuestLog.IsOnQuest then
+        local okOn, onQ = pcall(C_QuestLog.IsOnQuest, questID)
+        if okOn then isOnQuest = onQ end
     end
 
-    -- Check active QuestLog leaderboards (Classic)
-    if #objectiveTexts == 0 and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
-        Utils.WithSelectedQuest(questID, function()
-            local numLB = GetNumQuestLeaderBoards() or 0
-            for i = 1, numLB do
-                local desc, typeStr = GetQuestLogLeaderBoard(i)
-                if desc and desc ~= "" then
-                    table.insert(objectiveTexts, desc)
-                end
-            end
-        end)
-    end
-
-    -- Check QuestFrame (if currently viewing this quest in offer/detail dialog)
-    if #objectiveTexts == 0 and QuestFrame and QuestFrame:IsShown() then
-        local matchesOffer = false
+    -- Priority 3A: Check QuestFrame FIRST when viewing an offer/detail dialog (prevents QuestLog bleed!)
+    if QuestFrame and QuestFrame:IsShown() then
         if GetQuestID then
             local okID, cID = pcall(GetQuestID)
             if okID and cID and cID == questID then matchesOffer = true end
         end
+        if not matchesOffer and QuestFrame.questID and QuestFrame.questID == questID then
+            matchesOffer = true
+        end
         if not matchesOffer and title and GetTitleText then
             local frameTitle = GetTitleText()
-            if frameTitle and frameTitle == title then matchesOffer = true end
+            if frameTitle and Utils.CleanQuestTitle(frameTitle) == Utils.CleanQuestTitle(title) then
+                matchesOffer = true
+            end
         end
         if matchesOffer then
             if GetObjectiveText then
@@ -692,13 +745,49 @@ function Utils.IsTalkToQuest(questID)
                     table.insert(objectiveTexts, txt)
                 end
             end
-            if #objectiveTexts == 0 and GetQuestText then
+            if GetQuestText then
                 local okDesc, desc = pcall(GetQuestText)
                 if okDesc and desc and desc ~= "" then
-                    table.insert(objectiveTexts, desc)
+                    offerDescription = desc
+                end
+            end
+            if (not offerDescription or offerDescription == "") and QuestInfoDescriptionText and QuestInfoDescriptionText.GetText then
+                local desc = QuestInfoDescriptionText:GetText()
+                if desc and desc ~= "" then
+                    offerDescription = desc
                 end
             end
         end
+    end
+
+    -- Priority 3B: Check modern C_QuestLog objectives
+    if #objectiveTexts == 0 and C_QuestLog and C_QuestLog.GetQuestObjectives then
+        local okObjs, objs = pcall(C_QuestLog.GetQuestObjectives, questID)
+        if okObjs and type(objs) == "table" and #objs > 0 then
+            for _, obj in ipairs(objs) do
+                if obj and obj.text then
+                    table.insert(objectiveTexts, obj.text)
+                end
+            end
+        end
+    end
+
+    -- Priority 3C: Check active QuestLog leaderboards ONLY when quest is actually in the Quest Log
+    if #objectiveTexts == 0 and isOnQuest and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+        Utils.WithSelectedQuest(questID, function()
+            local numLB = GetNumQuestLeaderBoards() or 0
+            for i = 1, numLB do
+                local desc = GetQuestLogLeaderBoard(i)
+                if desc and desc ~= "" then
+                    table.insert(objectiveTexts, desc)
+                end
+            end
+        end)
+    end
+
+    -- Fallback: If QuestFrame offered a description but no objective text, analyze description
+    if #objectiveTexts == 0 and offerDescription and offerDescription ~= "" then
+        table.insert(objectiveTexts, offerDescription)
     end
 
     -- Analyze the gathered objective texts:
@@ -706,69 +795,44 @@ function Utils.IsTalkToQuest(questID)
         -- Talk-to / courier quests typically have 1 (rarely 2) simple instructions
         if #objectiveTexts <= 2 then
             local allTalkTo = true
+            local hasPositivePhrase = false
             for _, text in ipairs(objectiveTexts) do
-                local lower = string.lower(text)
-
-                -- Negative check: combat, slaying, gathering
-                if string.find(lower, "slain") or string.find(lower, "kill") or
-                   string.find(lower, "defeat") or string.find(lower, "destroy") or
-                   string.find(lower, "collect") or string.find(lower, "gather") or
-                   string.find(lower, "loot") or string.find(lower, "mine") or
-                   string.find(lower, "fish") or string.find(lower, "steal") or
-                   string.find(lower, "σκοτώστε") or string.find(lower, "νικήστε") or
-                   string.find(lower, "συλλέξτε") or string.find(lower, "μαζέψτε") then
+                if HasCombatOrMultiObjective(text) then
                     allTalkTo = false
                     break
                 end
-
-                -- Multi-count check: e.g. "0/5" or "1/10"
-                local curCount, maxCount = string.match(lower, "(%d+)%s*/%s*(%d+)")
-                if maxCount and tonumber(maxCount) and tonumber(maxCount) > 1 then
-                    allTalkTo = false
-                    break
-                end
-
-                -- Positive check: talk-to / courier verbs (anywhere in objective text, since negative check already excluded combat/gathering)
-                local isTalkPattern = (
-                    string.find(lower, "speak with") or
-                    string.find(lower, "speak to") or
-                    string.find(lower, "talk to") or
-                    string.find(lower, "talk with") or
-                    string.find(lower, "deliver ") or
-                    string.find(lower, "report to") or
-                    string.find(lower, "return to") or
-                    string.find(lower, "take .- to ") or
-                    string.find(lower, "give .- to ") or
-                    string.find(lower, "bring .- to ") or
-                    string.find(lower, "hand .- to ") or
-                    string.find(lower, "present .- to ") or
-                    string.find(lower, "show .- to ") or
-                    string.find(lower, "ask .- about") or
-                    string.find(lower, "consult ") or
-                    string.find(lower, "confer with") or
-                    string.find(lower, "check in with") or
-                    string.find(lower, "seek out ") or
-                    string.find(lower, "locate ") or
-                    string.find(lower, "meet with ") or
-                    string.find(lower, "^find ") or
-                    string.find(lower, "^meet ") or
-                    string.find(lower, "travel to") or
-                    string.find(lower, "go to ") or
-                    string.find(lower, "visit ") or
-                    string.find(lower, "μιλήστε με") or
-                    string.find(lower, "μίλησε με") or
-                    string.find(lower, "παραδώστε") or
-                    string.find(lower, "αναφέρετε") or
-                    string.find(lower, "επιστρέψτε")
-                )
-
-                if not isTalkPattern then
-                    allTalkTo = false
-                    break
+                if MatchesTalkToPhrase(string.lower(text)) then
+                    hasPositivePhrase = true
                 end
             end
 
-            if allTalkTo then
+            if allTalkTo and not hasPositivePhrase and offerDescription and offerDescription ~= "" then
+                if MatchesTalkToPhrase(string.lower(offerDescription)) then
+                    hasPositivePhrase = true
+                end
+            end
+
+            -- Breadcrumb XP fallback: Non-combat single objective at player level giving pure delivery XP (<= 3.6x mobXP)
+            if allTalkTo and not hasPositivePhrase then
+                local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+                local qLevel = (basicInfo and basicInfo.level and basicInfo.level > 0) and basicInfo.level or pLevel
+                local delta = qLevel - pLevel
+                local liveXP = 0
+                if matchesOffer and GetRewardXP then
+                    local okXP, val = pcall(GetRewardXP)
+                    if okXP and val and val > 0 then liveXP = val end
+                end
+                if liveXP == 0 and C_QuestLog and C_QuestLog.GetQuestRewardXP then
+                    local okXP, val = pcall(C_QuestLog.GetQuestRewardXP, questID)
+                    if okXP and val and val > 0 then liveXP = val end
+                end
+                local mobXP = math.max(50, (pLevel * 5) + 45)
+                if delta >= -3 and liveXP > 0 and liveXP <= (mobXP * 3.6) then
+                    hasPositivePhrase = true
+                end
+            end
+
+            if allTalkTo and hasPositivePhrase then
                 _talkToCache[questID] = true
                 return true
             end
