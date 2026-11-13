@@ -373,7 +373,8 @@ function Engine.CalculateWorth(questID)
     local hasGearUpgrade = (fScore >= 0.75) or (fDetails and fDetails.reason == "Gear Upgrade")
     local isChainStarter = (cDetails and cDetails.step == 1 and (cDetails.totalSteps or 0) > 1)
     local isHighReward = (rScore >= 0.75) or (rDetails and rDetails.reason == "High XP")
-    local isHighValue = (hasGearUpgrade or isChainStarter or isHighReward)
+    local isMilestone = (cDetails and (cDetails.isMilestone or cDetails.isClassOrProfession or cDetails.isCap)) or false
+    local isHighValue = (hasGearUpgrade or isChainStarter or isHighReward or isMilestone)
 
     local isTalkTo = (dDetails and dDetails.isTalkTo) or (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
 
@@ -385,6 +386,13 @@ function Engine.CalculateWorth(questID)
     -- Gear Upgrade Boost (ensure genuine upgrades reach the 82% - 95% bracket)
     if hasGearUpgrade and fScore >= 0.80 and not (color == "red" or color == "orange" or delta >= 3) then
         totalWorth = math.max(totalWorth, 0.78 + (fScore - 0.75) * 0.60)
+    end
+
+    -- Milestone / Prequest / Attunement / Major Reward Boost:
+    -- Ensures prequests for Dungeons, Raids, Key Unlocks, Class Quests, and Major Chain Rewards reach 90%+
+    if isMilestone and (isTalkTo or not isHard) and color ~= "gray" then
+        local milestoneFloor = (cDetails and (cDetails.isClassOrProfession or cDetails.isCap or cDetails.hasUnlock)) and 0.92 or 0.90
+        totalWorth = math.max(totalWorth, milestoneFloor)
     end
 
     -- Viability Damping & Bankable Calibration (only for real combat / challenge quests, not safe talk-to deliveries!)
@@ -410,7 +418,10 @@ function Engine.CalculateWorth(questID)
                 totalWorth = math.min(0.48, totalWorth * 0.60)
             end
         elseif (dDetails and (dDetails.isElite or dDetails.isDungeon)) and delta >= 0 then
-            if isHighValue then
+            if isMilestone then
+                local milestoneFloor = (cDetails and (cDetails.isClassOrProfession or cDetails.isCap or cDetails.hasUnlock)) and 0.92 or 0.90
+                totalWorth = math.max(totalWorth, milestoneFloor)
+            elseif isHighValue then
                 totalWorth = math.max(0.45, math.min(0.55, totalWorth * 0.70))
                 isBankable = true
             else

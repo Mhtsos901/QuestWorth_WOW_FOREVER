@@ -115,6 +115,17 @@ function Data.BuildChainIndex()
         local chainData = Data.KnownChains[chainID]
         local quests = (chainData and chainData.quests) or {}
         local total = #quests
+        local chainHasUnlock = false
+        local chainHasReward = false
+        if Data.QuestPayoffs then
+            for _, id in ipairs(quests) do
+                local p = Data.QuestPayoffs[id]
+                if p then
+                    if p.unlock or p.isKeyUnlock then chainHasUnlock = true end
+                    if p.reward then chainHasReward = true end
+                end
+            end
+        end
         for step, qID in ipairs(quests) do
             if type(qID) == "number" and qID > 0 then
                 local existing = Data.ChainIndex[qID]
@@ -134,6 +145,8 @@ function Data.BuildChainIndex()
                         totalSteps = total,
                         isCap = (step == total),
                         isImportant = chainData.isImportant or false,
+                        hasUnlock = chainHasUnlock,
+                        hasMajorReward = chainHasReward,
                     }
                 end
             end

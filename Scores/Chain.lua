@@ -89,10 +89,13 @@ function Scores.CalculateChain(questID)
             isClassOrProfession = true,
             inChain = true,
             isCap = true,
+            isMilestone = true,
             final = 1.00,
             reason = "Class Quest",
         }
     end
+
+    local payoff = Data and Data.GetQuestPayoff and Data.GetQuestPayoff(targetID)
 
     -- Priority 2: Data.ChainIndex (Internal High-Fidelity DB)
     if Data and Data.ChainIndex and Data.ChainIndex[targetID] then
@@ -101,15 +104,18 @@ function Scores.CalculateChain(questID)
         local step = chainInfo.step or 1
         local total = chainInfo.totalSteps or 1
 
+        local hasUnlock = chainInfo.hasUnlock or (payoff and (payoff.unlock ~= nil or payoff.isKeyUnlock == true)) or false
+        local hasMajorReward = chainInfo.hasMajorReward or (payoff and payoff.reward ~= nil) or false
+        local isMilestone = (chainInfo.isImportant == true) or isCap or hasUnlock or hasMajorReward
+
         -- Dynamic Step Progression Curve:
         local score
-        if step == 1 and total > 1 then
+        if isMilestone then
+            score = isCap and 1.00 or math.min(0.96, 0.90 + 0.06 * (step / math.max(1, total)))
+        elseif step == 1 and total > 1 then
             score = 0.65 -- Chain starter boost (early investment)
         else
             score = isCap and 1.00 or (0.40 + 0.50 * (step / math.max(1, total)))
-        end
-        if chainInfo.isImportant and not isCap then
-            score = math.min(0.90, score + 0.10) -- High importance chains get extra boost
         end
 
         local reason = (step == 1 and total > 1) and "Chain Start" or (isCap and "Chain Finale" or nil)
@@ -120,13 +126,16 @@ function Scores.CalculateChain(questID)
             step = step,
             totalSteps = total,
             isCap = isCap,
+            isMilestone = isMilestone,
+            hasUnlock = hasUnlock,
+            hasMajorReward = hasMajorReward,
             final = score,
             reason = reason,
         }
 
         if addon.db and addon.db.debug then
-            addon.Debug("Chain [Q:%d]: Found in LocalDB (Step %d/%d, Cap=%s) -> Score=%.2f",
-                targetID, step, total, tostring(isCap), score)
+            addon.Debug("Chain [Q:%d]: Found in LocalDB (Step %d/%d, Cap=%s, Milestone=%s) -> Score=%.2f",
+                targetID, step, total, tostring(isCap), tostring(isMilestone), score)
         end
 
         return score, details
@@ -174,14 +183,14 @@ function Scores.CalculateChain(questID)
             local step = bestMatch.step
             local total = bestMatch.total
             local isCap = (step == total)
+            local isMilestone = (bestMatch.chainData.isImportant == true) or isCap
             local score
-            if step == 1 and total > 1 then
+            if isMilestone then
+                score = isCap and 1.00 or math.min(0.96, 0.90 + 0.06 * (step / math.max(1, total)))
+            elseif step == 1 and total > 1 then
                 score = 0.65 -- Chain starter boost
             else
                 score = isCap and 1.00 or (0.40 + 0.50 * (step / math.max(1, total)))
-            end
-            if bestMatch.chainData.isImportant and not isCap then
-                score = math.min(0.90, score + 0.10)
             end
             local details = {
                 source = "KnownChainsFallback",
@@ -189,6 +198,7 @@ function Scores.CalculateChain(questID)
                 step = step,
                 totalSteps = total,
                 isCap = isCap,
+                isMilestone = isMilestone,
                 final = score,
                 reason = (step == 1 and total > 1) and "Chain Start" or (isCap and "Chain Finale" or nil),
             }
@@ -198,6 +208,22 @@ function Scores.CalculateChain(questID)
             end
             return score, details
         end
+    end
+
+    -- Priority 5: Curated single-step Unlock / Attunement / Key / Major Reward
+    if payoff and (payoff.unlock or payoff.isKeyUnlock or payoff.reward) then
+        local hasUnlock = (payoff.unlock ~= nil or payoff.isKeyUnlock == true)
+        local score = hasUnlock and 0.95 or 0.90
+        return score, {
+            source = "PayoffDB",
+            inChain = true,
+            isCap = true,
+            isMilestone = true,
+            hasUnlock = hasUnlock,
+            hasMajorReward = (payoff.reward ~= nil),
+            final = score,
+            reason = "Chain Finale",
+        }
     end
 
     -- Fallback: Standalone / Unchained quest baseline

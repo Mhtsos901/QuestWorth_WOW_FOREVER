@@ -1231,6 +1231,36 @@ assert_true((rArathi - rFoothills) >= 0.30, string.format("Clear reward gap betw
 mockPlayerState.level = savedLvl3M
 addonTable.Player.Update()
 
+-- 5. Dungeon/Raid prequests, attunements & major reward chains boost to 90%+
+local savedLvlPreq = mockPlayerState.level
+mockPlayerState.level = 18
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+mockQuestDB[65] = { title = "The Defias Brotherhood", level = 18, xp = 675, money = 0 }
+local c65 = addonTable.Scores.CalculateChain(65)
+local w65 = addonTable.Engine.CalculateWorth(65)
+assert_true(c65 >= 0.90, "Deadmines prequest 65 Chain score >= 0.90: " .. tostring(c65))
+assert_true(w65 >= 0.90, "Deadmines prequest 65 overall Worth >= 0.90 (90%+): " .. tostring(w65))
+
+mockPlayerState.level = 32
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+local c227 = addonTable.Scores.CalculateChain(227)
+local w227 = addonTable.Engine.CalculateWorth(227)
+assert_true(c227 >= 0.90, "Mor'Ladim Archeus prequest 227 Chain score >= 0.90: " .. tostring(c227))
+assert_true(w227 >= 0.90, "Mor'Ladim Archeus prequest 227 overall Worth >= 0.90 (90%+): " .. tostring(w227))
+
+mockPlayerState.level = 58
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+mockQuestDB[7848] = { title = "Attunement to the Core", level = 60, xp = 5000, money = 0, isDungeon = true }
+local c7848 = addonTable.Scores.CalculateChain(7848)
+local w7848 = addonTable.Engine.CalculateWorth(7848)
+assert_true(c7848 >= 0.90, "Molten Core attunement 7848 Chain score >= 0.90: " .. tostring(c7848))
+assert_true(w7848 >= 0.90, "Molten Core attunement 7848 overall Worth >= 0.90 (90%+): " .. tostring(w7848))
+mockPlayerState.level = savedLvlPreq
+addonTable.Player.Update()
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L
