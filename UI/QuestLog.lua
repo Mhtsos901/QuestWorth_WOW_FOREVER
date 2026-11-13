@@ -604,7 +604,6 @@ end
 
 -- Master function to update all visible quest entries in Quest Log
 function UI.UpdateQuestLog(force)
-    if addon.db and addon.db.enabled == false then return end
     if InCombatLockdown and InCombatLockdown() then return end
     if addon.isUpdatingUI then return end
 
@@ -1097,7 +1096,6 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     if not block then return end
     local fontString = GetBlockHeaderFontString(block)
     if not (fontString and fontString.GetText and fontString.SetText) then return end
-    if addon.db and addon.db.enabled == false then return end
     if InCombatLockdown and InCombatLockdown() then return end
 
     local rawText = fontString:GetText() or ""
@@ -1106,6 +1104,7 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
 
     local showTag = not addon.db or (addon.db.enabled ~= false and addon.db.showInTracker ~= false)
     if not showTag then
+        block._worthItActiveQuestID = nil
         if rawText ~= cleanText then
             fontString._worthItSettingText = true
             fontString:SetText(cleanText)
@@ -1115,7 +1114,11 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     end
 
     local qID = ResolveBlockQuestID(block, rawText, activeQuests, titleToID)
-    if not qID or qID <= 0 then return end
+    if not qID or qID <= 0 then
+        block._worthItActiveQuestID = nil
+        return
+    end
+    block._worthItActiveQuestID = qID
 
     local worth, breakdown = addon.Engine.CalculateWorth(qID)
     if not worth then return end
@@ -1136,7 +1139,13 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     if not block._worthItHoverHooked and block.HookScript then
         block._worthItHoverHooked = true
         block:HookScript("OnEnter", function(self)
-            local id = qID or ResolveBlockQuestID(self, cleanText, activeQuests, titleToID)
+            if addon.db and addon.db.enabled == false then return end
+            local id = self._worthItActiveQuestID
+            if (not id or id <= 0) then
+                local fs = GetBlockHeaderFontString(self)
+                local txt = fs and fs.GetText and fs:GetText() or ""
+                id = ResolveBlockQuestID(self, Utils.CleanQuestTitle(txt), activeQuests, titleToID)
+            end
             if id and id > 0 and UI.AddWorthLinesToTooltip then
                 addon.lastHoveredQuestID = id
                 UI.AddWorthLinesToTooltip(GameTooltip, id, true)
@@ -1146,7 +1155,13 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     if block.Header and not block.Header._worthItHoverHooked and block.Header.HookScript then
         block.Header._worthItHoverHooked = true
         block.Header:HookScript("OnEnter", function(self)
-            local id = qID or ResolveBlockQuestID(block, cleanText, activeQuests, titleToID)
+            if addon.db and addon.db.enabled == false then return end
+            local id = block._worthItActiveQuestID
+            if (not id or id <= 0) then
+                local fs = GetBlockHeaderFontString(block)
+                local txt = fs and fs.GetText and fs:GetText() or ""
+                id = ResolveBlockQuestID(block, Utils.CleanQuestTitle(txt), activeQuests, titleToID)
+            end
             if id and id > 0 and UI.AddWorthLinesToTooltip then
                 addon.lastHoveredQuestID = id
                 UI.AddWorthLinesToTooltip(GameTooltip, id, true)
@@ -1200,7 +1215,6 @@ local _isUpdatingTracker = false
 
 -- Master function to update all visible quest entries in the Objective Tracker
 function UI.UpdateObjectiveTracker(force)
-    if addon.db and addon.db.enabled == false then return end
     if InCombatLockdown and InCombatLockdown() then return end
     if _isUpdatingTracker then return end
 

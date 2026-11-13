@@ -140,7 +140,7 @@ local function GetReasonSummary(b)
 end
 
 local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
-    if not questID or questID <= 0 then return end
+    if not Utils.IsValidQuestID(questID) then return end
 
     addon.lastHoveredQuestID = questID
 
@@ -246,22 +246,22 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
 
         -- 2. Chain details
         if payoff and payoff.chain then
-            tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r")
+            tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r", 1, 1, 1, true)
         end
 
         -- 3. Key / Dungeon Unlocks
         if payoff and payoff.unlock then
-            tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r")
+            tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r", 1, 1, 1, true)
         end
 
         -- 4. Top Reward
         if payoff and payoff.reward then
-            tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r")
+            tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r", 1, 1, 1, true)
         end
 
         -- 5. Quest Origin / Type
         if payoff and payoff.origin then
-            tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r")
+            tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r", 1, 1, 1, true)
         end
 
         -- 6. Lore / Notes
@@ -398,12 +398,12 @@ local function AddItemQuestStarterLines(tooltip)
             local info = addon.Utils.GetQuestBasicInfo(qID)
             local payoff = addon.Data.GetQuestPayoff(qID)
             if info and info.title then
-                tooltip:AddLine("  |cff00ccff" .. L["ITEM_STARTS_QUEST"] .. "|r |cffffffff" .. info.title .. "|r")
+                tooltip:AddLine("  |cff00ccff" .. L["ITEM_STARTS_QUEST"] .. "|r |cffffffff" .. info.title .. "|r", 1, 1, 1, true)
             end
             if payoff and payoff.tip then
                 tooltip:AddLine("  |cff1aff4d★ " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. payoff.tip .. "|r", 0.9, 0.9, 0.9, true)
             elseif payoff and payoff.summary then
-                tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.summary .. "|r")
+                tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.summary .. "|r", 1, 1, 1, true)
             end
         end
         if starter and starter.drop and starter.drop ~= "" then

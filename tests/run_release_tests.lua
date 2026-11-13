@@ -1122,6 +1122,100 @@ assert_true(addonTable.Data.Zones["Riverglades"].isAlias == true, "Riverglades m
 assert_true(addonTable.Data.Zones["Hyjal"].isAlias == true, "Hyjal marked as alias")
 assert_true(addonTable.Data.Zones["The Temple of Atal'Hakkar"].isAlias == true, "The Temple of Atal'Hakkar marked as alias")
 
+-- ============================================================================
+-- 3M. UI BUG REGRESSION CHECKS (Cleanup on Disable, Dungeon Banner, Scroll Reset)
+-- ============================================================================
+print("\n--- [3M] UI Bug Regression Checks ---")
+
+-- 1. Toggle addon disabled strips Quest Log badges instead of early-returning
+local savedEnabled3M = addonTable.db.enabled
+local savedShowQL3M = addonTable.db.showInQuestLog
+local savedQLShown3M = QuestLogFrame:IsShown()
+mockQuestLog = {
+    { title = "Elwynn Forest (1)", isHeader = true, isCollapsed = false },
+    { title = "A Threat Within", questID = 783, level = 1, isHeader = false, isComplete = 0 },
+}
+mockQuestDB[783] = { title = "A Threat Within", level = 1, xp = 40, money = 0 }
+QuestLogFrame:Show()
+QuestLogTitle1:Show()
+QuestLogTitle2:Show()
+addonTable.db.enabled = true
+addonTable.db.showInQuestLog = true
+addonTable.UI.UpdateQuestLog(true)
+local btnQLTextAfterEnable = QuestLogTitle2.normalText:GetText() or ""
+assert_true(string.find(btnQLTextAfterEnable, "%[") ~= nil, "QuestLogTitle2 badged when addon enabled: " .. tostring(btnQLTextAfterEnable))
+
+addonTable.db.enabled = false
+addonTable.UI.UpdateQuestLog(true)
+local btnQLTextAfterDisable = QuestLogTitle2.normalText:GetText() or ""
+assert_true(string.find(btnQLTextAfterDisable, "%[%d+%%%]") == nil, "QuestLogTitle2 badge stripped when addon disabled: " .. tostring(btnQLTextAfterDisable))
+
+-- Restore QuestLog state
+addonTable.db.enabled = savedEnabled3M
+addonTable.db.showInQuestLog = savedShowQL3M
+if not savedQLShown3M then QuestLogFrame:Hide() end
+
+-- 2. WorldMap banner sets isDungeon cleanly between dungeon & outdoor zones
+local savedMapShown3M = WorldMapFrame:IsShown()
+WorldMapFrame:Show()
+_G.WorldMapFrame.GetMapID = function() return 291 end -- The Deadmines
+if _G.C_Map and _G.C_Map.GetMapInfo then
+    local origGetMapInfo = _G.C_Map.GetMapInfo
+    _G.C_Map.GetMapInfo = function(id)
+        if id == 291 then return { name = "The Deadmines", mapID = 291 } end
+        return origGetMapInfo(id)
+    end
+    addonTable.UI.UpdateWorldMapBanner()
+    assert_true(_G["WorthItWorldMapBanner"] and _G["WorthItWorldMapBanner"].isDungeon == true, "WorldMapBanner marks The Deadmines as isDungeon = true")
+    _G.C_Map.GetMapInfo = function(id)
+        if id == 1429 then return { name = "Elwynn Forest", mapID = 1429 } end
+        return origGetMapInfo(id)
+    end
+    _G.WorldMapFrame.GetMapID = function() return 1429 end
+    addonTable.UI.UpdateWorldMapBanner()
+    assert_true(_G["WorthItWorldMapBanner"] and _G["WorthItWorldMapBanner"].isDungeon == false, "WorldMapBanner resets isDungeon = false for outdoor zone")
+    _G.C_Map.GetMapInfo = origGetMapInfo
+end
+if not savedMapShown3M then WorldMapFrame:Hide() end
+
+-- 3. Objective Tracker recycled block updates _worthItActiveQuestID & uses live quest ID on OnEnter
+local savedShowTracker3M = addonTable.db.showInTracker
+addonTable.db.enabled = true
+addonTable.db.showInTracker = true
+local mockHeaderFS = QuestLogFrame:CreateFontString("WorthIt_TestTrackerFS")
+mockHeaderFS:SetText("A Threat Within")
+local mockBlock = _G.CreateFrame("Frame", "WorthIt_TestTrackerBlock", UIParent)
+mockBlock.HeaderText = mockHeaderFS
+mockBlock.questID = 783
+mockBlock.SetPoint = function() end
+_G.QuestObjectiveTracker = {
+    ContentsFrame = mockBlock,
+    EnumerateBlocks = function()
+        local done = false
+        return function()
+            if not done then done = true; return mockBlock end
+        end
+    end
+}
+addonTable.UI.UpdateObjectiveTracker(true)
+assert_true(mockBlock._worthItActiveQuestID == 783, "Recycled tracker block stores active questID 783")
+mockQuestDB[194] = { title = "Raptor Mastery", level = 34, xp = 2550, money = 0 }
+mockQuestLog = {
+    { title = "Stranglethorn Vale (1)", isHeader = true, isCollapsed = false },
+    { title = "Raptor Mastery", questID = 194, level = 34, isHeader = false, isComplete = 0 },
+}
+mockHeaderFS:SetText("Raptor Mastery")
+mockBlock.questID = 194
+addonTable.UI.UpdateObjectiveTracker(true)
+assert_true(mockBlock._worthItActiveQuestID == 194, "Recycled tracker block updates active questID to 194")
+if mockBlock.scripts and mockBlock.scripts["OnEnter"] then
+    addonTable.lastHoveredQuestID = nil
+    mockBlock.scripts["OnEnter"](mockBlock)
+    assert_true(addonTable.lastHoveredQuestID == 194, "Recycled tracker block OnEnter resolves live questID 194 instead of stale 783")
+end
+_G.QuestObjectiveTracker = nil
+addonTable.db.showInTracker = savedShowTracker3M
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

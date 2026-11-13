@@ -465,6 +465,7 @@ function UI.UpdateWorldMapBanner()
     if not banner then return end
 
     banner.data = res
+    banner.isDungeon = res.isDungeon
 
     -- Keep anchor aligned with Zones button at Y = -1
     banner:ClearAllPoints()
@@ -483,7 +484,7 @@ function UI.UpdateWorldMapBanner()
     end
 
     local cont = res.continent or (addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(res.zoneName) and addon.Data.GetZoneInfo(res.zoneName).continent)
-    local contMarkup = GetContinentMarkup(cont)
+    local contMarkup = GetContinentMarkup(cont, res.isDungeon)
     local contPrefix = (contMarkup ~= "") and (contMarkup .. " ") or ""
 
     -- Display only the core zone evaluation without cluttering with Log quest count
@@ -518,10 +519,20 @@ local function UpdateAdvisorToggleText(btn, isOpen)
 end
 
 local function CreateZoneAdvisorToggle(parent)
-    if advisorToggleButton then return advisorToggleButton end
+    if advisorToggleButton then
+        if parent and advisorToggleButton._worthItParent ~= parent and advisorToggleButton.SetParent then
+            advisorToggleButton:SetParent(parent)
+            advisorToggleButton:ClearAllPoints()
+            advisorToggleButton:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -1)
+            advisorToggleButton:SetFrameLevel((parent:GetFrameLevel() or 1) + 15)
+            advisorToggleButton._worthItParent = parent
+        end
+        return advisorToggleButton
+    end
     if not parent then return nil end
 
     local btn = CreateFrame("Button", "WorthItAdvisorToggleButton", parent, "UIPanelButtonTemplate")
+    btn._worthItParent = parent
     btn:SetSize(106, 20)
     btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -1)
     btn:SetFrameStrata("HIGH")
@@ -636,10 +647,21 @@ local function CreateAdvisorRow(index, parent)
 end
 
 local function CreateZoneAdvisorPanel(parent)
-    if advisorPanel then return advisorPanel end
+    if advisorPanel then
+        if parent and advisorPanel._worthItParent ~= parent and advisorPanel.SetParent then
+            advisorPanel:SetParent(parent)
+            advisorPanel:ClearAllPoints()
+            advisorPanel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -25)
+            advisorPanel:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 22)
+            advisorPanel:SetFrameLevel((parent:GetFrameLevel() or 1) + 25)
+            advisorPanel._worthItParent = parent
+        end
+        return advisorPanel
+    end
     if not parent then return nil end
 
     local panel = CreateFrame("Frame", "WorthItZoneAdvisorPanel", parent, "BackdropTemplate")
+    panel._worthItParent = parent
     panel:SetWidth(286)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -25)
     panel:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 22)
@@ -724,18 +746,30 @@ local function CreateZoneAdvisorPanel(parent)
 
     filterAll:SetScript("OnClick", function()
         if addon.db then addon.db.zoneAdvisorFilter = "ALL" end
+        if panel.scrollFrame and panel.slider then
+            panel.scrollFrame:SetVerticalScroll(0)
+            panel.slider:SetValue(0)
+        end
         UpdateFilterVisuals()
         UI.UpdateZoneAdvisor()
     end)
 
     filterOpt:SetScript("OnClick", function()
         if addon.db then addon.db.zoneAdvisorFilter = "OPTIMAL" end
+        if panel.scrollFrame and panel.slider then
+            panel.scrollFrame:SetVerticalScroll(0)
+            panel.slider:SetValue(0)
+        end
         UpdateFilterVisuals()
         UI.UpdateZoneAdvisor()
     end)
 
     filterQ:SetScript("OnClick", function()
         if addon.db then addon.db.zoneAdvisorFilter = "ACTIVE" end
+        if panel.scrollFrame and panel.slider then
+            panel.scrollFrame:SetVerticalScroll(0)
+            panel.slider:SetValue(0)
+        end
         UpdateFilterVisuals()
         UI.UpdateZoneAdvisor()
     end)
@@ -1034,9 +1068,16 @@ function UI.UpdateZoneAdvisor()
     child:SetHeight(math.max(1, totalHeight))
     local maxScroll = math.max(0, totalHeight - advisorPanel.scrollFrame:GetHeight())
     advisorPanel.slider:SetMinMaxValues(0, maxScroll)
-    if advisorPanel.scrollFrame:GetVerticalScroll() > maxScroll then
-        advisorPanel.scrollFrame:SetVerticalScroll(maxScroll)
-        advisorPanel.slider:SetValue(maxScroll)
+    if maxScroll <= 0 then
+        advisorPanel.scrollFrame:SetVerticalScroll(0)
+        advisorPanel.slider:SetValue(0)
+        advisorPanel.slider:Hide()
+    else
+        advisorPanel.slider:Show()
+        if advisorPanel.scrollFrame:GetVerticalScroll() > maxScroll then
+            advisorPanel.scrollFrame:SetVerticalScroll(maxScroll)
+            advisorPanel.slider:SetValue(maxScroll)
+        end
     end
 end
 
@@ -1107,6 +1148,8 @@ local function OnMapWatchUpdate(self, elapsed)
     end
 end
 
+local isWorldMapHooked = false
+
 function UI.InitializeWorldMap()
     if not WorldMapFrame then return end
 
@@ -1114,8 +1157,13 @@ function UI.InitializeWorldMap()
     CreateZoneAdvisorToggle(parent)
     CreateZoneAdvisorPanel(parent)
 
-    -- Start hidden: only runs OnUpdate while WorldMapFrame is actively visible
-    mapWatcher:Hide()
+    if isWorldMapHooked then return end
+    isWorldMapHooked = true
+
+    -- Start hidden unless WorldMapFrame is already open
+    if not WorldMapFrame:IsShown() then
+        mapWatcher:Hide()
+    end
     mapWatcher:SetScript("OnUpdate", OnMapWatchUpdate)
 
     WorldMapFrame:HookScript("OnShow", function()

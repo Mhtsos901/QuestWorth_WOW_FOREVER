@@ -84,9 +84,28 @@ local function EnsureTitleHoverFrame()
     return titleHoverFrame
 end
 
+local function CleanOfferTitle(raw)
+    local stripped = string.gsub(raw or "", "\n|cff.-$", "")
+    return Utils.CleanQuestTitle(stripped)
+end
+
 -- Update Quest Detail / Offer dialog (QuestFrameDetailPanel / QuestInfoTitleHeader)
 local function UpdateQuestOfferDialog()
-    if not (addon.db and addon.db.enabled) then return end
+    if not (addon.db and addon.db.enabled) then
+        if titleHoverFrame then titleHoverFrame:Hide() end
+        for _, header in ipairs({ QuestInfoTitleHeader, QuestDetailTitleText, QuestProgressTitleText }) do
+            if header and header.GetText and header.SetText then
+                local raw = header:GetText() or ""
+                if raw ~= "" then
+                    local clean = CleanOfferTitle(raw)
+                    if raw ~= clean then
+                        header:SetText(clean)
+                    end
+                end
+            end
+        end
+        return
+    end
     if not QuestFrame or not QuestFrame:IsShown() then return end
 
     local qID = nil
@@ -152,28 +171,32 @@ local function UpdateQuestOfferDialog()
     end
 
     local worth, breakdown = addon.Engine.CalculateWorth(qID)
-    if not worth then return end
+    if not worth then
+        if titleHoverFrame then titleHoverFrame:Hide() end
+        return
+    end
 
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
     local isBankable = (breakdown and breakdown.isBankable)
     local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
 
-    -- Attach mouseover tooltip on QuestInfoTitleHeader / QuestDetailTitleText
-    local hover = EnsureTitleHoverFrame()
-    if hover then
-        local anchor = (QuestInfoTitleHeader and ((QuestInfoTitleHeader.IsVisible and QuestInfoTitleHeader:IsVisible()) or (QuestInfoTitleHeader.IsShown and QuestInfoTitleHeader:IsShown())) and QuestInfoTitleHeader)
-            or (QuestDetailTitleText and ((QuestDetailTitleText.IsVisible and QuestDetailTitleText:IsVisible()) or (QuestDetailTitleText.IsShown and QuestDetailTitleText:IsShown())) and QuestDetailTitleText)
-            or QuestInfoTitleHeader or QuestDetailTitleText
-        if anchor then
+    -- Attach mouseover tooltip only when the corresponding detail title header is visible
+    local visibleAnchor = (QuestInfoTitleHeader and ((QuestInfoTitleHeader.IsVisible and QuestInfoTitleHeader:IsVisible()) or (QuestInfoTitleHeader.IsShown and QuestInfoTitleHeader:IsShown())) and QuestInfoTitleHeader)
+        or (QuestDetailTitleText and ((QuestDetailTitleText.IsVisible and QuestDetailTitleText:IsVisible()) or (QuestDetailTitleText.IsShown and QuestDetailTitleText:IsShown())) and QuestDetailTitleText)
+    if visibleAnchor then
+        local hover = EnsureTitleHoverFrame()
+        if hover then
             hover:ClearAllPoints()
-            hover:SetAllPoints(anchor)
-            local p = (anchor and anchor.GetParent and anchor:GetParent()) or QuestFrameDetailPanel or QuestFrame
+            hover:SetAllPoints(visibleAnchor)
+            local p = (visibleAnchor.GetParent and visibleAnchor:GetParent()) or QuestFrameDetailPanel or QuestFrame
             hover:SetParent(p)
             hover:SetFrameLevel((p:GetFrameLevel() or 1) + 10)
+            hover.questID = qID
+            hover:Show()
         end
-        hover.questID = qID
-        hover:Show()
+    elseif titleHoverFrame then
+        titleHoverFrame:Hide()
     end
 
     local hintText = L["HOVER_TITLE_HINT"] or "Hover title for Worth details & score breakdown"
@@ -375,6 +398,18 @@ function UI.InitializeQuestOffer()
                     C_Timer.After(0.05, UpdateGossipAvailableQuests)
                 else
                     UpdateGossipAvailableQuests()
+                end
+            end)
+        end)
+    end
+
+    if QuestFrameGreetingPanel and QuestFrameGreetingPanel.HookScript then
+        pcall(function()
+            QuestFrameGreetingPanel:HookScript("OnShow", function()
+                if C_Timer and C_Timer.After then
+                    C_Timer.After(0.02, UpdateQuestGreetingPanel)
+                else
+                    UpdateQuestGreetingPanel()
                 end
             end)
         end)

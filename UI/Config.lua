@@ -96,6 +96,24 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
     return slider
 end
 
+local function RefreshAllUI()
+    if addon.Engine and addon.Engine.InvalidateCache then
+        addon.Engine.InvalidateCache()
+    end
+    if addon.UI then
+        if addon.UI.UpdateQuestLog then addon.UI.UpdateQuestLog(true) end
+        if addon.UI.UpdateObjectiveTracker then addon.UI.UpdateObjectiveTracker(true) end
+        if addon.UI.UpdateWorldMapBanner then addon.UI.UpdateWorldMapBanner() end
+        if addon.UI.ToggleZoneAdvisor then
+            local showAdvisor = not addon.db or (addon.db.enabled ~= false and addon.db.showZoneAdvisor ~= false)
+            addon.UI.ToggleZoneAdvisor(showAdvisor)
+        elseif addon.UI.UpdateZoneAdvisor then
+            addon.UI.UpdateZoneAdvisor()
+        end
+        if addon.UI.UpdateQuestOfferDialog then addon.UI.UpdateQuestOfferDialog() end
+    end
+end
+
 local function CreateOptionsPanel()
     if configPanel then return configPanel end
 
@@ -114,12 +132,7 @@ local function CreateOptionsPanel()
         function() return addon.db and addon.db.enabled end,
         function(v)
             addon.db.enabled = v
-            if addon.UI and addon.UI.UpdateQuestLog then
-                addon.UI.UpdateQuestLog(true)
-            end
-            if addon.UI and addon.UI.UpdateObjectiveTracker then
-                addon.UI.UpdateObjectiveTracker(true)
-            end
+            RefreshAllUI()
         end)
 
     local cbTooltip = CreateCheckbox(panel, "Show Worth in Tooltip", "TOPLEFT", cbEnable, "BOTTOMLEFT", 0, -8,
@@ -170,27 +183,28 @@ local function CreateOptionsPanel()
         function() return addon.db and addon.db.debug end,
         function(v) addon.db.debug = v end)
 
+    -- Right column: Scoring Weights (keeps full layout well above bottom action buttons)
     local weightHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    weightHeader:SetPoint("TOPLEFT", cbDebug, "BOTTOMLEFT", 0, -16)
-    weightHeader:SetText("|cffffff00Scoring Weights (Sum of 5 is automatically normalized)|r")
+    weightHeader:SetPoint("TOPLEFT", subTitle, "BOTTOMLEFT", 330, -16)
+    weightHeader:SetText("|cffffff00Scoring Weights (Auto-normalized)|r")
 
-    local sR = CreateWeightSlider(panel, L["REWARD"], "TOPLEFT", weightHeader, "BOTTOMLEFT", 10, -22,
+    local sR = CreateWeightSlider(panel, L["REWARD"], "TOPLEFT", weightHeader, "BOTTOMLEFT", 10, -24,
         function() return addon.db and addon.db.weights and addon.db.weights.reward or 0.40 end,
         function(v) addon.db.weights.reward = v end)
 
-    local sF = CreateWeightSlider(panel, L["CLASS_FIT"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -26,
+    local sF = CreateWeightSlider(panel, L["CLASS_FIT"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -28,
         function() return addon.db and addon.db.weights and addon.db.weights.classFit or 0.25 end,
         function(v) addon.db.weights.classFit = v end)
 
-    local sC = CreateWeightSlider(panel, L["CHAIN"], "TOPLEFT", sF, "BOTTOMLEFT", 0, -26,
+    local sC = CreateWeightSlider(panel, L["CHAIN"], "TOPLEFT", sF, "BOTTOMLEFT", 0, -28,
         function() return addon.db and addon.db.weights and addon.db.weights.chain or 0.25 end,
         function(v) addon.db.weights.chain = v end)
 
-    local sH = CreateWeightSlider(panel, L["DENSITY"] or "Hub Density", "TOPLEFT", sC, "BOTTOMLEFT", 0, -26,
+    local sH = CreateWeightSlider(panel, L["DENSITY"] or "Hub Density", "TOPLEFT", sC, "BOTTOMLEFT", 0, -28,
         function() return addon.db and addon.db.weights and addon.db.weights.density or 0.10 end,
         function(v) addon.db.weights.density = v end)
 
-    local sD = CreateWeightSlider(panel, L["DIFFICULTY"], "TOPLEFT", sH, "BOTTOMLEFT", 0, -26,
+    local sD = CreateWeightSlider(panel, L["DIFFICULTY"], "TOPLEFT", sH, "BOTTOMLEFT", 0, -28,
         function() return addon.db and addon.db.weights and addon.db.weights.difficulty or 0.00 end,
         function(v) addon.db.weights.difficulty = v end)
 
@@ -212,6 +226,7 @@ local function CreateOptionsPanel()
     end
 
     panel:SetScript("OnShow", SyncPanelControls)
+    panel:SetScript("OnHide", RefreshAllUI)
 
     local btnReset = CreateFrame("Button", GetUniqueName("BtnReset"), panel, "UIPanelButtonTemplate")
     btnReset:SetPoint("BOTTOMLEFT", 16, 16)
@@ -220,12 +235,7 @@ local function CreateOptionsPanel()
     btnReset:SetScript("OnClick", function()
         addon.DB.Reset()
         SyncPanelControls()
-        if addon.UI and addon.UI.UpdateQuestLog then
-            addon.UI.UpdateQuestLog(true)
-        end
-        if addon.UI and addon.UI.UpdateObjectiveTracker then
-            addon.UI.UpdateObjectiveTracker(true)
-        end
+        RefreshAllUI()
         addon.Print(L["RESET_DEFAULTS"])
     end)
 
@@ -276,13 +286,7 @@ local function HandleSlashCmd(msg)
         PrintHelp()
     elseif cmd == "toggle" then
         addon.db.enabled = not addon.db.enabled
-        addon.Engine.InvalidateCache()
-        if addon.UI and addon.UI.UpdateQuestLog then
-            addon.UI.UpdateQuestLog(true)
-        end
-        if addon.UI and addon.UI.UpdateObjectiveTracker then
-            addon.UI.UpdateObjectiveTracker(true)
-        end
+        RefreshAllUI()
         addon.Print(addon.db.enabled and L["ADDON_ENABLED"] or L["ADDON_DISABLED"])
     elseif cmd == "debug" then
         if args[2] then
@@ -319,7 +323,7 @@ local function HandleSlashCmd(msg)
         addon.db.weights.classFit = nF
         addon.db.weights.density = nH
 
-        addon.Engine.InvalidateCache()
+        RefreshAllUI()
         addon.Print(string.format(L["WEIGHTS_UPDATED"], nD, nR, nC, nF, nH, (nD + nR + nC + nF + nH)))
     elseif cmd == "questlog" or cmd == "ql" then
         addon.db.showInQuestLog = not addon.db.showInQuestLog
@@ -349,12 +353,7 @@ local function HandleSlashCmd(msg)
         addon.Engine.RunDiagnostics()
     elseif cmd == "reset" then
         addon.DB.Reset()
-        if addon.UI and addon.UI.UpdateQuestLog then
-            addon.UI.UpdateQuestLog(true)
-        end
-        if addon.UI and addon.UI.UpdateObjectiveTracker then
-            addon.UI.UpdateObjectiveTracker(true)
-        end
+        RefreshAllUI()
         addon.Print(L["RESET_DEFAULTS"])
     else
         addon.Print("Unknown command '%s'. Use |cffffcc00/worthit help|r.", cmd)
