@@ -573,3 +573,168 @@ function Utils.ClearQuestBasicInfoCache()
     wipe(_basicInfoCache)
 end
 addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
+
+-- =========================================================================
+-- Talk-To / Courier / Discovery / Breadcrumb Quest Detection
+-- Identifies non-combat quests (e.g. "Speak with ...", "Deliver ... to ...")
+-- so they are NEVER penalized as high-level combat / orange / red / elite.
+-- =========================================================================
+local _talkToCache = {}
+
+function Utils.IsTalkToQuest(questID)
+    if not questID or questID <= 0 then return false end
+    if _talkToCache[questID] ~= nil then
+        return _talkToCache[questID]
+    end
+
+    -- 1. Metadata check in Data.QuestPayoffs
+    if addon.Data and addon.Data.QuestPayoffs and addon.Data.QuestPayoffs[questID] then
+        local p = addon.Data.QuestPayoffs[questID]
+        if p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true then
+            _talkToCache[questID] = true
+            return true
+        end
+    end
+
+    -- 2. Title check in Data.QuestPayoffsByTitle
+    local basicInfo = Utils.GetQuestBasicInfo(questID)
+    local title = basicInfo and basicInfo.title
+    if title and addon.Data and addon.Data.QuestPayoffsByTitle then
+        local lowerTitle = string.lower(title)
+        local p = addon.Data.QuestPayoffsByTitle[lowerTitle]
+        if p and (p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true) then
+            _talkToCache[questID] = true
+            return true
+        end
+    end
+
+    -- 3. Live Objective Text Inspection
+    local objectiveTexts = {}
+
+    -- Check modern C_QuestLog objectives
+    if C_QuestLog and C_QuestLog.GetQuestObjectives then
+        local okObjs, objs = pcall(C_QuestLog.GetQuestObjectives, questID)
+        if okObjs and type(objs) == "table" and #objs > 0 then
+            for _, obj in ipairs(objs) do
+                if obj and obj.text then
+                    table.insert(objectiveTexts, obj.text)
+                end
+            end
+        end
+    end
+
+    -- Check active QuestLog leaderboards (Classic)
+    if #objectiveTexts == 0 and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+        Utils.WithSelectedQuest(questID, function()
+            local numLB = GetNumQuestLeaderBoards() or 0
+            for i = 1, numLB do
+                local desc, typeStr = GetQuestLogLeaderBoard(i)
+                if desc and desc ~= "" then
+                    table.insert(objectiveTexts, desc)
+                end
+            end
+        end)
+    end
+
+    -- Check QuestFrame (if currently viewing this quest in offer/detail dialog)
+    if #objectiveTexts == 0 and QuestFrame and QuestFrame:IsShown() then
+        local matchesOffer = false
+        if GetQuestID then
+            local okID, cID = pcall(GetQuestID)
+            if okID and cID and cID == questID then matchesOffer = true end
+        end
+        if not matchesOffer and title and GetTitleText then
+            local frameTitle = GetTitleText()
+            if frameTitle and frameTitle == title then matchesOffer = true end
+        end
+        if matchesOffer then
+            if GetObjectiveText then
+                local okObj, txt = pcall(GetObjectiveText)
+                if okObj and txt and txt ~= "" then
+                    table.insert(objectiveTexts, txt)
+                end
+            end
+            if #objectiveTexts == 0 and QuestInfoObjectivesText and QuestInfoObjectivesText.GetText then
+                local txt = QuestInfoObjectivesText:GetText()
+                if txt and txt ~= "" then
+                    table.insert(objectiveTexts, txt)
+                end
+            end
+        end
+    end
+
+    -- Analyze the gathered objective texts:
+    if #objectiveTexts > 0 then
+        -- Talk-to / courier quests typically have 1 (rarely 2) simple instructions
+        if #objectiveTexts <= 2 then
+            local allTalkTo = true
+            for _, text in ipairs(objectiveTexts) do
+                local lower = string.lower(text)
+
+                -- Negative check: combat, slaying, gathering
+                if string.find(lower, "slain") or string.find(lower, "kill") or
+                   string.find(lower, "defeat") or string.find(lower, "destroy") or
+                   string.find(lower, "collect") or string.find(lower, "gather") or
+                   string.find(lower, "loot") or string.find(lower, "mine") or
+                   string.find(lower, "fish") or string.find(lower, "steal") or
+                   string.find(lower, "σκοτώστε") or string.find(lower, "νικήστε") or
+                   string.find(lower, "συλλέξτε") or string.find(lower, "μαζέψτε") then
+                    allTalkTo = false
+                    break
+                end
+
+                -- Multi-count check: e.g. "0/5" or "1/10"
+                local curCount, maxCount = string.match(lower, "(%d+)%s*/%s*(%d+)")
+                if maxCount and tonumber(maxCount) and tonumber(maxCount) > 1 then
+                    allTalkTo = false
+                    break
+                end
+
+                -- Positive check: talk-to / courier verbs
+                local isTalkPattern = (
+                    string.find(lower, "^speak with") or
+                    string.find(lower, "^speak to") or
+                    string.find(lower, "^talk to") or
+                    string.find(lower, "^deliver") or
+                    string.find(lower, "^report to") or
+                    string.find(lower, "^return to") or
+                    string.find(lower, "^take .* to") or
+                    string.find(lower, "^give .* to") or
+                    string.find(lower, "^bring .* to") or
+                    string.find(lower, "^ask .* about") or
+                    string.find(lower, "^consult") or
+                    string.find(lower, "^travel to") or
+                    string.find(lower, "^go to") or
+                    string.find(lower, "^visit") or
+                    string.find(lower, "^μιλήστε με") or
+                    string.find(lower, "^μίλησε με") or
+                    string.find(lower, "^παραδώστε") or
+                    string.find(lower, "^αναφέρετε") or
+                    string.find(lower, "^επιστρέψτε")
+                )
+
+                if not isTalkPattern then
+                    allTalkTo = false
+                    break
+                end
+            end
+
+            if allTalkTo then
+                _talkToCache[questID] = true
+                return true
+            end
+        end
+    end
+
+    _talkToCache[questID] = false
+    return false
+end
+
+function Utils.ClearTalkToCache(questID)
+    if questID then
+        _talkToCache[questID] = nil
+    else
+        wipe(_talkToCache)
+    end
+end
+addon.ClearTalkToCache = Utils.ClearTalkToCache

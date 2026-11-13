@@ -154,6 +154,26 @@ function Scores.CalculateDifficulty(questID)
 
     local isMelee = IsMeleePlayer()
 
+    -- Talk-To / Courier / Breadcrumb Safe Quests:
+    -- Non-combat interaction with NPCs. 100% safe, no combat penalties or elite flags!
+    local isTalkTo = (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
+    if isTalkTo then
+        local details = {
+            questLevel = questLevel,
+            playerLevel = playerLevel,
+            levelDelta = questLevel - playerLevel,
+            colorName = "yellow",
+            baseScore = 1.00,
+            penalty = 0.00,
+            isElite = false,
+            isMelee = isMelee,
+            isTalkTo = true,
+            final = 1.00,
+            reason = "Talk-To",
+        }
+        return 1.00, details
+    end
+
     local colorName, baseScore = CalculateBaseDifficulty(questLevel, playerLevel, isMelee)
     local penalty = 0.0
     local levelDelta = questLevel - playerLevel

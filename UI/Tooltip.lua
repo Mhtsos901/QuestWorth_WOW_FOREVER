@@ -107,7 +107,8 @@ local function GetReasonSummary(b)
     local dDetails = b.details.difficulty
     local dReason = dDetails and dDetails.reason
     if not dReason and b.d then
-        if dDetails and (dDetails.colorName == "red" or dDetails.colorName == "orange") then dReason = "High Level"
+        if dDetails and (dDetails.isTalkTo or dDetails.reason == "Talk-To") then dReason = "Talk to NPC"
+        elseif dDetails and (dDetails.colorName == "red" or dDetails.colorName == "orange") then dReason = "High Level"
         elseif dDetails and dDetails.isElite then dReason = "Elite Mob"
         elseif dDetails and dDetails.isDungeon then dReason = "Dungeon"
         elseif dDetails and dDetails.colorName == "gray" then dReason = "Trivial"
@@ -115,7 +116,9 @@ local function GetReasonSummary(b)
         end
     end
     if dReason then
-        if dReason == "Elite Mob" then
+        if dReason == "Talk to NPC" or dReason == "Talk-To" or (dDetails and dDetails.isTalkTo) or b.isTalkTo then
+            table.insert(reasons, "|cff00ff00" .. (L["TALK_TO_HIGHLIGHT"] or "Talk to NPC") .. "|r")
+        elseif dReason == "Elite Mob" then
             table.insert(reasons, "|cffff9900Elite Mob|r")
         elseif dReason == "Dungeon" then
             table.insert(reasons, "|cff00ccffDungeon|r")
@@ -183,6 +186,13 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         adviceText = "|cff1aff4dClaim XP & Rewards!|r"
     elseif isBankable then
         adviceText = "|cffffcc00Do in +1-2 Levels (Save in Log)|r"
+    elseif b.isTalkTo or (b.details and b.details.difficulty and b.details.difficulty.isTalkTo) then
+        local cDetails = b.details and b.details.chain
+        if cDetails and cDetails.step == 1 and (cDetails.totalSteps or 1) > 1 then
+            adviceText = "|cff00ff00" .. (L["TALK_TO_CHAIN_START"] or "Do Now (Talk to NPC • Chain Start)") .. "|r"
+        else
+            adviceText = "|cff00ff00" .. (L["TALK_TO_SUITABILITY"] or "Do Now (Talk to NPC)") .. "|r"
+        end
     elseif worth >= 0.70 then
         local clusterNote = (b.details and b.details.density and b.details.density.clusterCount and b.details.density.clusterCount >= 3) and "Quest Hub" or "High XP"
         adviceText = string.format("|cff00ff00Do Now (%s)|r", clusterNote)
@@ -292,7 +302,9 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         end
 
         local diffText
-        if b.wD and b.wD <= 0.001 then
+        if b.isTalkTo or (b.details and b.details.difficulty and b.details.difficulty.isTalkTo) then
+            diffText = "|cff00ff00" .. (L["SAFE_TALK_TO"] or "Safe (Talk to NPC)") .. "|r"
+        elseif b.wD and b.wD <= 0.001 then
             diffText = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:11:11:0:0|t |cffff3333Hard|r" or "|cff00ff00Normal|r"
         else
             local deltaStr = (b.details and b.details.difficulty and b.details.difficulty.levelDelta) and string.format(" (%+d)", b.details.difficulty.levelDelta) or ""
@@ -319,7 +331,7 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             Utils.FormatScore(b.h or 0.5) .. hNote,
             0.85, 0.85, 0.85, 1, 1, 1
         )
-        if (b.wD and b.wD > 0.001) or b.isHard then
+        if (b.wD and b.wD > 0.001) or b.isHard or b.isTalkTo or (b.details and b.details.difficulty and b.details.difficulty.isTalkTo) then
             tooltip:AddDoubleLine(
                 "  |cffa0a0a0" .. L["DIFFICULTY"] .. ":|r",
                 diffText,

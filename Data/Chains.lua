@@ -93,6 +93,11 @@ Data.KnownChains = {
         quests = { 148, 156, 157, 158 },
         isImportant = true,
     },
+    -- [1070] The Story of Morgan Ladimore (Mor'Ladim & Archeus)
+    [1070] = {
+        quests = { 227, 228, 229, 230 },
+        isImportant = true,
+    },
 }
 
 -- Build the fast lookup reverse index
@@ -465,7 +470,10 @@ Data.QuestPayoffs = {
     [1261] = { chain = "The Missing Diplomat (Finale)", summary = "The Missing Diplomat (Finale)" },
     [66]   = { chain = "The Legend of Stalvan (Step 1/10)", note = "Duskwood classic murder mystery.", summary = "The Legend of Stalvan Chain" },
     [75]   = { reward = "Stalvan's Reaper (2H Axe)", chain = "The Legend of Stalvan (Finale)", summary = "The Legend of Stalvan (Finale)" },
-    [229]  = { reward = "Archeus (2H Sword)", chain = "The Story of Morgan Ladimore", summary = "Mor'ladim Finale • Archeus (Rare Sword)" },
+    [227]  = { chain = "The Story of Morgan Ladimore (Step 1/4)", note = "Investigate the weathered grave in Raven Hill. Safe talk-to breadcrumb leading to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
+    [228]  = { chain = "The Story of Morgan Ladimore (Step 2/4)", note = "Speak with Commander Althea Ebonlocke in Darkshire. Safe talk-to step before Mor'ladim.", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
+    [229]  = { reward = "Mor'ladim's Skull", chain = "The Story of Morgan Ladimore (Step 3/4)", note = "Defeat Mor'Ladim in Raven Hill Cemetery. Pre-quest to Archeus.", summary = "Mor'ladim • Leads to Archeus (Rare Sword)", isKeyUnlock = true },
+    [230]  = { reward = "Archeus (Rare 2H Sword) / Lion's Heart", chain = "The Story of Morgan Ladimore (Step 4/4 Finale)", note = "Place Sarah's ring on Morgan Ladimore's grave in Raven Hill.", summary = "Mor'ladim Finale • Archeus (Rare Sword)", isKeyUnlock = true },
     [5601] = { chain = "The Battle of Darrowshire (Step 1/6)", note = "Little Pamela in EPL.", summary = "Battle of Darrowshire Chain" },
     [5944] = {
         reward = "Mark of Fordring (BiS Neck) / Fordring's Seal",
@@ -559,7 +567,7 @@ Data.QuestPayoffs = {
     [57]   = { chain = "The Night Watch (Step 1/3)", note = "Darkshire undead defense series. Kill Skeletal Warriors and Mages.", summary = "The Night Watch (Step 1/3)" },
     [58]   = { chain = "The Night Watch (Step 2/3)", note = "Second step in Raven Hill cemetery against Plague Spreaders.", summary = "The Night Watch (Step 2/3)" },
     [60]   = { reward = "Ring of the Night Watch / Weapon", chain = "The Night Watch (Step 3/3 Finale)", note = "Confronting Nightbane Worgens in Roland's Doom.", summary = "The Night Watch Finale • Ring of the Night Watch", isKeyUnlock = true },
-    [226]  = { chain = "The Story of Morgan Ladimore (Pre-quest)", note = "Raven Hill cemetery investigation. Leads to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)" },
+    [226]  = { chain = "The Story of Morgan Ladimore (Pre-quest)", note = "Raven Hill cemetery investigation. Leads to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
     [148]  = { chain = "The Hermit & Eliza (Step 1/4)", note = "Abercrombie in Raven Hill. Leads to the haunting of Eliza's Tomb.", summary = "The Hermit & Eliza Chain" },
     [156]  = { chain = "The Hermit & Eliza (Step 2/4)", summary = "The Hermit & Eliza Chain" },
     [157]  = { chain = "The Hermit & Eliza (Step 3/4)", summary = "The Hermit & Eliza Chain" },
@@ -731,9 +739,35 @@ Data.QuestPayoffsByTitle = {
         chain = "The Legend of Stalvan (Duskwood Murder)",
         summary = "The Legend of Stalvan Chain",
     },
+    ["the weathered grave"] = {
+        chain = "The Story of Morgan Ladimore (Step 1/4)",
+        note = "Investigate the weathered grave in Raven Hill. Safe talk-to breadcrumb leading to Mor'ladim & Archeus (Rare 2H Sword).",
+        summary = "Leads to: Mor'ladim & Archeus (Rare Sword)",
+        isTalkTo = true,
+    },
+    ["morgan ladimore"] = {
+        chain = "The Story of Morgan Ladimore (Step 2/4)",
+        note = "Speak with Commander Althea Ebonlocke in Darkshire. Safe talk-to step before Mor'ladim.",
+        summary = "Leads to: Mor'ladim & Archeus (Rare Sword)",
+        isTalkTo = true,
+    },
+    ["mor'ladim"] = {
+        reward = "Mor'ladim's Skull",
+        chain = "The Story of Morgan Ladimore (Step 3/4)",
+        summary = "Mor'ladim • Leads to Archeus (Rare Sword)",
+        isKeyUnlock = true,
+    },
+    ["the daughter's love"] = {
+        reward = "Archeus (Rare 2H Sword)",
+        chain = "The Story of Morgan Ladimore (Step 4/4 Finale)",
+        summary = "Mor'ladim Finale • Archeus (Rare Sword)",
+        isKeyUnlock = true,
+    },
     ["a daughter's love"] = {
         reward = "Archeus (Rare 2H Sword)",
+        chain = "The Story of Morgan Ladimore (Step 4/4 Finale)",
         summary = "Mor'ladim Finale • Archeus (Rare Sword)",
+        isKeyUnlock = true,
     },
     ["in dreams"] = {
         reward = "Mark of Fordring (BiS Neck) / Fordring's Seal",

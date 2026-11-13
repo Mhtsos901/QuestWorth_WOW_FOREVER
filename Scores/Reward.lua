@@ -139,9 +139,10 @@ function Scores.CalculateReward(questID)
     local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
     local maxLevel = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (GetMaxPlayerLevel and GetMaxPlayerLevel()) or 60
     local isMaxLevel = (playerLevel >= maxLevel)
+    local isTalkTo = (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
 
     local mobXP = math.max(50, (playerLevel * 5) + 45)
-    local mobMultiplier = 8.5 -- Documented 8-9 mob baseline (mobXP * 8.5)
+    local mobMultiplier = isTalkTo and 3.5 or 8.5 -- Talk-to breadcrumbs award ~40% XP with zero combat
     local benchmarkQuestXP = mobXP * mobMultiplier
 
     local rewardXP = GetQuestXP(questID)
@@ -197,6 +198,8 @@ function Scores.CalculateReward(questID)
     local reason = nil
     if finalScore < 0.30 then
         reason = "Low XP"
+    elseif isTalkTo and finalScore >= 0.70 then
+        reason = "Talk-To"
     elseif finalScore >= 0.85 then
         reason = "High XP"
     elseif totalMoney >= (expectedCopper * 1.5) then
@@ -210,6 +213,7 @@ function Scores.CalculateReward(questID)
         totalMoney = totalMoney,
         vendorResell = vendorResell,
         isMaxLevel = isMaxLevel,
+        isTalkTo = isTalkTo,
         final = finalScore,
         reason = reason,
     }

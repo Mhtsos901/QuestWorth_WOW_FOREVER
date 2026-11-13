@@ -54,6 +54,10 @@ local enUS = {
     ["ITEM_QUEST_STARTER"] = "Hidden / Item Quest Starter:",
     ["ITEM_STARTS_QUEST"] = "Starts Quest:",
     ["ITEM_CLICK_TO_START"] = "Right-click in inventory to start quest!",
+    ["TALK_TO_SUITABILITY"] = "Do Now (Talk to NPC)",
+    ["TALK_TO_CHAIN_START"] = "Do Now (Talk to NPC • Chain Start)",
+    ["TALK_TO_HIGHLIGHT"] = "Talk to NPC",
+    ["SAFE_TALK_TO"] = "Safe (Talk to NPC)",
 }
 
 -- Greek translations (elGR)
@@ -101,6 +105,10 @@ local elGR = {
     ["ITEM_QUEST_STARTER"] = "Έναρξη Κρυφού Quest (Αντικείμενο):",
     ["ITEM_STARTS_QUEST"] = "Ξεκινάει Quest:",
     ["ITEM_CLICK_TO_START"] = "Δεξί κλικ στην τσάντα για να ξεκινήσετε!",
+    ["TALK_TO_SUITABILITY"] = "Κάντε το τώρα (Μιλήστε σε NPC)",
+    ["TALK_TO_CHAIN_START"] = "Κάντε το τώρα (Μιλήστε σε NPC • Αρχή Αλυσίδας)",
+    ["TALK_TO_HIGHLIGHT"] = "Ομιλία σε NPC",
+    ["SAFE_TALK_TO"] = "Ασφαλές (Ομιλία σε NPC)",
 }
 
 for k, v in pairs(enUS) do

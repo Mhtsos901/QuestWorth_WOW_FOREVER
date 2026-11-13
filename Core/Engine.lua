@@ -83,6 +83,9 @@ function Engine.InvalidateCache()
     if addon.Scores and addon.Scores.InvalidateRewardCache then
         addon.Scores.InvalidateRewardCache()
     end
+    if addon.Utils and addon.Utils.ClearTalkToCache then
+        addon.Utils.ClearTalkToCache()
+    end
     addon.Debug("Evaluation cache invalidated.")
 end
 
@@ -347,46 +350,50 @@ function Engine.CalculateWorth(questID)
     local isHighReward = (rScore >= 0.75) or (rDetails and rDetails.reason == "High XP")
     local isHighValue = (hasGearUpgrade or isChainStarter or isHighReward)
 
+    local isTalkTo = (dDetails and dDetails.isTalkTo) or (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
+
     local color = dDetails and dDetails.colorName
     local delta = (dDetails and dDetails.levelDelta) or 0
     local isBankable = false
-    local isHard = (color == "red" or color == "orange" or delta >= 3 or (dDetails and (dDetails.isElite or dDetails.isDungeon == true)))
+    local isHard = not isTalkTo and (color == "red" or color == "orange" or delta >= 3 or (dDetails and (dDetails.isElite or dDetails.isDungeon == true)))
 
     -- Gear Upgrade Boost (ensure genuine upgrades reach the 82% - 95% bracket)
     if hasGearUpgrade and fScore >= 0.80 and not (color == "red" or color == "orange" or delta >= 3) then
         totalWorth = math.max(totalWorth, 0.78 + (fScore - 0.75) * 0.60)
     end
 
-    -- Viability Damping & Bankable Calibration
-    if color == "red" or delta >= 5 then
-        if isHighValue then
-            -- High-value red quest: Bank for later (+5 or higher)
-            -- Calibrated strictly to 48% - 52% (below Yellow hub clusters)
-            totalWorth = math.max(0.48, math.min(0.52, totalWorth * 0.75))
-            isBankable = true
-        else
-            -- Generic red quest: too dangerous, do not attempt
-            totalWorth = math.min(0.35, totalWorth * 0.40)
+    -- Viability Damping & Bankable Calibration (only for real combat / challenge quests, not safe talk-to deliveries!)
+    if not isTalkTo then
+        if color == "red" or delta >= 5 then
+            if isHighValue then
+                -- High-value red quest: Bank for later (+5 or higher)
+                -- Calibrated strictly to 48% - 52% (below Yellow hub clusters)
+                totalWorth = math.max(0.48, math.min(0.52, totalWorth * 0.75))
+                isBankable = true
+            else
+                -- Generic red quest: too dangerous, do not attempt
+                totalWorth = math.min(0.35, totalWorth * 0.40)
+            end
+        elseif color == "orange" or delta >= 3 then
+            if isHighValue then
+                -- High-value orange quest: Bank for later (+3 / +4)
+                -- Calibrated strictly to 53% - 60%
+                totalWorth = math.max(0.53, math.min(0.60, totalWorth * 0.85))
+                isBankable = true
+            else
+                -- Generic orange quest
+                totalWorth = math.min(0.48, totalWorth * 0.60)
+            end
+        elseif (dDetails and (dDetails.isElite or dDetails.isDungeon)) and delta >= 0 then
+            if isHighValue then
+                totalWorth = math.max(0.45, math.min(0.55, totalWorth * 0.70))
+                isBankable = true
+            else
+                totalWorth = math.min(0.42, totalWorth * 0.50)
+            end
+        elseif color == "gray" and not (cDetails and cDetails.isClassOrProfession) and fScore < 0.80 then
+            totalWorth = totalWorth * 0.30
         end
-    elseif color == "orange" or delta >= 3 then
-        if isHighValue then
-            -- High-value orange quest: Bank for later (+3 / +4)
-            -- Calibrated strictly to 53% - 60%
-            totalWorth = math.max(0.53, math.min(0.60, totalWorth * 0.85))
-            isBankable = true
-        else
-            -- Generic orange quest
-            totalWorth = math.min(0.48, totalWorth * 0.60)
-        end
-    elseif (dDetails and (dDetails.isElite or dDetails.isDungeon)) and delta >= 0 then
-        if isHighValue then
-            totalWorth = math.max(0.45, math.min(0.55, totalWorth * 0.70))
-            isBankable = true
-        else
-            totalWorth = math.min(0.42, totalWorth * 0.50)
-        end
-    elseif color == "gray" and not (cDetails and cDetails.isClassOrProfession) and fScore < 0.80 then
-        totalWorth = totalWorth * 0.30
     end
 
     -- For No-Gear, Non-Chain quests ("Do Now" XP hub quests):
@@ -419,6 +426,7 @@ function Engine.CalculateWorth(questID)
         isComplete = false,
         isBankable = isBankable,
         isHard = isHard,
+        isTalkTo = isTalkTo,
         details = {
             difficulty = dDetails,
             reward = rDetails,

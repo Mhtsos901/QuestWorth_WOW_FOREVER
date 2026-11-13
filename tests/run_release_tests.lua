@@ -325,6 +325,10 @@ _G.C_QuestLog = {
         if q and q.isElite then return { tagID = 1, tagName = "Elite" } end
         return nil
     end,
+    GetQuestObjectives = function(qID)
+        local q = mockQuestDB[qID] or mockQuestDB[tonumber(qID)]
+        return q and q.objectives
+    end,
 }
 
 _G.GetNumQuestLogEntries = function() return #mockQuestLog end
@@ -351,6 +355,10 @@ local currentOfferRewards = {}
 
 _G.GetQuestID = function() return currentOfferQuestID end
 _G.GetTitleText = function() return currentOfferTitle or "" end
+_G.GetObjectiveText = function()
+    local q = mockQuestDB[currentOfferQuestID]
+    return (q and q.objectiveText) or ""
+end
 _G.GetRewardXP = function() return currentOfferXP or 0 end
 _G.GetRewardMoney = function() return currentOfferMoney or 0 end
 _G.GetNumQuestChoices = function() return currentOfferChoices and #currentOfferChoices or 0 end
@@ -791,6 +799,104 @@ assert_true(string.find(openText, "< Zones", 1, true) ~= nil, "Toggle button sho
 assert_true(string.find(openText, "[\128-\255]") == nil, "Open toggle button contains zero broken non-ASCII symbols")
 
 addonTable.UI.ToggleZoneAdvisor(false)
+
+-- 3I: Talk-To / Courier / Breadcrumb Quest Non-Combat Logic & Mor'Ladim Archeus Chain Test
+print(" [3I] Talk-To / Courier / Breadcrumb Quest Non-Combat Logic & Mor'Ladim Archeus Chain Test:")
+local oldPlayerLvl = mockPlayerState.level
+mockPlayerState.level = 32
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+
+-- Setup Quest 227 ("The Weathered Grave") [Level 35 in Duskwood, player level 32 (delta +3)]
+mockQuestDB[227] = {
+    title = "The Weathered Grave",
+    level = 35,
+    xp = 721,
+    money = 0,
+    objectiveText = "Speak with Sirra Von'Indi in Darkshire.",
+    objectives = {
+        { text = "Speak with Sirra Von'Indi in Darkshire.", finished = false, numRequired = 1 }
+    }
+}
+
+-- 1. Metadata & Objective detection
+local isTalk = addonTable.Utils.IsTalkToQuest(227)
+assert_true(isTalk == true, "Quest 227 recognized as Talk-To / Courier quest")
+
+-- 2. Difficulty score: Non-combat guarantee (Safe, yellow, base 1.00, penalty 0.00, no skull)
+local dScore, dBreak = addonTable.Scores.CalculateDifficulty(227)
+assert_eq(dScore, 1.00, "Talk-To quest receives 1.00 Difficulty score despite delta +3")
+assert_true(dBreak.isTalkTo == true, "Difficulty details marks isTalkTo == true")
+assert_eq(dBreak.penalty, 0.00, "Talk-To quest incurs zero difficulty penalty")
+assert_eq(dBreak.reason, "Talk-To", "Difficulty reason classified as 'Talk-To'")
+
+-- 3. Reward score: Scaled against talk-to benchmark (721 XP achieves high reward score >= 0.85)
+local rScore, rBreak = addonTable.Scores.CalculateReward(227)
+assert_true(rScore >= 0.85, "Talk-To breadcrumb 721 XP achieves high reward score (>= 0.85): " .. tostring(rScore))
+
+-- 4. Chain score: Recognized as Step 1 of 4 in Mor'Ladim / Archeus chain
+local cScore, cBreak = addonTable.Scores.CalculateChain(227)
+assert_true(cScore >= 0.70, "Chain starter in Mor'Ladim Archeus chain scores >= 0.70: " .. tostring(cScore))
+assert_eq(cBreak.step, 1, "Chain step is 1")
+assert_eq(cBreak.totalSteps, 4, "Total chain steps is 4")
+
+-- 5. Overall Engine Worth: No orange/red damping, isHard == false, worth >= 0.70
+local wScore, wBreak = addonTable.Engine.CalculateWorth(227)
+assert_true(wBreak.isHard == false, "Talk-To quest is strictly NOT hard (isHard == false, no skull)")
+assert_true(wBreak.isBankable == false, "Talk-To quest is NOT bankable (ready to do now)")
+assert_true(wScore >= 0.70, "Overall Worth % is high leveling tier (>= 0.70): " .. tostring(wScore))
+
+-- 6. Dynamic Talk-To Quest purely from objective text (custom unlisted quest 9901)
+mockQuestDB[9901] = {
+    title = "Urgent Delivery to Lakeshire",
+    level = 38,
+    xp = 650,
+    money = 0,
+    objectiveText = "Deliver the Sealed Letter to Magistrate Solomon in Lakeshire.",
+    objectives = {
+        { text = "Deliver the Sealed Letter to Magistrate Solomon in Lakeshire.", finished = false, numRequired = 1 }
+    }
+}
+local isDynTalk = addonTable.Utils.IsTalkToQuest(9901)
+assert_true(isDynTalk == true, "Unlisted quest 9901 dynamically detected as Talk-To from objective text")
+local dynDScore, dynDBreak = addonTable.Scores.CalculateDifficulty(9901)
+assert_eq(dynDScore, 1.00, "Dynamic Talk-To quest receives 1.00 Difficulty score despite delta +6")
+assert_true(dynDBreak.isTalkTo == true, "Dynamic Talk-To details marks isTalkTo == true")
+
+-- 7. Tooltip Suitability & Breakdown verification
+currentOfferQuestID = 227
+currentOfferTitle = "The Weathered Grave"
+currentOfferXP = 721
+currentOfferMoney = 0
+GameTooltip:ClearLines()
+addonTable.UI.ShowQuestTooltip(GameTooltip, 227)
+
+local suitLine = nil
+local diffLine = nil
+local highlightLine = nil
+for _, line in ipairs(GameTooltip.lines or {}) do
+    local text = (line.left or "") .. " " .. (line.right or "")
+    if string.find(text, addonTable.L["SUITABILITY"] or "Suitability", 1, true) then suitLine = text end
+    if string.find(text, addonTable.L["DIFFICULTY"] or "Difficulty", 1, true) then diffLine = text end
+    if string.find(text, addonTable.L["HIGHLIGHTS"] or "Highlights", 1, true) then highlightLine = text end
+end
+
+assert_not_nil(suitLine, "Tooltip contains Suitability line")
+assert_true(string.find(suitLine, "Talk to NPC", 1, true) ~= nil, "Suitability guides player: " .. tostring(suitLine))
+assert_true(string.find(suitLine, "Bring Group") == nil, "Suitability does NOT tell player to bring group")
+
+assert_not_nil(diffLine, "Tooltip contains Difficulty breakdown line")
+assert_true(string.find(diffLine, "Safe", 1, true) ~= nil, "Difficulty breakdown shows Safe: " .. tostring(diffLine))
+assert_true(string.find(diffLine, "Hard") == nil, "Difficulty breakdown does NOT say Hard")
+
+assert_not_nil(highlightLine, "Tooltip contains Highlights line")
+assert_true(string.find(highlightLine, "Talk to NPC", 1, true) ~= nil, "Highlights includes Talk to NPC")
+assert_true(string.find(highlightLine, "Challenging") == nil, "Highlights does NOT say Challenging")
+
+-- Restore state
+mockPlayerState.level = oldPlayerLvl
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST

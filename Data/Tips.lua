@@ -18,6 +18,10 @@ local Data = addon.Data
 Data.QuestTips = {
     -- Duskwood
     [226]  = "The Raven Hill Tome is inside a chest in the southern mausoleum/crypt of Raven Hill Cemetery.",
+    [227]  = "Speak with Sirra Von'Indi in Darkshire. Safe talk-to step starting the Mor'Ladim and Archeus chain.",
+    [228]  = "Speak with Commander Althea Ebonlocke in Darkshire town hall. Safe talk-to step before confronting Mor'Ladim.",
+    [229]  = "Mor'Ladim patrols Raven Hill Cemetery. Highly dangerous level 35 elite mob; bring a group or kite carefully.",
+    [230]  = "Place Sarah's ring onto Morgan Ladimore's grave in Raven Hill Cemetery to complete the chain and claim Archeus.",
     [93]   = "Lean Wolf Flanks drop from Prairie Wolves & Starving Dire Wolves in western Duskwood (around Raven Hill). Can also be bought on the Auction House.",
     [174]  = "The Bronze Tube is crafted by Engineers (skill 65) or sold in limited quantities by trade vendors in Ironforge, Orgrimmar, or Duskwood.",
     [148]  = "Abercrombie's crate is located behind his wooden shack in southern Duskwood.",
