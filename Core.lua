@@ -183,6 +183,9 @@ local function OnEvent(self, event, ...)
         if addon.Data and addon.Data.InvalidatePayoffMemo then
             addon.Data.InvalidatePayoffMemo()
         end
+        if QuestFrame and QuestFrame:IsShown() and addon.UI and addon.UI.UpdateQuestOfferDialog then
+            addon.UI.UpdateQuestOfferDialog()
+        end
         DelayedRefresh(0.18)
 
     elseif event == "PLAYER_REGEN_ENABLED" then

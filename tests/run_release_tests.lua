@@ -167,6 +167,7 @@ _G.CreateFrame = function(frameType, name, parent, template)
         local fs = {
             text = "",
             shown = true,
+            GetParent = function(self) return f end,
             GetText = function(self) return self.text end,
             SetText = function(self, t) self.text = tostring(t or "") end,
             SetFontObject = function(self, o) end,
@@ -255,6 +256,11 @@ for b = 1, 10 do
     table.insert(_G.QuestLogListScrollFrame.buttons, btn)
 end
 
+_G.QuestFrame = _G.CreateFrame("Frame", "QuestFrame")
+_G.QuestFrameDetailPanel = _G.CreateFrame("Frame", "QuestFrameDetailPanel", _G.QuestFrame)
+_G.QuestInfoTitleHeader = _G.QuestFrameDetailPanel:CreateFontString("QuestInfoTitleHeader")
+_G.QuestDetailTitleText = _G.QuestFrameDetailPanel:CreateFontString("QuestDetailTitleText")
+
 _G.hooksecurefunc = function(arg1, arg2, arg3)
     if type(arg1) == "string" then
         local orig = _G[arg1]
@@ -331,6 +337,25 @@ _G.GetNumQuestLogRewards = function() return 1 end
 _G.GetNumQuestLogChoices = function() return 0 end
 _G.GetQuestLogRewardInfo = function(idx, qID) return "Reward Item", "Interface\\Icons\\INV_Sword_04", 1, 2, 0 end
 _G.GetQuestLogChoiceInfo = function(idx, qID) return nil end
+
+local currentOfferTitle = nil
+local currentOfferQuestID = nil
+local currentOfferXP = 0
+local currentOfferMoney = 0
+local currentOfferChoices = {}
+local currentOfferRewards = {}
+
+_G.GetQuestID = function() return currentOfferQuestID end
+_G.GetTitleText = function() return currentOfferTitle or "" end
+_G.GetRewardXP = function() return currentOfferXP or 0 end
+_G.GetRewardMoney = function() return currentOfferMoney or 0 end
+_G.GetNumQuestChoices = function() return currentOfferChoices and #currentOfferChoices or 0 end
+_G.GetNumQuestRewards = function() return currentOfferRewards and #currentOfferRewards or 0 end
+_G.GetQuestItemLink = function(typ, idx)
+    if typ == "choice" and currentOfferChoices then return currentOfferChoices[idx] end
+    if typ == "reward" and currentOfferRewards then return currentOfferRewards[idx] end
+    return nil
+end
 _G.GetItemInfo = function(itemID)
     if itemID == "uncached" or itemID == 999999 then return nil end
     return "Test Item", "item:" .. tostring(itemID), 2, 25, 20, "Weapon", "One-Handed Swords", 1, "INVTYPE_WEAPON", "Interface\\Icons\\INV_Sword_04"
@@ -629,6 +654,111 @@ assert_true(rScore >= 0.85, "High XP quest with 0 money achieves High XP score (
 mockPlayerState.level = prevLvl
 addonTable.Player.Update()
 addonTable.Engine.InvalidateCache()
+
+-- 3G: Option A - Pre-Accept Quest Offer Score Accuracy & Parchment Hover Tooltip
+print(" [3G] Pre-Accept Quest Offer Score Accuracy & Parchment Hover Tooltip:")
+local preLvl = mockPlayerState.level
+mockPlayerState.level = 28
+mockPlayerState.class = "Warrior"
+mockPlayerState.classToken = "WARRIOR"
+mockPlayerState.zone = "Duskwood"
+addonTable.Player.Update()
+
+-- Existing quest in Duskwood zone (like in user screenshot where 2 quests are in zone)
+table.insert(mockQuestLog, {
+    title = "Duskwood",
+    isHeader = true,
+})
+table.insert(mockQuestLog, {
+    title = "Wolves at Our Heels",
+    level = 26,
+    isHeader = false,
+    isComplete = false,
+    questID = 7499,
+})
+
+-- Define an unaccepted quest 7500 with gear upgrade and high XP
+mockQuestDB[7500] = { xp = 2450, money = 3500, uncached = false }
+
+currentOfferQuestID = 7500
+currentOfferTitle = "The Night Watch"
+currentOfferXP = 2450
+currentOfferMoney = 3500
+currentOfferChoices = { "item:20001" }
+currentOfferRewards = {}
+
+QuestFrame:Show()
+QuestFrameDetailPanel:Show()
+QuestInfoTitleHeader:SetText("The Night Watch")
+
+addonTable.UI.UpdateQuestOfferDialog()
+
+local headerText = QuestInfoTitleHeader:GetText()
+assert_true(string.find(headerText, "%[%d+%%%]") ~= nil, "Quest offer parchment title includes Worth meter badge")
+assert_true(string.find(headerText, "The Night Watch", 1, true) ~= nil, "Quest offer parchment preserves clean quest title")
+assert_true(string.find(headerText, addonTable.L["HOVER_TITLE_HINT"] or "Hover title", 1, true) ~= nil, "Quest offer parchment displays hover tooltip hint")
+
+local hoverFrame = _G["WorthIt_QuestOfferTitleHover"]
+assert_not_nil(hoverFrame, "Title hover frame created for quest offer dialog")
+assert_true(hoverFrame:IsShown(), "Title hover frame is visible on parchment")
+assert_eq(hoverFrame.questID, 7500, "Title hover frame bound to active offer questID 7500")
+
+-- Simulate hovering over title
+GameTooltip:ClearLines()
+local enterScript = hoverFrame:GetScript("OnEnter")
+assert_not_nil(enterScript, "Title hover frame has OnEnter handler")
+enterScript(hoverFrame)
+
+assert_true(GameTooltip:NumLines() > 0, "Mouseover on title populates GameTooltip")
+local tooltipHasTitle = false
+local tooltipHasBreakdown = false
+local tooltipHasReward = false
+local tooltipHasClassFit = false
+
+for _, line in ipairs(GameTooltip.lines or {}) do
+    local text = (line.left or "") .. " " .. (line.right or "")
+    if string.find(text, "The Night Watch", 1, true) then tooltipHasTitle = true end
+    if string.find(text, addonTable.L["BREAKDOWN"] or "Breakdown", 1, true) then tooltipHasBreakdown = true end
+    if string.find(text, addonTable.L["REWARD"] or "Reward", 1, true) then tooltipHasReward = true end
+    if string.find(text, addonTable.L["CLASS_FIT"] or "Class Fit", 1, true) then tooltipHasClassFit = true end
+end
+
+assert_true(tooltipHasTitle, "Hover tooltip displays quest title")
+assert_true(tooltipHasBreakdown, "Hover tooltip displays 5-score breakdown section")
+assert_true(tooltipHasReward, "Hover tooltip displays Reward Value line")
+assert_true(tooltipHasClassFit, "Hover tooltip displays Class Fit line")
+
+-- Verify pre-accept score matches post-accept score
+local preAcceptWorth, preBreak = addonTable.Engine.CalculateWorth(7500)
+assert_not_nil(preAcceptWorth, "Pre-accept worth score calculated")
+
+-- Now simulate player accepting quest into Quest Log
+table.insert(mockQuestLog, {
+    title = "The Night Watch",
+    level = 28,
+    isHeader = false,
+    isComplete = false,
+    questID = 7500,
+})
+QuestFrame:Hide()
+addonTable.Engine.InvalidateCache(7500)
+addonTable.Scores.InvalidateRewardCache()
+addonTable.Scores.InvalidateDensityCache()
+
+local postAcceptWorth, postBreak = addonTable.Engine.CalculateWorth(7500)
+assert_not_nil(postAcceptWorth, "Post-accept worth score calculated")
+local prePct = math.floor(preAcceptWorth * 100 + 0.5)
+local postPct = math.floor(postAcceptWorth * 100 + 0.5)
+assert_eq(prePct, postPct, "Pre-accept Worth % matches post-accept Worth % (" .. prePct .. "% == " .. postPct .. "%)")
+
+-- Clean up
+table.remove(mockQuestLog, #mockQuestLog)
+table.remove(mockQuestLog, #mockQuestLog)
+table.remove(mockQuestLog, #mockQuestLog)
+mockPlayerState.level = preLvl
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Scores.InvalidateDensityCache()
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST

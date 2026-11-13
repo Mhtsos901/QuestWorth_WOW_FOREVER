@@ -35,10 +35,27 @@ local function GetQuestXP(questID)
         if val and val > 0 then xp = val end
     end
 
-    if xp == 0 and GetQuestID then
-        local okID, currentID = pcall(GetQuestID)
-        if okID and currentID and currentID == questID then
-            if GetQuestRewardXP then
+    if xp == 0 and QuestFrame and QuestFrame:IsShown() then
+        local matchesOffer = false
+        if GetQuestID then
+            local okID, currentID = pcall(GetQuestID)
+            if okID and currentID and currentID == questID then
+                matchesOffer = true
+            end
+        end
+        if not matchesOffer and GetTitleText then
+            local qTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(questID)
+            local frameTitle = GetTitleText()
+            if qTitle and frameTitle and qTitle == frameTitle then
+                matchesOffer = true
+            end
+        end
+        if matchesOffer then
+            if GetRewardXP then
+                local ok, val = pcall(GetRewardXP)
+                if ok and val and val > 0 then xp = val end
+            end
+            if xp == 0 and GetQuestRewardXP then
                 local ok, val = pcall(GetQuestRewardXP)
                 if ok and val and val > 0 then xp = val end
             end
@@ -50,8 +67,18 @@ local function GetQuestXP(questID)
 
     if xp > 0 then
         _xpCache[questID] = xp
+        return xp
     end
-    return xp
+
+    -- Fallback for unaccepted quests not currently open in QuestFrame (e.g. Gossip listing):
+    -- Estimate baseline standard XP based on quest level so reward score doesn't artificially crash to 0.05.
+    -- DO NOT memoize in _xpCache so live XP replaces it immediately once dialog or log opens.
+    local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+    local qLevel = (Utils and Utils.GetQuestLevel and Utils.GetQuestLevel(questID)) or playerLevel
+    local effectiveLevel = (qLevel and qLevel > 0) and qLevel or playerLevel
+    local qMobXP = math.max(50, (effectiveLevel * 5) + 45)
+    local estimatedXP = math.floor(qMobXP * 8.5)
+    return estimatedXP
 end
 
 -- Safe helper to fetch direct Money reward for a quest
@@ -71,9 +98,25 @@ local function GetQuestMoney(questID)
         end)
         if val and val > 0 then money = val end
     end
-    if money == 0 and QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID and GetRewardMoney then
-        local ok, val = pcall(GetRewardMoney)
-        if ok and val and val > 0 then money = val end
+    if money == 0 and QuestFrame and QuestFrame:IsShown() then
+        local matchesOffer = false
+        if GetQuestID then
+            local okID, currentID = pcall(GetQuestID)
+            if okID and currentID and currentID == questID then
+                matchesOffer = true
+            end
+        end
+        if not matchesOffer and GetTitleText then
+            local qTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(questID)
+            local frameTitle = GetTitleText()
+            if qTitle and frameTitle and qTitle == frameTitle then
+                matchesOffer = true
+            end
+        end
+        if matchesOffer and GetRewardMoney then
+            local ok, val = pcall(GetRewardMoney)
+            if ok and val and val > 0 then money = val end
+        end
     end
 
     if money > 0 then

@@ -262,23 +262,39 @@ function Utils.GetQuestRewardData(questID)
     end
 
     -- Fallback for unaccepted quest in QuestFrame dialog
-    if #choices == 0 and #rewards == 0 and QuestFrame and QuestFrame:IsShown() and GetQuestID and GetQuestID() == questID then
-        local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
-        for i = 1, numOfferChoices do
-            local link = GetQuestItemLink and GetQuestItemLink("choice", i)
-            if link then
-                table.insert(choices, link)
-                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
-                if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
+    if #choices == 0 and #rewards == 0 and QuestFrame and QuestFrame:IsShown() then
+        local matchesOffer = false
+        if GetQuestID then
+            local okID, cID = pcall(GetQuestID)
+            if okID and cID and cID == questID then
+                matchesOffer = true
             end
         end
-        local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
-        for i = 1, numOfferRewards do
-            local link = GetQuestItemLink and GetQuestItemLink("reward", i)
-            if link then
-                table.insert(rewards, link)
-                local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
-                fixedPricesSum = fixedPricesSum + sellPrice
+        if not matchesOffer and GetTitleText then
+            local qTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(questID)
+            local offerTitle = GetTitleText()
+            if qTitle and offerTitle and qTitle == offerTitle then
+                matchesOffer = true
+            end
+        end
+        if matchesOffer then
+            local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
+            for i = 1, numOfferChoices do
+                local link = GetQuestItemLink and GetQuestItemLink("choice", i)
+                if link then
+                    table.insert(choices, link)
+                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
+                end
+            end
+            local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
+            for i = 1, numOfferRewards do
+                local link = GetQuestItemLink and GetQuestItemLink("reward", i)
+                if link then
+                    table.insert(rewards, link)
+                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    fixedPricesSum = fixedPricesSum + sellPrice
+                end
             end
         end
     end
