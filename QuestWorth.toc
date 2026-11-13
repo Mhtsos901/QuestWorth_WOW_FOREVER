@@ -15,6 +15,7 @@ Data/ArmorTypes.lua
 Data/Chains.lua
 Data/Tips.lua
 Data/Zones.lua
+Data/ForeverData.lua
 Scores/Difficulty.lua
 Scores/Reward.lua
 Scores/Chain.lua

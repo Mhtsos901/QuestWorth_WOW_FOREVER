@@ -552,6 +552,17 @@ function Utils.GetQuestBasicInfo(questID)
         end
     end
 
+    -- Scan active QuestFrame offer dialog for unaccepted quest title
+    if (not title) and QuestFrame and QuestFrame:IsShown() and GetTitleText then
+        local okID, cID = pcall(GetQuestID)
+        if (okID and cID and cID == questID) or (not cID or cID == 0) then
+            local okT, t = pcall(GetTitleText)
+            if okT and t and t ~= "" then
+                title = t
+            end
+        end
+    end
+
     local finalLevel = level
     if not finalLevel or finalLevel <= 0 then
         finalLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1

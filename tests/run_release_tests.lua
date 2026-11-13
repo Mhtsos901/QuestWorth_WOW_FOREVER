@@ -303,6 +303,10 @@ local mockQuestDB = {}
 local mockQuestLog = {}
 
 _G.C_QuestLog = {
+    GetTitleForQuestID = function(qID)
+        local q = mockQuestDB[qID] or mockQuestDB[tonumber(qID)]
+        return q and q.title
+    end,
     GetNumQuestLogEntries = function() return #mockQuestLog end,
     GetInfo = function(index) return mockQuestLog[index] end,
     IsOnQuest = function(qID)
@@ -388,6 +392,7 @@ local files = {
     "Data/Chains.lua",
     "Data/Tips.lua",
     "Data/Zones.lua",
+    "Data/ForeverData.lua",
     "Scores/Difficulty.lua",
     "Scores/Reward.lua",
     "Scores/Chain.lua",
@@ -897,6 +902,69 @@ assert_true(string.find(highlightLine, "Challenging") == nil, "Highlights does N
 mockPlayerState.level = oldPlayerLvl
 addonTable.Player.Update()
 addonTable.Engine.InvalidateCache()
+
+-- 3J: WoW Forever Custom Quests, Dungeons, Hidden Items & Chains Coverage
+print(" [3J] WoW Forever Expansion Quest Coverage, Hidden Items & Dungeon Chains:")
+
+-- 1. Custom Forever Dungeons in Data.Zones
+local wetlandsExcav = addonTable.Data.Zones["Excavation Site: Wetlands"]
+assert_not_nil(wetlandsExcav, "Excavation Site: Wetlands registered in Data.Zones")
+assert_true(wetlandsExcav.isDungeon == true, "Excavation Site: Wetlands is marked as dungeon")
+assert_eq(wetlandsExcav.min, 26, "Excavation Site: Wetlands min level is 26")
+assert_eq(wetlandsExcav.max, 33, "Excavation Site: Wetlands max level is 33")
+
+local drownedCity = addonTable.Data.Zones["The Drowned City"]
+assert_not_nil(drownedCity, "The Drowned City registered in Data.Zones")
+assert_true(drownedCity.isDungeon == true, "The Drowned City is marked as dungeon")
+
+local dalaranCity = addonTable.Data.Zones["City of Dalaran"]
+assert_not_nil(dalaranCity, "City of Dalaran registered in Data.Zones")
+assert_true(dalaranCity.isDungeon == true, "City of Dalaran is marked as dungeon")
+
+local kroldok = addonTable.Data.Zones["Krol'dok Stronghold"]
+assert_not_nil(kroldok, "Krol'dok Stronghold registered in Data.Zones")
+assert_true(kroldok.isDungeon == true, "Krol'dok Stronghold is marked as dungeon")
+
+-- 2. Custom Forever Chains in Data.ChainIndex & Scores.CalculateChain
+local q92753Chain = addonTable.Data.ChainIndex[92753]
+assert_not_nil(q92753Chain, "Deadmines Toxic Soil finale (92753) indexed in ChainIndex")
+assert_true(q92753Chain.isCap == true, "92753 is finale cap of Toxic Soil chain")
+local cScore92753 = addonTable.Scores.CalculateChain(92753)
+assert_eq(cScore92753, 1.00, "92753 Toxic Soil finale achieves 1.00 chain score")
+
+local q96393Chain = addonTable.Data.ChainIndex[96393]
+assert_not_nil(q96393Chain, "Hall of Thanes Old Ironforge Incursion (96393) indexed in ChainIndex")
+assert_true(q96393Chain.totalSteps >= 2, "Hall of Thanes Incursion has multi-step prerequisites")
+
+local q95140Chain = addonTable.Data.ChainIndex[95140]
+assert_not_nil(q95140Chain, "Horde Paladin Wolfsbane chain (95140) indexed in ChainIndex")
+assert_true(q95140Chain.isCap == true, "95140 is finale of Wolfsbane chain")
+
+-- 3. Custom Secret Item Drops in Data.SecretQuestStarters
+local titanRelic = addonTable.Data.SecretQuestStarters[270866]
+assert_not_nil(titanRelic, "Titan Relic (270866) registered as secret quest starter")
+assert_true(titanRelic.questID == 95664 or titanRelic.questID == 95810, "Titan Relic starts quest 95664 (Horde) or 95810 (Alliance)")
+
+local smallScroll = addonTable.Data.SecretQuestStarters[17008]
+assert_not_nil(smallScroll, "Small Scroll (17008) registered as secret quest starter")
+assert_eq(smallScroll.questID, 6522, "Small Scroll starts quest 6522")
+
+-- 4. Custom Quest Payoffs in Data.QuestPayoffs
+local payoff96395 = addonTable.Data.QuestPayoffs[96395]
+assert_not_nil(payoff96395, "Hall of Thanes An Ancient Grudge (96395) has payoff data")
+assert_true(string.find(payoff96395.reward or "", "Catacomb Cloak", 1, true) ~= nil, "Payoff lists Catacomb Cloak reward")
+
+local payoff95791 = addonTable.Data.QuestPayoffs[95791]
+assert_not_nil(payoff95791, "The Drowned City Saltseer Captain (95791) has payoff data")
+assert_true(string.find(payoff95791.reward or "", "Mutinous Cuffs", 1, true) ~= nil, "Payoff lists Mutinous Cuffs reward")
+
+-- 5. Custom Quest Tips in Data.QuestTips
+local tip96393 = addonTable.Data.QuestTips[96393]
+assert_not_nil(tip96393, "Hall of Thanes quest 96393 has actionable tip")
+assert_true(string.find(tip96393, "Dark Iron Map", 1, true) ~= nil, "Tip mentions Dark Iron Map drop")
+
+local tip92753 = addonTable.Data.QuestTips[92753]
+assert_not_nil(tip92753, "Deadmines Toxic Soil quest 92753 has actionable tip")
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST
