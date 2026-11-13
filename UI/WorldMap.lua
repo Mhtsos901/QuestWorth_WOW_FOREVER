@@ -181,16 +181,16 @@ local function CreateWorldMapBanner()
 
     local scrollContainer = (WorldMapFrame.ScrollContainer) or WorldMapFrame
     local frame = CreateFrame("Button", "WorthItWorldMapBanner", WorldMapFrame, "BackdropTemplate")
-    frame:SetHeight(24)
+    frame:SetHeight(22)
     frame:SetFrameStrata("HIGH")
     frame:SetFrameLevel(WorldMapFrame:GetFrameLevel() + 25)
 
-    -- Anchor directly above the map canvas so it never obstructs zone titles (e.g. Westfall (10-20) / Fishing)
+    -- Anchor directly at the height of the Zones % button (Y = -6 on ScrollContainer)
     frame:ClearAllPoints()
     if WorldMapFrame.ScrollContainer then
-        frame:SetPoint("BOTTOM", WorldMapFrame.ScrollContainer, "TOP", 0, 4)
+        frame:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -6)
     else
-        frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
+        frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -34)
     end
 
     -- Backdrop styling: authentic Blizzard dark slate panel with gold border
@@ -385,6 +385,14 @@ function UI.UpdateWorldMapBanner()
 
     banner.data = res
 
+    -- Keep anchor aligned with Zones button at Y = -6
+    banner:ClearAllPoints()
+    if WorldMapFrame.ScrollContainer then
+        banner:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -6)
+    else
+        banner:SetPoint("TOP", WorldMapFrame, "TOP", 0, -34)
+    end
+
     local badge = Utils.FormatBadge(res.worth, false)
     local statusColor = (res.worth >= 0.70 and "|cff00ff00") or (res.worth >= 0.50 and "|cffffff00") or "|cffff3333"
 
@@ -397,20 +405,16 @@ function UI.UpdateWorldMapBanner()
     local contMarkup = GetContinentMarkup(cont)
     local contPrefix = (contMarkup ~= "") and (contMarkup .. " ") or ""
 
-    local displayText
-    if res.activeCount and res.activeCount > 0 then
-        displayText = string.format("%s %s|cffffffff%s|r%s  %s%s|r  |cffffcc00[Log: %.0f%% (%d Qs)]|r",
-            badge, contPrefix, res.zoneName, levelStr, statusColor, res.status, (res.activeWorth or 0) * 100, res.activeCount)
-    else
-        displayText = string.format("%s %s|cffffffff%s|r%s  %s%s|r  |cff888888[0 Quests in Log]|r",
-            badge, contPrefix, res.zoneName, levelStr, statusColor, res.status)
-    end
+    -- Display only the core zone evaluation without cluttering with Log quest count
+    local displayText = string.format("%s %s|cffffffff%s|r%s  %s%s|r",
+        badge, contPrefix, res.zoneName, levelStr, statusColor, res.status)
 
     banner.Text:SetText(displayText)
 
     -- Dynamic width with comfortable padding
-    local textWidth = banner.Text:GetStringWidth() or 220
-    banner:SetWidth(math.max(240, textWidth + 28))
+    local textWidth = (banner.Text and banner.Text.GetStringWidth and banner.Text:GetStringWidth()) or 180
+    banner:SetWidth(math.max(190, textWidth + 24))
+    banner:SetHeight(22)
 
     banner:Show()
 end
@@ -423,20 +427,28 @@ local advisorPanel = nil
 local advisorToggleButton = nil
 local advisorRows = {}
 
+local function UpdateAdvisorToggleText(btn, isOpen)
+    if not btn then return end
+    local text = isOpen and "|cff00ff00[< Zones]|r" or "|cff00ccff[Zones %]|r"
+    if btn.SetText then btn:SetText(text) end
+    if btn.Text and btn.Text.SetText then btn.Text:SetText(text) end
+    local fs = btn.GetFontString and btn:GetFontString()
+    if fs and fs.SetText then fs:SetText(text) end
+end
+
 local function CreateZoneAdvisorToggle(parent)
     if advisorToggleButton then return advisorToggleButton end
     if not parent then return nil end
 
     local btn = CreateFrame("Button", "WorthItAdvisorToggleButton", parent, "UIPanelButtonTemplate")
-    btn:SetSize(116, 22)
+    btn:SetSize(106, 22)
     btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -6)
     btn:SetFrameStrata("HIGH")
     btn:SetFrameLevel(parent:GetFrameLevel() + 15)
 
-    btn:SetText("Zone Advisor")
+    UpdateAdvisorToggleText(btn, false)
     if btn:GetFontString() then
         btn:GetFontString():SetFontObject("GameFontNormalSmall")
-        btn:GetFontString():SetTextColor(1, 0.82, 0, 1) -- Blizzard Gold
     end
 
     btn:SetScript("OnEnter", function(self)
@@ -1057,7 +1069,7 @@ function UI.ToggleZoneAdvisor(enable)
 
     if InCombatLockdown and InCombatLockdown() then
         if toggle then
-            toggle.Text:SetText(targetState and "|cff00ff00[◀ Zones]|r" or "|cff00ccff[≡ Zones %]|r")
+            UpdateAdvisorToggleText(toggle, targetState)
         end
         return
     end
@@ -1067,12 +1079,12 @@ function UI.ToggleZoneAdvisor(enable)
             panel:Show()
             UI.UpdateZoneAdvisor()
             if toggle then
-                toggle.Text:SetText("|cff00ff00[◀ Zones]|r")
+                UpdateAdvisorToggleText(toggle, true)
             end
         else
             panel:Hide()
             if toggle then
-                toggle.Text:SetText("|cff00ccff[≡ Zones %]|r")
+                UpdateAdvisorToggleText(toggle, false)
             end
         end
     end)

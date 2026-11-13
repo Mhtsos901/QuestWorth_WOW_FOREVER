@@ -180,6 +180,7 @@ _G.CreateFrame = function(frameType, name, parent, template)
             ClearAllPoints = function(self) end,
             SetWidth = function(self, w) end,
             SetWordWrap = function(self, w) end,
+            GetStringWidth = function(self) return (#self.text or 10) * 7 end,
             Show = function(self) self.shown = true end,
             Hide = function(self) self.shown = false end,
             IsShown = function(self) return self.shown end,
@@ -291,7 +292,10 @@ _G.C_Timer = {
 }
 
 _G.C_Map = {
-    GetBestMapForUnit = function(unit) return 1431 end -- Duskwood
+    GetBestMapForUnit = function(unit) return 1431 end, -- Duskwood
+    GetMapInfo = function(mapID)
+        return { mapID = mapID or 1431, name = "Duskwood", mapType = 3 }
+    end
 }
 
 -- Quest mock database for tests
@@ -759,6 +763,34 @@ mockPlayerState.level = preLvl
 addonTable.Player.Update()
 addonTable.Engine.InvalidateCache()
 addonTable.Scores.InvalidateDensityCache()
+
+-- 3H: World Map Zone Banner Facelift & Advisor Toggle Symbol Fix
+print(" [3H] World Map Zone Banner Facelift & Clean Toggle:")
+WorldMapFrame:Show()
+addonTable.UI.UpdateWorldMapBanner()
+local banner = _G["WorthItWorldMapBanner"]
+assert_not_nil(banner, "World map zone worth banner created")
+assert_true(banner:IsShown(), "World map zone worth banner is visible")
+
+local bText = banner.Text and banner.Text:GetText() or ""
+assert_true(string.find(bText, "%[%d+%%%]") ~= nil, "Zone banner includes Worth score badge")
+assert_true(string.find(bText, "Duskwood", 1, true) ~= nil, "Zone banner displays current zone name")
+assert_true(string.find(bText, "%[Log:") == nil, "Zone banner omits cluttering Log quest count (only first part shown)")
+
+-- Test toggle button text
+addonTable.UI.ToggleZoneAdvisor(false)
+local tBtn = _G["WorthItAdvisorToggleButton"]
+assert_not_nil(tBtn, "Zone advisor toggle button exists")
+local closedText = tBtn:GetText() or (tBtn.Text and tBtn.Text:GetText()) or ""
+assert_true(string.find(closedText, "Zones %", 1, true) ~= nil, "Toggle button shows clean [Zones %] when closed")
+assert_true(string.find(closedText, "[\128-\255]") == nil, "Toggle button contains zero broken non-ASCII symbols")
+
+addonTable.UI.ToggleZoneAdvisor(true)
+local openText = tBtn:GetText() or (tBtn.Text and tBtn.Text:GetText()) or ""
+assert_true(string.find(openText, "< Zones", 1, true) ~= nil, "Toggle button shows clean [< Zones] when open")
+assert_true(string.find(openText, "[\128-\255]") == nil, "Open toggle button contains zero broken non-ASCII symbols")
+
+addonTable.UI.ToggleZoneAdvisor(false)
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST
