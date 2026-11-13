@@ -374,6 +374,10 @@ _G.GetQuestItemLink = function(typ, idx)
 end
 _G.GetItemInfo = function(itemID)
     if itemID == "uncached" or itemID == 999999 then return nil end
+    if itemID == "item:40001" or itemID == 40001 then
+        -- Level 40 Rare Plate Chest (classID = 4, subClassID = 4)
+        return "Scarlet Plate Chest", "item:40001", 3, 45, 40, "Armor", "Plate", 1, "INVTYPE_CHEST", "Interface\\Icons\\INV_Chest_Plate04", 12500, 4, 4
+    end
     return "Test Item", "item:" .. tostring(itemID), 2, 25, 20, "Weapon", "One-Handed Swords", 1, "INVTYPE_WEAPON", "Interface\\Icons\\INV_Sword_04"
 end
 _G.C_Item = {
@@ -965,6 +969,93 @@ assert_true(string.find(tip96393, "Dark Iron Map", 1, true) ~= nil, "Tip mention
 
 local tip92753 = addonTable.Data.QuestTips[92753]
 assert_not_nil(tip92753, "Deadmines Toxic Soil quest 92753 has actionable tip")
+
+-- 3K: Deep Logic Audit Fixes Verification
+print(" [3K] Deep Logic Audit Fixes Verification:")
+
+-- 1. Deterministic ChainIndex Priority (longest chain wins over short prerequisite prefix)
+local q5515Chain = addonTable.Data.ChainIndex[5515]
+assert_not_nil(q5515Chain, "Quest 5515 indexed in ChainIndex")
+assert_eq(q5515Chain.totalSteps, 9, "Quest 5515 retains full 9-step Ras Frostwhisper chain instead of 2-step prefix")
+assert_true(q5515Chain.isCap == false, "Quest 5515 is step 2/9 (not incorrectly marked as Chain Finale)")
+
+local q166Chain = addonTable.Data.ChainIndex[166]
+assert_not_nil(q166Chain, "Quest 166 indexed in ChainIndex")
+assert_eq(q166Chain.step, 7, "Defias Brotherhood Finale (166) is step 7")
+assert_eq(q166Chain.totalSteps, 7, "Defias Brotherhood chain is 7 steps")
+assert_true(q166Chain.isCap == true, "Quest 166 is Defias Brotherhood Finale")
+assert_true(addonTable.Utils.IsTalkToQuest(65) == true, "Defias Brotherhood step 1 (65) is recognized as Talk-To")
+
+-- 2. Unaccepted quest without initial objective text does NOT cache false in _talkToCache
+mockQuestDB[9955] = {
+    title = "Urgent Message to Stormwind",
+    level = 30,
+    xp = 600,
+    money = 0,
+    objectives = nil,
+    objectiveText = nil,
+}
+assert_true(addonTable.Utils.IsTalkToQuest(9955) == false, "Quest 9955 initially false when no objective text available")
+-- Now player opens QuestFrame and objective text appears
+mockQuestDB[9955].objectiveText = "Speak with Bolvar Fordragon in Stormwind Keep."
+currentOfferQuestID = 9955
+currentOfferTitle = "Urgent Message to Stormwind"
+QuestFrame:Show()
+assert_true(addonTable.Utils.IsTalkToQuest(9955) == true, "Quest 9955 becomes IsTalkToQuest == true once QuestFrame exposes objective text (cache was not poisoned)")
+QuestFrame:Hide()
+currentOfferQuestID = nil
+currentOfferTitle = nil
+
+-- 3. Level 38 Warrior evaluating Level 40 Plate quest reward gets Gear Upgrade instead of 0.05 Unusable
+local savedLvl3K = mockPlayerState.level
+local savedClass3K = mockPlayerState.class
+local savedToken3K = mockPlayerState.classToken
+mockPlayerState.level = 38
+mockPlayerState.class = "Warrior"
+mockPlayerState.classToken = "WARRIOR"
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.ClearSafeGetItemInfoCache()
+
+mockQuestDB[9960] = { title = "Plate Test Quest", level = 40, xp = 3200, money = 0 }
+currentOfferQuestID = 9960
+currentOfferTitle = "Plate Test Quest"
+currentOfferChoices = { "item:40001" }
+currentOfferRewards = {}
+QuestFrame:Show()
+local fit38 = addonTable.Scores.CalculateClassFit(9960)
+assert_true(fit38 >= 0.75, "Level 38 Warrior evaluating Level 40 Plate reward scores >= 0.75 (got " .. tostring(fit38) .. ")")
+QuestFrame:Hide()
+currentOfferQuestID = nil
+currentOfferTitle = nil
+currentOfferChoices = {}
+
+mockPlayerState.level = savedLvl3K
+mockPlayerState.class = savedClass3K
+mockPlayerState.classToken = savedToken3K
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+
+-- 4. Forever secret item starter linked into Data.ItemQuestMap
+assert_eq(addonTable.Data.ItemQuestMap[270866], 95810, "Titan Relic (270866) linked in Data.ItemQuestMap")
+
+-- 5. Tooltip Highlights omits duplicate raw 'Talk-To' when 'Talk to NPC' is shown
+mockPlayerState.level = 32
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+GameTooltip:ClearLines()
+addonTable.UI.ShowQuestTooltip(GameTooltip, 227)
+local hl227 = nil
+for _, line in ipairs(GameTooltip.lines or {}) do
+    local text = (line.left or "") .. " " .. (line.right or "")
+    if string.find(text, addonTable.L["HIGHLIGHTS"] or "Highlights", 1, true) then hl227 = text end
+end
+assert_not_nil(hl227, "Tooltip for 227 contains Highlights line")
+assert_true(string.find(hl227, "Talk to NPC", 1, true) ~= nil, "Highlights for 227 includes Talk to NPC")
+assert_true(string.find(hl227, "Talk-To", 1, true) == nil, "Highlights for 227 does NOT duplicate raw 'Talk-To'")
+mockPlayerState.level = savedLvl3K
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
 
 -- ============================================================================
 -- SCENARIO 4: COMBAT & EVENT STORM STRESS TEST

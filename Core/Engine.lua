@@ -86,6 +86,9 @@ function Engine.InvalidateCache()
     if addon.Utils and addon.Utils.ClearTalkToCache then
         addon.Utils.ClearTalkToCache()
     end
+    if addon.Data and addon.Data.InvalidatePayoffMemo then
+        addon.Data.InvalidatePayoffMemo()
+    end
     addon.Debug("Evaluation cache invalidated.")
 end
 

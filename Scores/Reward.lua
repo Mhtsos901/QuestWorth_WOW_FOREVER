@@ -77,7 +77,14 @@ local function GetQuestXP(questID)
     local qLevel = (Utils and Utils.GetQuestLevel and Utils.GetQuestLevel(questID)) or playerLevel
     local effectiveLevel = (qLevel and qLevel > 0) and qLevel or playerLevel
     local qMobXP = math.max(50, (effectiveLevel * 5) + 45)
-    local estimatedXP = math.floor(qMobXP * 8.5)
+    local isTalkTo = (Utils and Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)) or false
+    local mult = isTalkTo and 3.5 or 8.5
+    local delta = effectiveLevel - playerLevel
+    local levelFactor = 1.0
+    if delta < -5 then
+        levelFactor = math.max(0.10, 1.0 + (delta + 5) * 0.20)
+    end
+    local estimatedXP = math.floor(qMobXP * mult * levelFactor)
     return estimatedXP
 end
 

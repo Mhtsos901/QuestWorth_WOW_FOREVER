@@ -70,13 +70,13 @@ local function GetReasonSummary(b)
         end
     end
     if rReason then
-        if rReason == "High XP" then
+        if rReason == "High XP" or (rReason == "Talk-To" and b.r and b.r >= 0.85) then
             table.insert(reasons, "|cff00ff00High XP|r")
         elseif rReason == "Good Gold" then
             table.insert(reasons, "|cffffcc00Good Gold|r")
         elseif rReason == "Low XP" then
             table.insert(reasons, "|cffaaaaaaLow XP|r")
-        else
+        elseif rReason ~= "Talk-To" then
             table.insert(reasons, rReason)
         end
     end
@@ -380,8 +380,9 @@ local function AddItemQuestStarterLines(tooltip)
 
     if tooltip._worthItAddedItemID == itemID then return end
 
-    local qID = addon.Data and addon.Data.ItemQuestMap and addon.Data.ItemQuestMap[itemID]
-    local isStarter = (qID ~= nil)
+    local starter = addon.Data and addon.Data.SecretQuestStarters and addon.Data.SecretQuestStarters[itemID]
+    local qID = (starter and starter.questID) or (addon.Data and addon.Data.ItemQuestMap and addon.Data.ItemQuestMap[itemID])
+    local isStarter = (qID ~= nil) or (starter ~= nil)
 
     if not isStarter then
         local _, _, _, _, _, itemType, _, _, _, _, _, _, classID = addon.Utils.SafeGetItemInfo(link)
@@ -404,6 +405,9 @@ local function AddItemQuestStarterLines(tooltip)
             elseif payoff and payoff.summary then
                 tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.summary .. "|r")
             end
+        end
+        if starter and starter.drop and starter.drop ~= "" then
+            tooltip:AddLine("  |cffcccccc• " .. starter.drop .. "|r", 0.85, 0.85, 0.85, true)
         end
         tooltip:AddLine("  |cff1aff4d" .. L["ITEM_CLICK_TO_START"] .. "|r")
         tooltip._worthItAddedItemID = itemID

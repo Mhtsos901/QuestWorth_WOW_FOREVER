@@ -144,39 +144,54 @@ function Scores.CalculateChain(questID)
         return apiScore, details
     end
 
-    -- Priority 4: Fallback KnownChains scan for unaccepted / dialog quests
+    -- Priority 4: Fallback KnownChains scan for unaccepted / dialog quests (longest chain wins ties)
     if Data and Data.KnownChains then
+        local bestMatch = nil
         for chainID, chainData in pairs(Data.KnownChains) do
             local quests = chainData.quests or {}
             local total = #quests
             for step, id in ipairs(quests) do
                 if id == targetID or tonumber(id) == targetID then
-                    local isCap = (step == total)
-                    local score
-                    if step == 1 and total > 1 then
-                        score = 0.65 -- Chain starter boost
-                    else
-                        score = isCap and 1.00 or (0.40 + 0.50 * (step / math.max(1, total)))
+                    if not bestMatch or total > bestMatch.total or (total == bestMatch.total and type(chainID) == "number" and chainID < 3000 and (type(bestMatch.chainID) ~= "number" or bestMatch.chainID >= 3000)) then
+                        bestMatch = {
+                            chainID = chainID,
+                            chainData = chainData,
+                            step = step,
+                            total = total,
+                        }
                     end
-                    if chainData.isImportant and not isCap then
-                        score = math.min(0.90, score + 0.10)
-                    end
-                    local details = {
-                        source = "KnownChainsFallback",
-                        chainID = chainID,
-                        step = step,
-                        totalSteps = total,
-                        isCap = isCap,
-                        final = score,
-                        reason = (step == 1 and total > 1) and "Chain Start" or (isCap and "Chain Finale" or nil),
-                    }
-                    if addon.db and addon.db.debug then
-                        addon.Debug("Chain [Q:%d]: Found in KnownChains (Step %d/%d) -> Score=%.2f",
-                            targetID, step, total, score)
-                    end
-                    return score, details
+                    break
                 end
             end
+        end
+
+        if bestMatch then
+            local step = bestMatch.step
+            local total = bestMatch.total
+            local isCap = (step == total)
+            local score
+            if step == 1 and total > 1 then
+                score = 0.65 -- Chain starter boost
+            else
+                score = isCap and 1.00 or (0.40 + 0.50 * (step / math.max(1, total)))
+            end
+            if bestMatch.chainData.isImportant and not isCap then
+                score = math.min(0.90, score + 0.10)
+            end
+            local details = {
+                source = "KnownChainsFallback",
+                chainID = bestMatch.chainID,
+                step = step,
+                totalSteps = total,
+                isCap = isCap,
+                final = score,
+                reason = (step == 1 and total > 1) and "Chain Start" or (isCap and "Chain Finale" or nil),
+            }
+            if addon.db and addon.db.debug then
+                addon.Debug("Chain [Q:%d]: Found in KnownChains (Step %d/%d) -> Score=%.2f",
+                    targetID, step, total, score)
+            end
+            return score, details
         end
     end
 

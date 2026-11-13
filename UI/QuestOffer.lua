@@ -141,6 +141,12 @@ local function UpdateQuestOfferDialog()
     if Utils.ClearQuestRewardsCache then
         Utils.ClearQuestRewardsCache(qID)
     end
+    if Utils.ClearTalkToCache then
+        Utils.ClearTalkToCache(qID)
+    end
+    if addon.Data and addon.Data.InvalidatePayoffMemo then
+        addon.Data.InvalidatePayoffMemo()
+    end
     if addon.Scores and addon.Scores.InvalidateRewardCache then
         addon.Scores.InvalidateRewardCache()
     end

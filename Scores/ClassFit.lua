@@ -9,6 +9,13 @@ local Scores = addon.Scores
 local Data = addon.Data
 local Utils = addon.Utils
 
+local function SafeGetInventoryItemLink(unit, slotID)
+    if not GetInventoryItemLink then return nil end
+    local ok, link = pcall(GetInventoryItemLink, unit, slotID)
+    if ok then return link end
+    return nil
+end
+
 -- Fallback tables in case Data tables are uninitialized
 local SHIELD_USERS = { WARRIOR = true, PALADIN = true, SHAMAN = true }
 local HOLDABLE_USERS = {
@@ -173,7 +180,7 @@ end
 
 -- Check if Rogue is currently playing a Dagger build (either Assassination spec or wielding a Dagger in Main Hand)
 local function IsRogueDaggerBuild(specIndex)
-    local mhLink = GetInventoryItemLink("player", 16)
+    local mhLink = SafeGetInventoryItemLink("player", 16)
     if mhLink then
         local mhSubClass = select(13, addon.SafeGetItemInfo(mhLink))
         if mhSubClass == 15 then
@@ -234,9 +241,9 @@ local function CheckWeaponUpgrade(itemLink, equipLoc, targetSlot)
     newQuality = newQuality or 1
 
     for _, slotID in ipairs(slots) do
-        local equippedLink = GetInventoryItemLink("player", slotID)
+        local equippedLink = SafeGetInventoryItemLink("player", slotID)
         if not equippedLink and slotID == 17 then
-            local mhLink = GetInventoryItemLink("player", 16)
+            local mhLink = SafeGetInventoryItemLink("player", 16)
             local mhEquipLoc = nil
             if mhLink then
                 local mhInfo = addon.SafeGetItemInfo(mhLink)
@@ -261,9 +268,9 @@ local function CheckWeaponUpgrade(itemLink, equipLoc, targetSlot)
     end
 
     for _, slotID in ipairs(slots) do
-        local equippedLink = GetInventoryItemLink("player", slotID)
+        local equippedLink = SafeGetInventoryItemLink("player", slotID)
         if not equippedLink and slotID == 17 then
-            local mhLink = GetInventoryItemLink("player", 16)
+            local mhLink = SafeGetInventoryItemLink("player", 16)
             local mhEquipLoc = nil
             if mhLink then
                 local mhInfo = addon.SafeGetItemInfo(mhLink)
@@ -300,9 +307,9 @@ local function CheckArmorUpgrade(itemLink, equipLoc)
     if not newItemLevel or newItemLevel <= 0 then return false, 0.0 end
 
     for _, slotID in ipairs(slots) do
-        local equippedLink = GetInventoryItemLink("player", slotID)
+        local equippedLink = SafeGetInventoryItemLink("player", slotID)
         if not equippedLink and slotID == 17 then
-            local mhLink = GetInventoryItemLink("player", 16)
+            local mhLink = SafeGetInventoryItemLink("player", 16)
             local mhEquipLoc = nil
             if mhLink then
                 local mhInfo = addon.SafeGetItemInfo(mhLink)
@@ -339,7 +346,7 @@ local function GetPlayerEquippedHitAndExpertise()
     local currentHit = 0
     local currentExpertise = 0
     for slot = 1, 19 do
-        local link = GetInventoryItemLink("player", slot)
+        local link = SafeGetInventoryItemLink("player", slot)
         if link then
             local itemStats = GetStatsForItem(link)
             if itemStats then
@@ -403,7 +410,7 @@ local function EvaluateItemFit(itemLink, playerClass, playerLevel, specIndex, st
             if equipLoc == "INVTYPE_WEAPONMAINHAND" and subClassID ~= 15 then
                 return 0.15 -- Non-dagger main hand breaks Backstab/Ambush builds
             elseif equipLoc == "INVTYPE_WEAPON" and subClassID ~= 15 then
-                local mhLink = GetInventoryItemLink("player", 16)
+                local mhLink = SafeGetInventoryItemLink("player", 16)
                 local mhSubClass = mhLink and select(13, addon.SafeGetItemInfo(mhLink))
                 if mhSubClass ~= 15 then
                     return 0.15
@@ -419,7 +426,8 @@ local function EvaluateItemFit(itemLink, playerClass, playerLevel, specIndex, st
                 return 0.05
             end
 
-            local preferred = (Data.GetPreferredArmorType and Data.GetPreferredArmorType(playerClass, playerLevel)) or 1
+            local effectiveArmorLevel = (playerLevel >= 36) and math.max(playerLevel, 40) or playerLevel
+            local preferred = (Data.GetPreferredArmorType and Data.GetPreferredArmorType(playerClass, effectiveArmorLevel)) or 1
             if subClassID > preferred then
                 return 0.05
             end

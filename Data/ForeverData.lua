@@ -69,8 +69,12 @@ local FOREVER_ITEM_STARTERS = {
     [18358] = { questID = 7500, name = "The Arcanist's Cookbook", drop = "Drops in Dire Maul; also tradeable" },
     [267138] = { questID = 94980, name = "Krol'dok Moulding", drop = "Dropped by Tunk, at the forge beside War Handler Ashka in Krol'dok Stronghold; everyone in the group can loot it" },
 }
+Data.ItemQuestMap = Data.ItemQuestMap or {}
 for itID, itData in pairs(FOREVER_ITEM_STARTERS) do
     Data.SecretQuestStarters[itID] = itData
+    if itData.questID and itData.questID > 0 then
+        Data.ItemQuestMap[itID] = itData.questID
+    end
 end
 
 -- =========================================================================
@@ -808,7 +812,6 @@ local FOREVER_CHAINS = {
     [3014] = { quests = { 356, 99156, 92422 }, isImportant = true },
     [3015] = { quests = { 373, 389, 391 }, isImportant = true },
     [3016] = { quests = { 2283, 2284, 2318, 2338, 2339, 2340, 2341 }, isImportant = true },
-    [3017] = { quests = { -97101, -97100 }, isImportant = true },
     [3018] = { quests = { 9052, 9051, 9053 }, isImportant = true },
     [3019] = { quests = { 92346, 92343 }, isImportant = true },
     [3020] = { quests = { 3906, 3981, 3982, 4001, 4002, 4003 }, isImportant = true },

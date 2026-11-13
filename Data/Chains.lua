@@ -25,7 +25,7 @@ Data.APIQuestLineMap = {}
 Data.KnownChains = {
     -- [1001] The Defias Brotherhood (Westfall / Deadmines)
     [1001] = {
-        quests = { 155, 166, 167, 168, 65, 132, 135, 141, 142, 153 },
+        quests = { 65, 132, 135, 141, 142, 155, 166 },
         isImportant = true,
     },
     -- [1007] Leaders of the Fang (Wailing Caverns)
@@ -85,7 +85,7 @@ Data.KnownChains = {
     },
     -- [1060] The Night Watch (Duskwood Undead Defense)
     [1060] = {
-        quests = { 57, 58, 60 },
+        quests = { 56, 57, 58 },
         isImportant = true,
     },
     -- [1065] The Hermit & Eliza (Duskwood Lore)
@@ -100,19 +100,43 @@ Data.KnownChains = {
     },
 }
 
--- Build the fast lookup reverse index
+-- Build the fast lookup reverse index (deterministic priority: longer chain wins, curated < 3000 wins ties)
 function Data.BuildChainIndex()
-    for chainID, chainData in pairs(Data.KnownChains) do
-        local quests = chainData.quests or {}
+    wipe(Data.ChainIndex)
+    local sortedIDs = {}
+    for chainID in pairs(Data.KnownChains) do
+        if type(chainID) == "number" then
+            table.insert(sortedIDs, chainID)
+        end
+    end
+    table.sort(sortedIDs)
+
+    for _, chainID in ipairs(sortedIDs) do
+        local chainData = Data.KnownChains[chainID]
+        local quests = (chainData and chainData.quests) or {}
         local total = #quests
         for step, qID in ipairs(quests) do
-            Data.ChainIndex[qID] = {
-                chainID = chainID,
-                step = step,
-                totalSteps = total,
-                isCap = (step == total),
-                isImportant = chainData.isImportant or false,
-            }
+            if type(qID) == "number" and qID > 0 then
+                local existing = Data.ChainIndex[qID]
+                local shouldReplace = false
+                if not existing then
+                    shouldReplace = true
+                elseif total > (existing.totalSteps or 0) then
+                    shouldReplace = true
+                elseif total == (existing.totalSteps or 0) and chainID < 3000 and (existing.chainID or 9999) >= 3000 then
+                    shouldReplace = true
+                end
+
+                if shouldReplace then
+                    Data.ChainIndex[qID] = {
+                        chainID = chainID,
+                        step = step,
+                        totalSteps = total,
+                        isCap = (step == total),
+                        isImportant = chainData.isImportant or false,
+                    }
+                end
+            end
         end
     end
 end
@@ -166,7 +190,7 @@ Data.ItemQuestMap = {
     [4854]  = 1017,  -- Befouled Water Globe (Ashenvale)
     [4851]  = 954,   -- Glowing Stave (Darkshore)
     [5805]  = 1435,  -- The Corrupter Flute (Desolace)
-    [10441] = 3367,  -- Slaghide Gauntlets (Searing Gorge)
+    [10441] = 6981,  -- Glowing Shard (Wailing Caverns)
     [9254]  = 7003,  -- Perfect Yeti Hide (Feralas)
     [12840] = 977,   -- Pristine Yeti Hide (Winterspring)
     [13180] = 5405,  -- Araj's Scarab (Andorhal)
@@ -180,23 +204,23 @@ Data.ItemQuestMap = {
 -- =========================================================================
 Data.QuestPayoffs = {
     -- The Deadmines / Defias Brotherhood
-    [153] = {
+    [65]  = { chain = "The Defias Brotherhood (Step 1/7)", note = "First step of the required Defias Brotherhood chain.", summary = "Leads to: Deadmines Dungeon & Westfall Tunic", isTalkTo = true },
+    [132] = { chain = "The Defias Brotherhood (Step 2/7)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic", isTalkTo = true },
+    [135] = { chain = "The Defias Brotherhood (Step 3/7)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic", isTalkTo = true },
+    [141] = { chain = "The Defias Brotherhood (Step 4/7)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic", isTalkTo = true },
+    [142] = { chain = "The Defias Brotherhood (Step 5/7)", note = "Defias Messenger spawns along Westfall roads. Unlocks the traitor escort.", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
+    [155] = { chain = "The Defias Brotherhood (Step 6/7)", note = "Escort the Defias Traitor in Moonbrook. Unlocks final Deadmines dungeon quest.", summary = "Pre-quest to: Deadmines Dungeon Finale" },
+    [166] = {
         unlock = "Dungeon: The Deadmines",
-        reward = "Westfall Tunic / Chausses of Westfall (Rare)",
-        chain = "The Defias Brotherhood (Step 10/10 Finale)",
+        reward = "Westfall Tunic / Chausses / Staff of Westfall (Rare)",
+        chain = "The Defias Brotherhood (Step 7/7 Finale)",
         note = "Alliance iconic chain finale & main Deadmines quest.",
         summary = "Unlocks: Deadmines Dungeon • Westfall Tunic (Rare)",
         isKeyUnlock = true,
     },
-    [155] = { chain = "The Defias Brotherhood (Step 1/10)", note = "Leads to Deadmines dungeon unlock & Westfall Tunic (Rare).", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [166] = { chain = "The Defias Brotherhood (Step 2/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [167] = { chain = "The Defias Brotherhood (Step 3/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [168] = { chain = "The Defias Brotherhood (Step 4/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [65]  = { chain = "The Defias Brotherhood (Step 5/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [132] = { chain = "The Defias Brotherhood (Step 6/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [135] = { chain = "The Defias Brotherhood (Step 7/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [141] = { chain = "The Defias Brotherhood (Step 8/10)", summary = "Leads to: Deadmines Dungeon & Westfall Tunic" },
-    [142] = { chain = "The Defias Brotherhood (Step 9/10)", note = "Escort step in Moonbrook. Unlocks final Deadmines dungeon quest.", summary = "Pre-quest to: Deadmines Dungeon Finale" },
+    [153] = { reward = "Leather Armor", note = "Red Leather Bandanas from Defias in Westfall / Moonbrook.", summary = "Westfall Defias Quest" },
+    [167] = { unlock = "Dungeon: The Deadmines", note = "Interior Deadmines quest (Oh Brother. . .).", summary = "Deadmines Dungeon Quest" },
+    [168] = { unlock = "Dungeon: The Deadmines", note = "Interior Deadmines quest (Collecting Memories).", summary = "Deadmines Dungeon Quest" },
     [81]  = { unlock = "Dungeon: The Deadmines", reward = "Miner's Revenge", note = "Interior Deadmines quest.", summary = "Deadmines Dungeon Quest" },
     [144] = { unlock = "Dungeon: The Deadmines", note = "Interior Deadmines quest.", summary = "Deadmines Dungeon Quest" },
 
@@ -564,9 +588,9 @@ Data.QuestPayoffs = {
     [231]  = { origin = "Wanted Poster", note = "Wanted poster in Darkshire (Duskwood).", summary = "Wanted Poster • Maggot Eye Bounty" },
 
     -- Duskwood Leveling Chains & Lore
-    [57]   = { chain = "The Night Watch (Step 1/3)", note = "Darkshire undead defense series. Kill Skeletal Warriors and Mages.", summary = "The Night Watch (Step 1/3)" },
-    [58]   = { chain = "The Night Watch (Step 2/3)", note = "Second step in Raven Hill cemetery against Plague Spreaders.", summary = "The Night Watch (Step 2/3)" },
-    [60]   = { reward = "Ring of the Night Watch / Weapon", chain = "The Night Watch (Step 3/3 Finale)", note = "Confronting Nightbane Worgens in Roland's Doom.", summary = "The Night Watch Finale • Ring of the Night Watch", isKeyUnlock = true },
+    [56]   = { chain = "The Night Watch (Step 1/3)", note = "Darkshire undead defense series. Kill Skeletal Warriors and Mages.", summary = "The Night Watch (Step 1/3)" },
+    [57]   = { chain = "The Night Watch (Step 2/3)", note = "Second step in Raven Hill cemetery against Skeletal Fiends and Horrors.", summary = "The Night Watch (Step 2/3)" },
+    [58]   = { reward = "Ring of the Night Watch / Weapon", chain = "The Night Watch (Step 3/3 Finale)", note = "Final step in Dawning Wood Catacombs against Plague Spreaders.", summary = "The Night Watch Finale • Ring of the Night Watch", isKeyUnlock = true },
     [226]  = { chain = "The Story of Morgan Ladimore (Pre-quest)", note = "Raven Hill cemetery investigation. Leads to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
     [148]  = { chain = "The Hermit & Eliza (Step 1/4)", note = "Abercrombie in Raven Hill. Leads to the haunting of Eliza's Tomb.", summary = "The Hermit & Eliza Chain" },
     [156]  = { chain = "The Hermit & Eliza (Step 2/4)", summary = "The Hermit & Eliza Chain" },
@@ -1073,7 +1097,7 @@ function Data.GetQuestPayoff(questID, questTitle)
     end
 
     -- Detect WoW Forever Custom Content (Riverglades & Zephras Isle)
-    if C_Map and C_Map.GetBestMapForUnit then
+    if (not targetID or targetID >= 90000) and C_Map and C_Map.GetBestMapForUnit then
         local ok, currentMap = pcall(C_Map.GetBestMapForUnit, "player")
         if ok and currentMap then
             if currentMap == 2548 then

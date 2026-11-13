@@ -611,7 +611,9 @@ function Utils.IsTalkToQuest(questID)
     local basicInfo = Utils.GetQuestBasicInfo(questID)
     local title = basicInfo and basicInfo.title
     if title and addon.Data and addon.Data.QuestPayoffsByTitle then
-        local lowerTitle = string.lower(title)
+        local cleanTitle = Utils.CleanQuestTitle and Utils.CleanQuestTitle(title) or title
+        cleanTitle = string.gsub(cleanTitle, "^%s*%[%d+%]%s*", "")
+        local lowerTitle = string.lower(string.gsub(cleanTitle, "^%s*(.-)%s*$", "%1"))
         local p = addon.Data.QuestPayoffsByTitle[lowerTitle]
         if p and (p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true) then
             _talkToCache[questID] = true
@@ -735,9 +737,9 @@ function Utils.IsTalkToQuest(questID)
                 return true
             end
         end
+        _talkToCache[questID] = false
     end
 
-    _talkToCache[questID] = false
     return false
 end
 
