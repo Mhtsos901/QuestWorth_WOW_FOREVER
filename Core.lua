@@ -41,6 +41,9 @@ local function RefreshAllUI()
         if addon.UI.UpdateZoneAdvisor then
             addon.UI.UpdateZoneAdvisor()
         end
+        if addon.UI.ApplyQuestObjectHighlight then
+            addon.UI.ApplyQuestObjectHighlight()
+        end
     end
 end
 
@@ -106,6 +109,9 @@ local function OnEvent(self, event, ...)
         end
         if addon.UI and addon.UI.InitializeWorldMap then
             addon.UI.InitializeWorldMap()
+        end
+        if addon.UI and addon.UI.ApplyQuestObjectHighlight then
+            addon.UI.ApplyQuestObjectHighlight()
         end
         if addon.Engine and addon.Engine.InvalidateCache then
             addon.Engine.InvalidateCache()
@@ -189,6 +195,9 @@ local function OnEvent(self, event, ...)
         DelayedRefresh(0.18)
 
     elseif event == "PLAYER_REGEN_ENABLED" then
+        if addon.UI and addon.UI.ApplyQuestObjectHighlight and addon._objectHighlightDeferred then
+            addon.UI.ApplyQuestObjectHighlight()
+        end
         if _combatDeferred then
             _refreshPending = false
             DelayedRefresh(0.05)

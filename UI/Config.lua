@@ -24,6 +24,7 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_WEIGHTS"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_QUESTLOG"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_TRACKER"])
+    DEFAULT_CHAT_FRAME:AddMessage(L["HELP_OBJECTS"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_TEST"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_RESET"])
 end
@@ -111,6 +112,7 @@ local function RefreshAllUI()
             addon.UI.UpdateZoneAdvisor()
         end
         if addon.UI.UpdateQuestOfferDialog then addon.UI.UpdateQuestOfferDialog() end
+        if addon.UI.ApplyQuestObjectHighlight then addon.UI.ApplyQuestObjectHighlight() end
     end
 end
 
@@ -135,15 +137,15 @@ local function CreateOptionsPanel()
             RefreshAllUI()
         end)
 
-    local cbTooltip = CreateCheckbox(panel, "Show Worth in Tooltip", "TOPLEFT", cbEnable, "BOTTOMLEFT", 0, -8,
+    local cbTooltip = CreateCheckbox(panel, "Show Worth in Tooltip", "TOPLEFT", cbEnable, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.showInTooltip end,
         function(v) addon.db.showInTooltip = v end)
 
-    local cbBreakdown = CreateCheckbox(panel, "Show Detailed 5-Score Breakdown in Tooltip", "TOPLEFT", cbTooltip, "BOTTOMLEFT", 0, -8,
+    local cbBreakdown = CreateCheckbox(panel, "Show Detailed 5-Score Breakdown in Tooltip", "TOPLEFT", cbTooltip, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.showBreakdown end,
         function(v) addon.db.showBreakdown = v end)
 
-    local cbQuestLog = CreateCheckbox(panel, "Show Worth Tag in Quest Log (Window)", "TOPLEFT", cbBreakdown, "BOTTOMLEFT", 0, -8,
+    local cbQuestLog = CreateCheckbox(panel, "Show Worth Tag in Quest Log (Window)", "TOPLEFT", cbBreakdown, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.showInQuestLog end,
         function(v)
             addon.db.showInQuestLog = v
@@ -152,7 +154,7 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbTracker = CreateCheckbox(panel, "Show Worth Tag in Objective Tracker (Right)", "TOPLEFT", cbQuestLog, "BOTTOMLEFT", 0, -8,
+    local cbTracker = CreateCheckbox(panel, "Show Worth Tag in Objective Tracker (Right)", "TOPLEFT", cbQuestLog, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.showInTracker end,
         function(v)
             addon.db.showInTracker = v
@@ -161,7 +163,7 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbWorldMap = CreateCheckbox(panel, "Show Zone Worth Banner on World Map", "TOPLEFT", cbTracker, "BOTTOMLEFT", 0, -8,
+    local cbWorldMap = CreateCheckbox(panel, "Show Zone Worth Banner on World Map", "TOPLEFT", cbTracker, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.showInWorldMap end,
         function(v)
             addon.db.showInWorldMap = v
@@ -170,7 +172,7 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbZoneAdvisor = CreateCheckbox(panel, "Show Zone Advisor Sidebar on World Map", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -8,
+    local cbZoneAdvisor = CreateCheckbox(panel, "Show Zone Advisor Sidebar on World Map", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.showZoneAdvisor end,
         function(v)
             addon.db.showZoneAdvisor = v
@@ -179,7 +181,16 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -8,
+    local cbQuestObjects = CreateCheckbox(panel, "Highlight Quest Objects in World (Sparkles & 3D Glow)", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -6,
+        function() return addon.db and addon.db.highlightQuestObjects ~= false end,
+        function(v)
+            addon.db.highlightQuestObjects = v
+            if addon.UI and addon.UI.ApplyQuestObjectHighlight then
+                addon.UI.ApplyQuestObjectHighlight()
+            end
+        end)
+
+    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbQuestObjects, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.debug end,
         function(v) addon.db.debug = v end)
 
@@ -217,6 +228,7 @@ local function CreateOptionsPanel()
         cbTracker:SetChecked(addon.db.showInTracker)
         cbWorldMap:SetChecked(addon.db.showInWorldMap ~= false)
         cbZoneAdvisor:SetChecked(addon.db.showZoneAdvisor ~= false)
+        cbQuestObjects:SetChecked(addon.db.highlightQuestObjects ~= false)
         cbDebug:SetChecked(addon.db.debug)
         sR:SyncValue()
         sF:SyncValue()
@@ -349,6 +361,12 @@ local function HandleSlashCmd(msg)
             addon.UI.ToggleZoneAdvisor(addon.db.showZoneAdvisor)
         end
         addon.Print("Zone Advisor Sidebar: %s", addon.db.showZoneAdvisor and "|cff00ff00ON|r" or "|cffff0000OFF|r")
+    elseif cmd == "objects" or cmd == "object" or cmd == "sparkle" or cmd == "sparkles" or cmd == "glow" then
+        addon.db.highlightQuestObjects = not (addon.db.highlightQuestObjects ~= false)
+        if addon.UI and addon.UI.ApplyQuestObjectHighlight then
+            addon.UI.ApplyQuestObjectHighlight()
+        end
+        addon.Print(string.format(L["OBJECT_HIGHLIGHT_TOGGLED"], addon.db.highlightQuestObjects and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
     elseif cmd == "test" or cmd == "diag" then
         addon.Engine.RunDiagnostics()
     elseif cmd == "reset" then

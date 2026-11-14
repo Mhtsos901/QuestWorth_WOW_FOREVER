@@ -16,6 +16,7 @@ local DEFAULT_SETTINGS = {
     showInTracker = true,
     showInWorldMap = true,
     showZoneAdvisor = true,
+    highlightQuestObjects = true,
     zoneAdvisorFilter = "ALL",
     weights = {
         reward = 0.40,
@@ -49,7 +50,8 @@ local function SanitizeSettings(db)
     -- Verify boolean settings
     local boolKeys = {
         "enabled", "debug", "showInTooltip", "showBreakdown",
-        "showInQuestLog", "showInTracker", "showInWorldMap", "showZoneAdvisor"
+        "showInQuestLog", "showInTracker", "showInWorldMap", "showZoneAdvisor",
+        "highlightQuestObjects"
     }
     for _, k in ipairs(boolKeys) do
         if type(db[k]) ~= "boolean" then

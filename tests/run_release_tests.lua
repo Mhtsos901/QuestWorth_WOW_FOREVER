@@ -102,6 +102,25 @@ _G.SOUNDKIT = { IG_MAINMENU_OPTION_CHECKBOX_ON = 856 }
 _G.PlaySound = function(s) end
 _G.InterfaceOptions_AddCategory = function(p) end
 
+-- CVars mock
+local mockCVars = {
+    questPOI = "0",
+    Outline = "0",
+    OutlineEngineMode = "0",
+    graphicsOutlineMode = "0",
+    SoftTargetInteract = "1",
+    SoftTargetIconGameObject = "0",
+    SoftTargetIconEnemy = "0",
+    SoftTargetEnemy = "0",
+    SoftTargetFriend = "0",
+}
+_G.GetCVar = function(name) return mockCVars[name] end
+_G.SetCVar = function(name, val) mockCVars[name] = tostring(val) end
+_G.C_CVar = {
+    GetCVar = _G.GetCVar,
+    SetCVar = _G.SetCVar,
+}
+
 -- Mock Frames
 local createdFrames = {}
 _G.CreateFrame = function(frameType, name, parent, template)
@@ -216,9 +235,34 @@ _G.CreateFrame = function(frameType, name, parent, template)
     function f:SetText(t) self:GetFontString():SetText(t) end
     function f:GetText() return self:GetFontString():GetText() end
     function f:SetOwner(owner, anchor) self.owner = owner end
-    function f:ClearLines() self.lines = {} end
-    function f:AddLine(text, r, g, b) self.lines = self.lines or {}; table.insert(self.lines, {left = text, r = r, g = g, b = b}) end
-    function f:AddDoubleLine(l, r, lr, lg, lb, rr, rg, rb) self.lines = self.lines or {}; table.insert(self.lines, {left = l, right = r}) end
+    function f:ClearLines()
+        if self.name and self.lines then
+            for idx = 1, #self.lines do
+                if _G[self.name .. "TextLeft" .. idx] then
+                    _G[self.name .. "TextLeft" .. idx]:SetText("")
+                end
+            end
+        end
+        self.lines = {}
+    end
+    function f:AddLine(text, r, g, b)
+        self.lines = self.lines or {}
+        table.insert(self.lines, {left = text, r = r, g = g, b = b})
+        if self.name then
+            local key = self.name .. "TextLeft" .. #self.lines
+            if not _G[key] then _G[key] = self:CreateFontString(key) end
+            _G[key]:SetText(text)
+        end
+    end
+    function f:AddDoubleLine(l, r, lr, lg, lb, rr, rg, rb)
+        self.lines = self.lines or {}
+        table.insert(self.lines, {left = l, right = r})
+        if self.name then
+            local key = self.name .. "TextLeft" .. #self.lines
+            if not _G[key] then _G[key] = self:CreateFontString(key) end
+            _G[key]:SetText(l)
+        end
+    end
     function f:NumLines() return self.lines and #self.lines or 0 end
     function f:SetHyperlink(link) self.hyperlink = link end
     function f:SetVerticalScroll(val) self.scroll = val end
@@ -245,6 +289,9 @@ end
 _G.WorldFrame = _G.CreateFrame("Frame", "WorldFrame")
 _G.UIParent = _G.CreateFrame("Frame", "UIParent")
 _G.GameTooltip = _G.CreateFrame("Frame", "GameTooltip")
+_G.GameTooltip.GetUnit = function(self) return self.mockUnit end
+_G.GameTooltip.GetItem = function(self) return self.mockItemName, self.mockItemLink end
+_G.GameTooltip.GetSpell = function(self) return self.mockSpellName end
 _G.WorldMapFrame = _G.CreateFrame("Frame", "WorldMapFrame")
 _G.QuestLogFrame = _G.CreateFrame("Frame", "QuestLogFrame")
 _G.QuestLogListScrollFrame = _G.CreateFrame("Frame", "QuestLogListScrollFrame")
@@ -448,6 +495,7 @@ assert_true(_G.WorthItDB.enabled == true, "Default setting 'enabled' is true")
 assert_true(_G.WorthItDB.showInTooltip == true, "Default setting 'showInTooltip' is true")
 assert_true(_G.WorthItDB.showInQuestLog == true, "Default setting 'showInQuestLog' is true")
 assert_true(_G.WorthItDB.showInWorldMap == true, "Default setting 'showInWorldMap' is true")
+assert_true(_G.WorthItDB.highlightQuestObjects == true, "Default setting 'highlightQuestObjects' is true")
 assert_true(type(_G.WorthItDB.weights) == "table", "Weights table initialized")
 assert_true(_G.WorthItDB.weights.reward == 0.40, "Default reward weight is 0.40")
 assert_true(_G.WorthItDB.weights.classFit == 0.25, "Default class fit weight is 0.25")
@@ -1334,6 +1382,106 @@ mockPlayerState.level = savedLvlKirin
 mockQuestLog = savedLogKirin
 addonTable.Player.Update()
 
+-- 8. Quest World Object Highlight (3D Glow/Sparkles CVars + GameObject Tooltip Banner, excluding Mobs)
+local savedLogObj = mockQuestLog
+local savedHighlightOpt = addonTable.db.highlightQuestObjects
+addonTable.db.highlightQuestObjects = true
+addonTable.UI.ApplyQuestObjectHighlight()
+assert_eq(mockCVars.Outline, "2", "Quest object highlight enables 3D Outline CVar (2)")
+assert_eq(mockCVars.questPOI, "1", "Quest object highlight enables questPOI CVar (1)")
+assert_eq(mockCVars.SoftTargetInteract, "3", "Quest object highlight enables SoftTargetInteract for nearby objects (3)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Quest object highlight enables floating SoftTargetIconGameObject (1)")
+assert_eq(mockCVars.SoftTargetIconEnemy, "0", "Quest object highlight keeps SoftTargetIconEnemy disabled for mobs (0)")
+
+addonTable.db.highlightQuestObjects = false
+addonTable.UI.ApplyQuestObjectHighlight()
+assert_eq(mockCVars.Outline, "0", "Disabling quest object highlight restores original Outline CVar (0)")
+assert_eq(mockCVars.SoftTargetInteract, "1", "Disabling quest object highlight restores original SoftTargetInteract CVar (1)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Disabling quest object highlight restores original SoftTargetIconGameObject CVar (0)")
+
+addonTable.db.highlightQuestObjects = true
+addonTable.UI.ApplyQuestObjectHighlight()
+mockQuestLog = {
+    { title = "Gnomeregan (2)", isHeader = true, isCollapsed = false },
+    { title = "Save Techbot's Brain!", questID = 2922, level = 26, isHeader = false, isComplete = 0 },
+    { title = "The Grand Betrayal", questID = 2929, level = 35, isHeader = false, isComplete = 0 },
+}
+mockQuestDB[2922] = {
+    title = "Save Techbot's Brain!",
+    level = 26,
+    xp = 2100,
+    money = 0,
+    isDungeon = true,
+    objectives = { { text = "0/1 Techbot's Memory Core", type = "object", finished = false } },
+}
+mockQuestDB[2929] = {
+    title = "The Grand Betrayal",
+    level = 35,
+    xp = 3900,
+    money = 0,
+    isDungeon = true,
+    objectives = { { text = "Mekgineer Thermaplugg slain: 0/1", type = "monster", finished = false } },
+}
+
+-- Positive test: world interactable GameObject matching active non-kill objective
+GameTooltip:ClearLines()
+GameTooltip._worthItAddedQuestID = nil
+GameTooltip._worthItAddedItemID = nil
+GameTooltip._worthItAddedObjectText = nil
+GameTooltip.mockUnit = nil
+GameTooltip.mockItemLink = nil
+GameTooltip.mockSpellName = nil
+GameTooltip:AddLine("Techbot's Memory Core", 1, 1, 1)
+if GameTooltip.scripts and GameTooltip.scripts["OnShow"] then
+    GameTooltip.scripts["OnShow"](GameTooltip)
+else
+    addonTable.UI.AddWorldObjectQuestLines(GameTooltip)
+end
+local objTooltipFound = false
+for _, line in ipairs(GameTooltip.lines or {}) do
+    if line.left and string.find(line.left, "QUEST OBJECT", 1, true) then
+        objTooltipFound = true
+    end
+end
+assert_true(objTooltipFound, "Hovering quest world object injects 'QUEST OBJECT (Interact!)' banner into GameTooltip")
+
+-- Negative test 1: mob-kill objective name must NOT be tagged as Quest Object
+GameTooltip:ClearLines()
+GameTooltip._worthItAddedQuestID = nil
+GameTooltip._worthItAddedItemID = nil
+GameTooltip._worthItAddedObjectText = nil
+GameTooltip:AddLine("Mekgineer Thermaplugg", 1, 0, 0)
+addonTable.UI.AddWorldObjectQuestLines(GameTooltip)
+local mobObjTagged = false
+for _, line in ipairs(GameTooltip.lines or {}) do
+    if line.left and string.find(line.left, "QUEST OBJECT", 1, true) then
+        mobObjTagged = true
+    end
+end
+assert_true(mobObjTagged == false, "Mob-kill objective ('Mekgineer Thermaplugg slain') is NOT tagged as a Quest World Object")
+
+-- Negative test 2: tooltip with GetUnit() set is excluded even if name overlaps
+GameTooltip:ClearLines()
+GameTooltip._worthItAddedQuestID = nil
+GameTooltip._worthItAddedItemID = nil
+GameTooltip._worthItAddedObjectText = nil
+GameTooltip.mockUnit = "Techbot's Memory Core"
+GameTooltip:AddLine("Techbot's Memory Core", 1, 1, 1)
+addonTable.UI.AddWorldObjectQuestLines(GameTooltip)
+local unitTagged = false
+for _, line in ipairs(GameTooltip.lines or {}) do
+    if line.left and string.find(line.left, "QUEST OBJECT", 1, true) then
+        unitTagged = true
+    end
+end
+assert_true(unitTagged == false, "Unit/mob tooltip (GetUnit ~= nil) is excluded from Quest Object highlight")
+
+GameTooltip.mockUnit = nil
+GameTooltip:ClearLines()
+mockQuestLog = savedLogObj
+addonTable.db.highlightQuestObjects = savedHighlightOpt
+addonTable.UI.ApplyQuestObjectHighlight()
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L
@@ -1428,6 +1576,8 @@ local fuzzTargets = {
     { name = "UI.UpdateObjectiveTracker", fn = function(v) return addonTable.UI.UpdateObjectiveTracker(v) end },
     { name = "UI.UpdateWorldMapBanner", fn = function(v) return addonTable.UI.UpdateWorldMapBanner(v) end },
     { name = "UI.UpdateZoneAdvisor", fn = function(v) return addonTable.UI.UpdateZoneAdvisor(v) end },
+    { name = "UI.ApplyQuestObjectHighlight", fn = function(v) return addonTable.UI.ApplyQuestObjectHighlight(v) end },
+    { name = "UI.AddWorldObjectQuestLines", fn = function(v) return addonTable.UI.AddWorldObjectQuestLines(v) end },
 }
 
 local fuzzErrors = 0

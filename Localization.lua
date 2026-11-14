@@ -58,6 +58,9 @@ local enUS = {
     ["TALK_TO_CHAIN_START"] = "Do Now (Talk to NPC • Chain Start)",
     ["TALK_TO_HIGHLIGHT"] = "Talk to NPC",
     ["SAFE_TALK_TO"] = "Safe (Talk to NPC)",
+    ["HELP_OBJECTS"] = "  |cffffcc00/worthit objects|r - Toggle 3D glow, sparkles & interact icon on quest world objects",
+    ["OBJECT_HIGHLIGHT_TOGGLED"] = "Quest Object Highlight (Sparkles & 3D Glow): %s",
+    ["QUEST_OBJECT_HEADER"] = "QUEST OBJECT (Interact!)",
 }
 
 -- Greek translations (elGR)
@@ -109,6 +112,9 @@ local elGR = {
     ["TALK_TO_CHAIN_START"] = "Κάντε το τώρα (Μιλήστε σε NPC • Αρχή Αλυσίδας)",
     ["TALK_TO_HIGHLIGHT"] = "Ομιλία σε NPC",
     ["SAFE_TALK_TO"] = "Ασφαλές (Ομιλία σε NPC)",
+    ["HELP_OBJECTS"] = "  |cffffcc00/worthit objects|r - Εναλλαγή 3D λάμψης, sparkles & εικονιδίου σε αντικείμενα quest στον κόσμο",
+    ["OBJECT_HIGHLIGHT_TOGGLED"] = "Επισήμανση Αντικειμένων Quest (Sparkles & 3D Glow): %s",
+    ["QUEST_OBJECT_HEADER"] = "ΑΝΤΙΚΕΙΜΕΝΟ QUEST (Interact!)",
 }
 
 for k, v in pairs(enUS) do
