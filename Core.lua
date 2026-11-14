@@ -231,6 +231,11 @@ local function OnEvent(self, event, ...)
                 addon.UI.UpdateQuestGreetingPanel()
             end
         end
+
+    elseif event == "PLAYER_SOFT_INTERACT_CHANGED" then
+        if addon.UI and addon.UI.UpdateSoftTargetQuestObjectIcon then
+            addon.UI.UpdateSoftTargetQuestObjectIcon(false)
+        end
     end
 end
 
@@ -244,7 +249,8 @@ local EVENTS = {
     "TRAIT_CONFIG_UPDATED", "PLAYER_EQUIPMENT_CHANGED",
     "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED",
     "GET_ITEM_INFO_RECEIVED", "PLAYER_REGEN_ENABLED", "QUEST_DETAIL", "QUEST_PROGRESS",
-    "QUEST_COMPLETE", "GOSSIP_SHOW", "QUEST_GREETING"
+    "QUEST_COMPLETE", "GOSSIP_SHOW", "QUEST_GREETING",
+    "PLAYER_SOFT_INTERACT_CHANGED"
 }
 
 for _, ev in ipairs(EVENTS) do

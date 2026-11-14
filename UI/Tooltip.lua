@@ -447,6 +447,9 @@ local function OnTooltipCleared(tooltip)
     tooltip._worthItAddedQuestID = nil
     tooltip._worthItAddedItemID = nil
     tooltip._worthItAddedObjectText = nil
+    if tooltip == GameTooltip and not tooltip._worthItInObjectCheck and UI.UpdateSoftTargetQuestObjectIcon then
+        UI.UpdateSoftTargetQuestObjectIcon(false)
+    end
 end
 
 -- =========================================================================
@@ -459,7 +462,7 @@ local OBJECT_HIGHLIGHT_CVARS = {
     OutlineEngineMode = "1",
     graphicsOutlineMode = "2",
     SoftTargetInteract = "3",
-    SoftTargetIconGameObject = "1",
+    SoftTargetIconGameObject = "0",
     SoftTargetIconEnemy = "0",
     SoftTargetEnemy = "0",
     SoftTargetFriend = "0",
@@ -511,8 +514,12 @@ function UI.ApplyQuestObjectHighlight()
                 addon._savedObjectCVars[k] = SafeGetCVar(k)
             end
         end
+        addon._savedObjectCVars.SoftTargetIconGameObject = "0"
         for k, v in pairs(OBJECT_HIGHLIGHT_CVARS) do
             SafeSetCVar(k, v)
+        end
+        if UI.UpdateSoftTargetQuestObjectIcon then
+            UI.UpdateSoftTargetQuestObjectIcon(false)
         end
         return true
     else
@@ -530,6 +537,7 @@ function UI.ApplyQuestObjectHighlight()
                 SafeSetCVar(k, v)
             end
         end
+        SafeSetCVar("SoftTargetIconGameObject", "0")
         return false
     end
 end
@@ -662,34 +670,10 @@ local function ReadTooltipLineText(tooltip, index)
     return nil
 end
 
-function UI.AddWorldObjectQuestLines(tooltip)
-    if not (addon.db and addon.db.enabled and addon.db.highlightQuestObjects ~= false) then return end
-    if not tooltip or type(tooltip) ~= "table" or not tooltip.NumLines then return end
-    if tooltip._worthItInObjectCheck then return end
-    if tooltip._worthItAddedQuestID or tooltip._worthItAddedItemID or tooltip._worthItAddedObjectText then return end
-
-    -- Exclude 2D UI widget tooltips (buttons, map pins, frames) and units/items/spells strictly
-    local owner = tooltip.GetOwner and tooltip:GetOwner()
-    if owner and owner ~= UIParent and owner ~= WorldFrame then return end
-    if tooltip.GetUnit and select(1, tooltip:GetUnit()) then return end
-    if tooltip.GetItem and select(2, tooltip:GetItem()) then return end
-    if tooltip.GetSpell and select(1, tooltip:GetSpell()) then return end
-
-    local numLines = tooltip:NumLines() or 0
-    if numLines < 1 then return end
-
-    local rawLine1 = ReadTooltipLineText(tooltip, 1)
-    local cleanObjName = StripTooltipFormatting(rawLine1)
-    if #cleanObjName < 3 then return end
+function UI.MatchWorldObjectToActiveQuest(rawObjName, extraLinesLower)
+    local cleanObjName = StripTooltipFormatting(rawObjName)
+    if #cleanObjName < 3 then return nil end
     local lowerObjName = string.lower(cleanObjName)
-
-    local extraLinesLower = {}
-    for i = 2, numLines do
-        local lineTxt = StripTooltipFormatting(ReadTooltipLineText(tooltip, i))
-        if lineTxt ~= "" then
-            table.insert(extraLinesLower, string.lower(lineTxt))
-        end
-    end
 
     local matchedQuestID, matchedQuestTitle, matchedObjText = nil, nil, nil
     local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
@@ -719,7 +703,7 @@ function UI.AddWorldObjectQuestLines(tooltip)
             local nonKillObjs = GetQuestNonKillObjectives(qID)
 
             if #nonKillObjs > 0 then
-                -- Pass 1: Match hovered GameObject title against non-kill objective target names
+                -- Pass 1: Match GameObject title against non-kill objective target names
                 for _, objText in ipairs(nonKillObjs) do
                     local targetName = ExtractObjectiveObjectName(objText)
                     local lowerTarget = string.lower(targetName)
@@ -735,7 +719,7 @@ function UI.AddWorldObjectQuestLines(tooltip)
                 end
 
                 -- Pass 2: Fallback check on existing tooltip lines 2..N (e.g. modern quest object tooltips)
-                if not matchedQuestID and #extraLinesLower > 0 then
+                if not matchedQuestID and extraLinesLower and #extraLinesLower > 0 then
                     for _, extraLine in ipairs(extraLinesLower) do
                         if lowerQTitle ~= "" and #lowerQTitle >= 4 and string.find(extraLine, lowerQTitle, 1, true) then
                             matchedQuestID = qID
@@ -762,7 +746,82 @@ function UI.AddWorldObjectQuestLines(tooltip)
         if matchedQuestID then break end
     end
 
-    if not matchedQuestID then return false end
+    if not matchedQuestID then return nil end
+    return matchedQuestID, matchedQuestTitle, matchedObjText, cleanObjName
+end
+
+function UI.UpdateSoftTargetQuestObjectIcon(hoveredMatched)
+    if InCombatLockdown and InCombatLockdown() then return false end
+
+    if not (addon.db and addon.db.enabled ~= false and addon.db.highlightQuestObjects ~= false) then
+        SafeSetCVar("SoftTargetIconGameObject", "0")
+        return false
+    end
+
+    if hoveredMatched == true then
+        SafeSetCVar("SoftTargetIconGameObject", "1")
+        return true
+    end
+
+    local softName = nil
+    if UnitName then
+        local ok, n = pcall(UnitName, "softinteract")
+        if ok and type(n) == "string" and n ~= "" then
+            softName = n
+        end
+    end
+
+    local isEnemy = false
+    if softName and UnitIsEnemy then
+        local okE, en = pcall(UnitIsEnemy, "player", "softinteract")
+        if okE and en then
+            isEnemy = true
+        end
+    end
+
+    if softName and not isEnemy and UI.MatchWorldObjectToActiveQuest(softName) then
+        SafeSetCVar("SoftTargetIconGameObject", "1")
+        return true
+    end
+
+    SafeSetCVar("SoftTargetIconGameObject", "0")
+    return false
+end
+
+function UI.AddWorldObjectQuestLines(tooltip)
+    if not (addon.db and addon.db.enabled and addon.db.highlightQuestObjects ~= false) then return end
+    if not tooltip or type(tooltip) ~= "table" or not tooltip.NumLines then return end
+    if tooltip._worthItInObjectCheck then return end
+    if tooltip._worthItAddedQuestID or tooltip._worthItAddedItemID or tooltip._worthItAddedObjectText then return end
+
+    -- Exclude 2D UI widget tooltips (buttons, map pins, frames) and units/items/spells strictly
+    local owner = tooltip.GetOwner and tooltip:GetOwner()
+    if owner and owner ~= UIParent and owner ~= WorldFrame then return end
+    if tooltip.GetUnit and select(1, tooltip:GetUnit()) then return end
+    if tooltip.GetItem and select(2, tooltip:GetItem()) then return end
+    if tooltip.GetSpell and select(1, tooltip:GetSpell()) then return end
+
+    local numLines = tooltip:NumLines() or 0
+    if numLines < 1 then return end
+
+    local rawLine1 = ReadTooltipLineText(tooltip, 1)
+    local extraLinesLower = {}
+    for i = 2, numLines do
+        local lineTxt = StripTooltipFormatting(ReadTooltipLineText(tooltip, i))
+        if lineTxt ~= "" then
+            table.insert(extraLinesLower, string.lower(lineTxt))
+        end
+    end
+
+    local matchedQuestID, matchedQuestTitle, matchedObjText, cleanObjName = UI.MatchWorldObjectToActiveQuest(rawLine1, extraLinesLower)
+    if not matchedQuestID then
+        if tooltip == GameTooltip then
+            UI.UpdateSoftTargetQuestObjectIcon(false)
+        end
+        return false
+    end
+
+    UI.UpdateSoftTargetQuestObjectIcon(true)
 
     tooltip._worthItInObjectCheck = true
     tooltip._worthItAddedObjectText = cleanObjName

@@ -1383,16 +1383,28 @@ mockPlayerState.level = savedLvlKirin
 mockQuestLog = savedLogKirin
 addonTable.Player.Update()
 
--- 8. Quest World Object Highlight (3D Glow/Sparkles CVars + GameObject Tooltip Banner, excluding Mobs)
+-- 8. Quest World Object Highlight (3D Glow/Sparkles CVars + Selective Quest-Only SoftTarget Icon + Tooltip)
 do
 local savedLogObj = mockQuestLog
 local savedHighlightOpt = addonTable.db.highlightQuestObjects
+local savedUnitName = _G.UnitName
+local savedUnitIsEnemy = _G.UnitIsEnemy
+local mockSoftTargetName = nil
+
+_G.UnitName = function(unit)
+    if unit == "softinteract" then return mockSoftTargetName end
+    return savedUnitName and savedUnitName(unit) or "TestPlayer"
+end
+_G.UnitIsEnemy = function(u1, u2)
+    return false
+end
+
 addonTable.db.highlightQuestObjects = true
 addonTable.UI.ApplyQuestObjectHighlight()
 assert_eq(mockCVars.Outline, "2", "Quest object highlight enables 3D Outline CVar (2)")
 assert_eq(mockCVars.questPOI, "1", "Quest object highlight enables questPOI CVar (1)")
 assert_eq(mockCVars.SoftTargetInteract, "3", "Quest object highlight enables SoftTargetInteract for nearby objects (3)")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Quest object highlight enables floating SoftTargetIconGameObject (1)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Quest object highlight keeps floating SoftTargetIconGameObject OFF globally (0) so unrelated objects get no icon")
 assert_eq(mockCVars.SoftTargetIconEnemy, "0", "Quest object highlight keeps SoftTargetIconEnemy disabled for mobs (0)")
 
 addonTable.db.highlightQuestObjects = false
@@ -1447,6 +1459,24 @@ for _, line in ipairs(GameTooltip.lines or {}) do
     end
 end
 assert_true(objTooltipFound, "Hovering quest world object injects 'QUEST OBJECT (Interact!)' banner into GameTooltip")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Hovering an active quest object dynamically enables SoftTargetIconGameObject (1)")
+
+-- Clearing tooltip resets floating icon when not soft-targeting an active quest object
+GameTooltip:ClearLines()
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Clearing tooltip resets SoftTargetIconGameObject back to 0")
+
+-- Soft-targeting via PLAYER_SOFT_INTERACT_CHANGED: enables ONLY for active quest objects, OFF for unrelated objects
+mockSoftTargetName = "Mailbox"
+pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Soft-targeting unrelated world object ('Mailbox') keeps SoftTargetIconGameObject OFF (0)")
+
+mockSoftTargetName = "Techbot's Memory Core"
+pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Soft-targeting active quest object ('Techbot's Memory Core') enables SoftTargetIconGameObject (1)")
+
+mockSoftTargetName = nil
+pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Clearing soft-target resets SoftTargetIconGameObject back to 0")
 
 -- Negative test 1: mob-kill objective name must NOT be tagged as Quest Object
 GameTooltip:ClearLines()
@@ -1481,6 +1511,8 @@ assert_true(unitTagged == false, "Unit/mob tooltip (GetUnit ~= nil) is excluded 
 
 GameTooltip.mockUnit = nil
 GameTooltip:ClearLines()
+_G.UnitName = savedUnitName
+_G.UnitIsEnemy = savedUnitIsEnemy
 mockQuestLog = savedLogObj
 addonTable.db.highlightQuestObjects = savedHighlightOpt
 addonTable.UI.ApplyQuestObjectHighlight()
@@ -1791,6 +1823,7 @@ local fuzzTargets = {
     { name = "UI.UpdateWorldMapBanner", fn = function(v) return addonTable.UI.UpdateWorldMapBanner(v) end },
     { name = "UI.UpdateZoneAdvisor", fn = function(v) return addonTable.UI.UpdateZoneAdvisor(v) end },
     { name = "UI.ApplyQuestObjectHighlight", fn = function(v) return addonTable.UI.ApplyQuestObjectHighlight(v) end },
+    { name = "UI.UpdateSoftTargetQuestObjectIcon", fn = function(v) return addonTable.UI.UpdateSoftTargetQuestObjectIcon(v) end },
     { name = "UI.AddWorldObjectQuestLines", fn = function(v) return addonTable.UI.AddWorldObjectQuestLines(v) end },
     { name = "UI.UpdateGossipAvailableQuests", fn = function(v) return addonTable.UI.UpdateGossipAvailableQuests(v) end },
     { name = "UI.UpdateQuestGreetingPanel", fn = function(v) return addonTable.UI.UpdateQuestGreetingPanel(v) end },
