@@ -463,9 +463,9 @@ local OBJECT_HIGHLIGHT_CVARS = {
     Outline = "2",
     OutlineEngineMode = "2",
     graphicsOutlineMode = "2",
-    SoftTargetInteract = "3",
-    SoftTargetIconQuest = "1",
-    SoftTargetIconGameObject = "1",
+    SoftTargetInteract = "0",
+    SoftTargetIconQuest = "0",
+    SoftTargetIconGameObject = "0",
     SoftTargetIconEnemy = "0",
     SoftTargetEnemy = "0",
     SoftTargetFriend = "0",
@@ -473,7 +473,7 @@ local OBJECT_HIGHLIGHT_CVARS = {
 
 local OBJECT_HIGHLIGHT_FALLBACK_OFF = {
     Outline = "0",
-    SoftTargetInteract = "1",
+    SoftTargetInteract = "0",
     SoftTargetIconGameObject = "0",
 }
 
@@ -525,7 +525,7 @@ function UI.ApplyQuestObjectHighlight()
         for k, v in pairs(OBJECT_HIGHLIGHT_CVARS) do
             SafeSetCVar(k, v)
         end
-        _softTargetIconActive = true
+        _softTargetIconActive = false
         return true
     else
         if addon._savedObjectCVars then
@@ -795,15 +795,9 @@ end
 function UI.UpdateSoftTargetQuestObjectIcon(hoveredMatched)
     if InCombatLockdown and InCombatLockdown() then return false end
 
-    if not (addon.db and addon.db.enabled ~= false and addon.db.highlightQuestObjects ~= false) then
-        _softTargetIconActive = false
-        SafeSetCVar("SoftTargetIconGameObject", "0")
-        return false
-    end
-
-    _softTargetIconActive = true
-    SafeSetCVar("SoftTargetIconGameObject", "1")
-    return true
+    _softTargetIconActive = false
+    SafeSetCVar("SoftTargetIconGameObject", "0")
+    return false
 end
 
 function UI.AddWorldObjectQuestLines(tooltip)

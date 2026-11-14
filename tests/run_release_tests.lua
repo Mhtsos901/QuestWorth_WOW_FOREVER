@@ -1401,10 +1401,10 @@ end
 
 addonTable.db.highlightQuestObjects = true
 addonTable.UI.ApplyQuestObjectHighlight()
-assert_eq(mockCVars.Outline, "2", "Quest object highlight enables 3D Outline CVar (2)")
+assert_eq(mockCVars.Outline, "2", "Quest object highlight enables 3D Outline/Sparkles CVar (2)")
 assert_eq(mockCVars.questPOI, "1", "Quest object highlight enables questPOI CVar (1)")
-assert_eq(mockCVars.SoftTargetInteract, "3", "Quest object highlight enables SoftTargetInteract for nearby objects (3)")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Quest object highlight enables floating SoftTargetIconGameObject (1) so objects are visible from afar")
+assert_eq(mockCVars.SoftTargetInteract, "0", "Quest object highlight keeps SoftTargetInteract disabled (0) so no skinning/loot icons appear")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Quest object highlight keeps SoftTargetIconGameObject disabled (0)")
 assert_eq(mockCVars.SoftTargetIconEnemy, "0", "Quest object highlight keeps SoftTargetIconEnemy disabled for mobs (0)")
 
 addonTable.db.highlightQuestObjects = false
@@ -1459,24 +1459,24 @@ for _, line in ipairs(GameTooltip.lines or {}) do
     end
 end
 assert_true(objTooltipFound, "Hovering quest world object injects 'QUEST OBJECT (Interact!)' banner into GameTooltip")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Hovering an active quest object keeps SoftTargetIconGameObject enabled (1)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Hovering an active quest object keeps SoftTargetIconGameObject disabled (0) for sparkles-only mode")
 
--- Clearing tooltip keeps global GameObject icon ON while feature is enabled
+-- Clearing tooltip keeps SoftTargetIconGameObject disabled
 GameTooltip:ClearLines()
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Clearing tooltip keeps SoftTargetIconGameObject enabled (1) while highlightQuestObjects is active")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Clearing tooltip keeps SoftTargetIconGameObject disabled (0)")
 
--- Soft-targeting via PLAYER_SOFT_INTERACT_CHANGED stays enabled without errors
+-- Soft-targeting via PLAYER_SOFT_INTERACT_CHANGED keeps icons off in sparkles-only mode
 mockSoftTargetName = "Mailbox"
 pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "SoftTargetIconGameObject remains enabled (1) for distant world object visibility")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "SoftTargetIconGameObject remains disabled (0) in sparkles-only mode")
 
 mockSoftTargetName = "Techbot's Memory Core"
 pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Soft-targeting active quest object ('Techbot's Memory Core') keeps SoftTargetIconGameObject enabled (1)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Soft-targeting active quest object keeps SoftTargetIconGameObject disabled (0) in sparkles-only mode")
 
 mockSoftTargetName = nil
 pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Clearing soft-target keeps SoftTargetIconGameObject enabled (1) while highlightQuestObjects is active")
+assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Clearing soft-target keeps SoftTargetIconGameObject disabled (0)")
 
 -- Negative test 1: mob-kill objective name must NOT be tagged as Quest Object
 GameTooltip:ClearLines()
