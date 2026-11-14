@@ -443,11 +443,13 @@ function UI.ShowQuestTooltip(tooltip, questID, owner)
 end
 
 -- Clear the deduplication token when tooltip is cleared
+local _softTargetIconActive = false
+
 local function OnTooltipCleared(tooltip)
     tooltip._worthItAddedQuestID = nil
     tooltip._worthItAddedItemID = nil
     tooltip._worthItAddedObjectText = nil
-    if tooltip == GameTooltip and not tooltip._worthItInObjectCheck and UI.UpdateSoftTargetQuestObjectIcon then
+    if tooltip == GameTooltip and not tooltip._worthItInObjectCheck and _softTargetIconActive and UI.UpdateSoftTargetQuestObjectIcon then
         UI.UpdateSoftTargetQuestObjectIcon(false)
     end
 end
@@ -487,12 +489,17 @@ local function SafeGetCVar(name)
 end
 
 local function SafeSetCVar(name, value)
+    local strVal = tostring(value)
+    local current = SafeGetCVar(name)
+    if current ~= nil and tostring(current) == strVal then
+        return true
+    end
     if C_CVar and C_CVar.SetCVar then
-        local ok = pcall(C_CVar.SetCVar, name, tostring(value))
+        local ok = pcall(C_CVar.SetCVar, name, strVal)
         if ok then return true end
     end
     if SetCVar then
-        local ok = pcall(SetCVar, name, tostring(value))
+        local ok = pcall(SetCVar, name, strVal)
         if ok then return true end
     end
     return false
@@ -670,12 +677,18 @@ local function ReadTooltipLineText(tooltip, index)
     return nil
 end
 
-function UI.MatchWorldObjectToActiveQuest(rawObjName, extraLinesLower)
-    local cleanObjName = StripTooltipFormatting(rawObjName)
-    if #cleanObjName < 3 then return nil end
-    local lowerObjName = string.lower(cleanObjName)
+local _objectTargetsCache = nil
 
-    local matchedQuestID, matchedQuestTitle, matchedObjText = nil, nil, nil
+function UI.InvalidateObjectTargetsCache()
+    _objectTargetsCache = nil
+end
+
+local function GetActiveQuestObjectTargets()
+    if _objectTargetsCache then
+        return _objectTargetsCache
+    end
+
+    local entries = {}
     local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
         or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
 
@@ -698,48 +711,79 @@ function UI.MatchWorldObjectToActiveQuest(rawObjName, extraLinesLower)
         end
 
         if not isHeader and Utils.IsValidQuestID(qID) then
-            local cleanQTitle = Utils.CleanQuestTitle and Utils.CleanQuestTitle(qTitle or "") or (qTitle or "")
-            local lowerQTitle = string.lower(cleanQTitle)
             local nonKillObjs = GetQuestNonKillObjectives(qID)
-
             if #nonKillObjs > 0 then
-                -- Pass 1: Match GameObject title against non-kill objective target names
+                local cleanQTitle = Utils.CleanQuestTitle and Utils.CleanQuestTitle(qTitle or "") or (qTitle or "")
+                local displayTitle = cleanQTitle ~= "" and cleanQTitle or ("Quest #" .. qID)
+                local lowerQTitle = string.lower(cleanQTitle)
+                local parsedObjs = {}
                 for _, objText in ipairs(nonKillObjs) do
                     local targetName = ExtractObjectiveObjectName(objText)
-                    local lowerTarget = string.lower(targetName)
-                    if #lowerTarget >= 4 then
-                        if lowerObjName == lowerTarget or
-                           (#lowerObjName >= 4 and (string.find(lowerObjName, lowerTarget, 1, true) or string.find(lowerTarget, lowerObjName, 1, true))) then
-                            matchedQuestID = qID
-                            matchedQuestTitle = cleanQTitle ~= "" and cleanQTitle or ("Quest #" .. qID)
-                            matchedObjText = StripTooltipFormatting(objText)
-                            break
-                        end
-                    end
+                    table.insert(parsedObjs, {
+                        cleanText = StripTooltipFormatting(objText),
+                        lowerTarget = string.lower(targetName),
+                    })
                 end
+                table.insert(entries, {
+                    questID = qID,
+                    displayTitle = displayTitle,
+                    lowerTitle = lowerQTitle,
+                    firstObjText = parsedObjs[1].cleanText,
+                    objectives = parsedObjs,
+                })
+            end
+        end
+    end
 
-                -- Pass 2: Fallback check on existing tooltip lines 2..N (e.g. modern quest object tooltips)
-                if not matchedQuestID and extraLinesLower and #extraLinesLower > 0 then
-                    for _, extraLine in ipairs(extraLinesLower) do
-                        if lowerQTitle ~= "" and #lowerQTitle >= 4 and string.find(extraLine, lowerQTitle, 1, true) then
-                            matchedQuestID = qID
-                            matchedQuestTitle = cleanQTitle ~= "" and cleanQTitle or ("Quest #" .. qID)
-                            matchedObjText = StripTooltipFormatting(nonKillObjs[1])
-                            break
-                        end
-                        for _, objText in ipairs(nonKillObjs) do
-                            local targetName = ExtractObjectiveObjectName(objText)
-                            local lowerTarget = string.lower(targetName)
-                            if #lowerTarget >= 4 and string.find(extraLine, lowerTarget, 1, true) then
-                                matchedQuestID = qID
-                                matchedQuestTitle = cleanQTitle ~= "" and cleanQTitle or ("Quest #" .. qID)
-                                matchedObjText = StripTooltipFormatting(objText)
-                                break
-                            end
-                        end
-                        if matchedQuestID then break end
+    _objectTargetsCache = entries
+    return entries
+end
+
+function UI.MatchWorldObjectToActiveQuest(rawObjName, extraLinesLower)
+    local cleanObjName = StripTooltipFormatting(rawObjName)
+    if #cleanObjName < 3 then return nil end
+
+    local activeTargets = GetActiveQuestObjectTargets()
+    if #activeTargets == 0 then return nil end
+
+    local lowerObjName = string.lower(cleanObjName)
+    local matchedQuestID, matchedQuestTitle, matchedObjText = nil, nil, nil
+
+    for _, qEntry in ipairs(activeTargets) do
+        -- Pass 1: Match GameObject title against non-kill objective target names
+        for _, obj in ipairs(qEntry.objectives) do
+            local lowerTarget = obj.lowerTarget
+            if #lowerTarget >= 4 then
+                if lowerObjName == lowerTarget or
+                   (#lowerObjName >= 4 and (string.find(lowerObjName, lowerTarget, 1, true) or string.find(lowerTarget, lowerObjName, 1, true))) then
+                    matchedQuestID = qEntry.questID
+                    matchedQuestTitle = qEntry.displayTitle
+                    matchedObjText = obj.cleanText
+                    break
+                end
+            end
+        end
+
+        -- Pass 2: Fallback check on existing tooltip lines 2..N (e.g. modern quest object tooltips)
+        if not matchedQuestID and extraLinesLower and #extraLinesLower > 0 then
+            local lowerQTitle = qEntry.lowerTitle
+            for _, extraLine in ipairs(extraLinesLower) do
+                if lowerQTitle ~= "" and #lowerQTitle >= 4 and string.find(extraLine, lowerQTitle, 1, true) then
+                    matchedQuestID = qEntry.questID
+                    matchedQuestTitle = qEntry.displayTitle
+                    matchedObjText = qEntry.firstObjText
+                    break
+                end
+                for _, obj in ipairs(qEntry.objectives) do
+                    local lowerTarget = obj.lowerTarget
+                    if #lowerTarget >= 4 and string.find(extraLine, lowerTarget, 1, true) then
+                        matchedQuestID = qEntry.questID
+                        matchedQuestTitle = qEntry.displayTitle
+                        matchedObjText = obj.cleanText
+                        break
                     end
                 end
+                if matchedQuestID then break end
             end
         end
 
@@ -754,11 +798,13 @@ function UI.UpdateSoftTargetQuestObjectIcon(hoveredMatched)
     if InCombatLockdown and InCombatLockdown() then return false end
 
     if not (addon.db and addon.db.enabled ~= false and addon.db.highlightQuestObjects ~= false) then
+        _softTargetIconActive = false
         SafeSetCVar("SoftTargetIconGameObject", "0")
         return false
     end
 
     if hoveredMatched == true then
+        _softTargetIconActive = true
         SafeSetCVar("SoftTargetIconGameObject", "1")
         return true
     end
@@ -780,10 +826,12 @@ function UI.UpdateSoftTargetQuestObjectIcon(hoveredMatched)
     end
 
     if softName and not isEnemy and UI.MatchWorldObjectToActiveQuest(softName) then
+        _softTargetIconActive = true
         SafeSetCVar("SoftTargetIconGameObject", "1")
         return true
     end
 
+    _softTargetIconActive = false
     SafeSetCVar("SoftTargetIconGameObject", "0")
     return false
 end

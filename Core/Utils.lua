@@ -200,6 +200,7 @@ function Utils.GetQuestRewardData(questID)
     local rewards = {}
     local maxChoicePrice = 0
     local fixedPricesSum = 0
+    local anyUncachedItem = false
 
     -- Modern C_QuestLog resolution (independent of player's UI selection!)
     local numChoices = (C_QuestLog and C_QuestLog.GetNumQuestLogChoices and C_QuestLog.GetNumQuestLogChoices(questID)) or 0
@@ -218,11 +219,18 @@ function Utils.GetQuestRewardData(questID)
             local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
             if ok and itemID then
                 link = select(2, addon.SafeGetItemInfo(itemID))
+                if not link then
+                    anyUncachedItem = true
+                end
             end
         end
         if link then
             table.insert(choices, link)
-            local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+            local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+            if not itemName then
+                anyUncachedItem = true
+            end
+            sellPrice = sellPrice or 0
             if sellPrice > maxChoicePrice then
                 maxChoicePrice = sellPrice
             end
@@ -245,11 +253,18 @@ function Utils.GetQuestRewardData(questID)
             local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
             if ok and itemID then
                 link = select(2, addon.SafeGetItemInfo(itemID))
+                if not link then
+                    anyUncachedItem = true
+                end
             end
         end
         if link then
             table.insert(rewards, link)
-            local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+            local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+            if not itemName then
+                anyUncachedItem = true
+            end
+            sellPrice = sellPrice or 0
             fixedPricesSum = fixedPricesSum + sellPrice
         end
     end
@@ -262,7 +277,11 @@ function Utils.GetQuestRewardData(questID)
                 local link = GetQuestLogItemLink and GetQuestLogItemLink("choice", i)
                 if link then
                     table.insert(choices, link)
-                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+                    if not itemName then
+                        anyUncachedItem = true
+                    end
+                    sellPrice = sellPrice or 0
                     if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
                 end
             end
@@ -271,7 +290,11 @@ function Utils.GetQuestRewardData(questID)
                 local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", i)
                 if link then
                     table.insert(rewards, link)
-                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+                    if not itemName then
+                        anyUncachedItem = true
+                    end
+                    sellPrice = sellPrice or 0
                     fixedPricesSum = fixedPricesSum + sellPrice
                 end
             end
@@ -300,7 +323,11 @@ function Utils.GetQuestRewardData(questID)
                 local link = GetQuestItemLink and GetQuestItemLink("choice", i)
                 if link then
                     table.insert(choices, link)
-                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+                    if not itemName then
+                        anyUncachedItem = true
+                    end
+                    sellPrice = sellPrice or 0
                     if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
                 end
             end
@@ -309,15 +336,19 @@ function Utils.GetQuestRewardData(questID)
                 local link = GetQuestItemLink and GetQuestItemLink("reward", i)
                 if link then
                     table.insert(rewards, link)
-                    local sellPrice = select(11, addon.SafeGetItemInfo(link)) or 0
+                    local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+                    if not itemName then
+                        anyUncachedItem = true
+                    end
+                    sellPrice = sellPrice or 0
                     fixedPricesSum = fixedPricesSum + sellPrice
                 end
             end
         end
     end
 
-    -- If we found items or prices, cache it!
-    if #choices > 0 or #rewards > 0 then
+    -- Only cache when all item rewards have resolved item info from the server
+    if (#choices > 0 or #rewards > 0) and not anyUncachedItem then
         _questRewardsCache[questID] = {
             choices = choices,
             rewards = rewards,
@@ -488,7 +519,7 @@ function Utils.GetQuestBasicInfo(questID)
         end
     end
 
-    local title, level, isElite, isHeader
+    local title, level, isElite, isDungeon, isGroup, isHeader
 
     if C_QuestLog and C_QuestLog.GetTitleForQuestID then
         local ok, t = pcall(C_QuestLog.GetTitleForQuestID, questID)
@@ -526,6 +557,9 @@ function Utils.GetQuestBasicInfo(questID)
                     title = title or info.title
                     level = level or (info.level and info.level > 0 and info.level)
                     isElite = isElite or info.isElite
+                    local qTag = type(info.questTag) == "string" and info.questTag or ""
+                    isDungeon = isDungeon or info.isDungeon or (qTag ~= "" and (string.find(qTag, "Dungeon", 1, true) ~= nil or string.find(qTag, "Raid", 1, true) ~= nil))
+                    isGroup = isGroup or ((info.suggestedGroup or 0) > 1) or (qTag ~= "" and string.find(qTag, "Group", 1, true) ~= nil)
                     isHeader = info.isHeader
                     break
                 end
@@ -534,7 +568,10 @@ function Utils.GetQuestBasicInfo(questID)
                 if ok and (qid == questID or (not qid and t == title)) then
                     title = title or t
                     level = level or (lvl and lvl > 0 and lvl)
-                    isElite = isElite or (tag == "Elite" or tag == ELITE)
+                    local qTag = type(tag) == "string" and tag or ""
+                    isElite = isElite or (qTag == "Elite" or qTag == ELITE)
+                    isDungeon = isDungeon or (qTag ~= "" and (string.find(qTag, "Dungeon", 1, true) ~= nil or string.find(qTag, "Raid", 1, true) ~= nil))
+                    isGroup = isGroup or (qTag ~= "" and string.find(qTag, "Group", 1, true) ~= nil)
                     isHeader = isH
                     break
                 end
@@ -594,6 +631,8 @@ function Utils.GetQuestBasicInfo(questID)
         title = title or ("Quest #" .. questID),
         level = finalLevel,
         isElite = isElite or false,
+        isDungeon = isDungeon or false,
+        isGroup = isGroup or false,
         isHeader = isHeader or false,
     }
 

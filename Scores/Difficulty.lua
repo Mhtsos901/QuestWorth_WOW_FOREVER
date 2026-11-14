@@ -132,8 +132,8 @@ function Scores.CalculateDifficulty(questID)
     local info = Utils.GetQuestBasicInfo(questID)
     local questLevel = (info and info.level and info.level > 0) and info.level or playerLevel
     local isElite = (info and info.isElite) or false
-    local isDungeon = false
-    local isGroup = false
+    local isDungeon = (info and info.isDungeon) or false
+    local isGroup = (info and info.isGroup) or false
     if C_QuestLog and C_QuestLog.GetQuestTagInfo then
         local ok, tag = pcall(C_QuestLog.GetQuestTagInfo, questID)
         if ok and tag then

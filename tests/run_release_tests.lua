@@ -1728,6 +1728,72 @@ addonTable.Engine.InvalidateCache()
 addonTable.Engine.WorldMapZoneCache = {}
 end
 
+-- 12. Deep Audit Mechanics Connection, Cache Coherency & CVar Deduplication
+do
+-- 12A: Engine.CacheSize decrements accurately on single-quest Engine.InvalidateCache(qID)
+addonTable.Engine.InvalidateCache()
+assert_eq(addonTable.Engine.CacheSize, 0, "Engine.CacheSize starts at 0 after full wipe")
+addonTable.Engine.CalculateWorth(5211)
+assert_eq(addonTable.Engine.CacheSize, 1, "Engine.CacheSize increments to 1 after evaluating quest 5211")
+addonTable.Engine.InvalidateCache(5211)
+assert_eq(addonTable.Engine.CacheSize, 0, "Engine.CacheSize decrements back to 0 after Engine.InvalidateCache(5211)")
+
+-- 12B: Uncached item reward does not poison _questRewardsCache with 0 vendor price
+local savedGetItemInfo12 = _G.GetItemInfo
+local itemServerReady = false
+_G.GetItemInfo = function(item)
+    if tostring(item):find("99901") then
+        if not itemServerReady then
+            return nil
+        end
+        return "Delayed Reward Sword", "|cff0070dd|Hitem:99901::::::::35:::::::|h[Delayed Reward Sword]|h|r", 3, 40, 35, "Weapon", "One-Handed Swords", 1, "INVTYPE_WEAPON", 135342, 24500
+    end
+    return savedGetItemInfo12(item)
+end
+mockQuestDB[9991] = {
+    title = "Delayed Server Item Quest",
+    level = 35,
+    xp = 2400,
+    money = 0,
+}
+currentOfferQuestID = 9991
+currentOfferTitle = "Delayed Server Item Quest"
+currentOfferChoices = { "|cff0070dd|Hitem:99901::::::::35:::::::|h[Delayed Reward Sword]|h|r" }
+currentOfferRewards = {}
+QuestFrame:Show()
+addonTable.ClearSafeGetItemInfoCache()
+addonTable.Engine.InvalidateCache(9991)
+local _, _, priceBefore = addonTable.Utils.GetQuestRewardData(9991)
+assert_eq(priceBefore, 0, "Uncached server item initially reports 0 vendor price without poisoning cache")
+
+-- Server now delivers GET_ITEM_INFO_RECEIVED
+itemServerReady = true
+addonTable.ClearSafeGetItemInfoCache()
+local _, _, priceAfter = addonTable.Utils.GetQuestRewardData(9991)
+assert_eq(priceAfter, 24500, "Utils.GetQuestRewardData resolves 24500 copper immediately once server item info arrives")
+QuestFrame:Hide()
+currentOfferQuestID = nil
+currentOfferTitle = nil
+currentOfferChoices = {}
+_G.GetItemInfo = savedGetItemInfo12
+mockQuestDB[9991] = nil
+
+-- 12C: SafeSetCVar deduplicates redundant SetCVar calls on GameTooltip:ClearLines()
+local setCVarCount = 0
+local origSetCVar12 = _G.C_CVar.SetCVar
+_G.C_CVar.SetCVar = function(name, val)
+    setCVarCount = setCVarCount + 1
+    return origSetCVar12(name, val)
+end
+addonTable.UI.UpdateSoftTargetQuestObjectIcon(false)
+local countAfterReset = setCVarCount
+for i = 1, 20 do
+    GameTooltip:ClearLines()
+end
+assert_eq(setCVarCount, countAfterReset, "20 GameTooltip:ClearLines() calls trigger 0 redundant C_CVar.SetCVar calls when icon is already off")
+_G.C_CVar.SetCVar = origSetCVar12
+end
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

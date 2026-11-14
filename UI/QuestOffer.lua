@@ -133,10 +133,10 @@ local function UpdateQuestOfferDialog()
         Utils.ClearTalkToCache(qID)
     end
     if addon.Data and addon.Data.InvalidatePayoffMemo then
-        addon.Data.InvalidatePayoffMemo()
+        addon.Data.InvalidatePayoffMemo(qID)
     end
     if addon.Scores and addon.Scores.InvalidateRewardCache then
-        addon.Scores.InvalidateRewardCache()
+        addon.Scores.InvalidateRewardCache(qID)
     end
 
     local worth, breakdown = addon.Engine.CalculateWorth(qID)

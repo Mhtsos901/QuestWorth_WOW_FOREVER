@@ -76,7 +76,10 @@ end
 -- Invalidate calculation cache (single questID or full wipe)
 function Engine.InvalidateCache(questID)
     if questID then
-        Engine.Cache[questID] = nil
+        if Engine.Cache[questID] ~= nil then
+            Engine.Cache[questID] = nil
+            Engine.CacheSize = math.max(0, (Engine.CacheSize or 1) - 1)
+        end
         Engine.CompletionCache[questID] = nil
         wipe(Engine.WorldMapZoneCache)
         if addon.Scores and addon.Scores.InvalidateRewardCache then
@@ -88,8 +91,14 @@ function Engine.InvalidateCache(questID)
         if addon.Utils and addon.Utils.ClearQuestBasicInfoCache then
             addon.Utils.ClearQuestBasicInfoCache(questID)
         end
+        if addon.Utils and addon.Utils.ClearQuestRewardsCache then
+            addon.Utils.ClearQuestRewardsCache(questID)
+        end
         if addon.Data and addon.Data.InvalidatePayoffMemo then
             addon.Data.InvalidatePayoffMemo(questID)
+        end
+        if addon.UI and addon.UI.InvalidateObjectTargetsCache then
+            addon.UI.InvalidateObjectTargetsCache()
         end
         return
     end
@@ -111,8 +120,14 @@ function Engine.InvalidateCache(questID)
     if addon.Utils and addon.Utils.ClearQuestBasicInfoCache then
         addon.Utils.ClearQuestBasicInfoCache()
     end
+    if addon.Utils and addon.Utils.ClearQuestRewardsCache then
+        addon.Utils.ClearQuestRewardsCache()
+    end
     if addon.Data and addon.Data.InvalidatePayoffMemo then
         addon.Data.InvalidatePayoffMemo()
+    end
+    if addon.UI and addon.UI.InvalidateObjectTargetsCache then
+        addon.UI.InvalidateObjectTargetsCache()
     end
     addon.Debug("Evaluation cache invalidated.")
 end
