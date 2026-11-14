@@ -1,15 +1,9 @@
 --[[
     WorthIt / QuestWorth - UI/QuestOffer.lua
-    Evaluates and displays Worth % on new, unaccepted quests BEFORE the player accepts them.
-    
-    Covers:
-    1. Gossip NPC Dialogue (GossipFrame / ScrollBox / GossipTitleButtons):
-       Badges available quests with exclamation marks [!] right in the NPC's quest list.
-    2. Quest Greeting Panel (QuestFrameGreetingPanel / QuestTitleButtons):
-       Badges available quests in multi-quest greeting dialogs.
-    3. Quest Detail & Offer Panel (QuestFrame / QuestFrameDetailPanel):
-       - Badges QuestInfoTitleHeader cleanly with the colored Worth % [XX%] at the top of the parchment.
-       - NO floating buttons or overlays over Accept / Decline buttons!
+    Evaluates and displays Worth % on selected quest offer/turn-in dialogs
+    (QuestFrameDetailPanel / QuestFrameProgressPanel) once live rewards & objectives load.
+    Intentionally omits pre-selection Worth % badges from multi-quest NPC lists
+    (GossipFrame / QuestFrameGreetingPanel) where full quest payload is not yet available.
 ]]
 
 local addonName, addon = ...
@@ -22,35 +16,6 @@ local L = addon.L
 if _G["WorthIt_QuestOfferPill"] then
     _G["WorthIt_QuestOfferPill"]:Hide()
     _G["WorthIt_QuestOfferPill"]:SetParent(nil)
-end
-
-local function HookHoverTooltip(widget, getQuestIDFunc)
-    if not widget or widget._worthItHooked then return end
-    widget._worthItHooked = true
-    local function onEnter(self)
-        local id = getQuestIDFunc(self)
-        if id and id > 0 and UI.ShowQuestTooltip then
-            UI.ShowQuestTooltip(GameTooltip, id, self)
-        end
-    end
-    local function onLeave()
-        if GameTooltip then GameTooltip:Hide() end
-    end
-    if widget.HookScript then
-        widget:HookScript("OnEnter", onEnter)
-        widget:HookScript("OnLeave", onLeave)
-    elseif widget.SetScript then
-        local origEnter = widget.GetScript and widget:GetScript("OnEnter")
-        widget:SetScript("OnEnter", function(self, ...)
-            if origEnter then origEnter(self, ...) end
-            onEnter(self)
-        end)
-        local origLeave = widget.GetScript and widget:GetScript("OnLeave")
-        widget:SetScript("OnLeave", function(self, ...)
-            if origLeave then origLeave(self, ...) end
-            onLeave(self)
-        end)
-    end
 end
 
 local titleHoverFrame = nil
@@ -107,6 +72,10 @@ local function UpdateQuestOfferDialog()
         return
     end
     if not QuestFrame or not QuestFrame:IsShown() then return end
+    if QuestFrameGreetingPanel and QuestFrameGreetingPanel:IsShown() then
+        if titleHoverFrame then titleHoverFrame:Hide() end
+        return
+    end
 
     local qID = nil
     if GetQuestID then
@@ -253,113 +222,54 @@ local function UpdateQuestOfferDialog()
     end
 end
 
--- Update available quests in GossipFrame (NPC dialog with exclamation marks)
+local function StripButtonWorthBadge(widget, textRegion)
+    if not widget then return end
+    local target = textRegion or widget
+    if target.GetText and target.SetText then
+        local raw = target:GetText() or ""
+        if raw ~= "" and (widget._worthItQuestID or string.find(raw, "%[%d+%%%]") or string.find(raw, "%[OK%]")) then
+            local clean = Utils.CleanQuestTitle(raw)
+            if raw ~= clean then
+                target:SetText(clean)
+            end
+        end
+    end
+    widget._worthItQuestID = nil
+end
+
+-- Clean any stale Worth % badges from GossipFrame (pre-selection NPC quest list)
 local function UpdateGossipAvailableQuests()
-    if not (addon.db and addon.db.enabled) then return end
     if not GossipFrame or not GossipFrame:IsShown() then return end
 
-    -- 1. Modern ScrollBox Framework (Dragonflight / 11.x / Interface 16001)
     if GossipFrame.GreetingPanel and GossipFrame.GreetingPanel.ScrollBox and GossipFrame.GreetingPanel.ScrollBox.GetView then
         local view = GossipFrame.GreetingPanel.ScrollBox:GetView()
         if view and view.EnumerateFrames then
             for _, frame in view:EnumerateFrames() do
                 if frame and frame:IsShown() then
-                    local data = frame.GetElementData and frame:GetElementData()
-                    local qID = data and ((data.info and data.info.questID) or data.questID)
                     local fontString = frame.GreetingText or frame.Text or (frame.GetFontString and frame:GetFontString())
-
-                    if qID and qID > 0 and fontString and fontString.GetText and fontString.SetText then
-                        local worth, breakdown = addon.Engine.CalculateWorth(qID)
-                        if worth then
-                            local isComplete = (breakdown and breakdown.isComplete)
-                            local isHard = (breakdown and breakdown.isHard)
-                            local isBankable = (breakdown and breakdown.isBankable)
-                            local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
-                            local raw = fontString:GetText() or ""
-                            local clean = Utils.CleanQuestTitle(raw)
-                            local target = badge .. " " .. clean
-                            if raw ~= target then
-                                fontString:SetText(target)
-                            end
-
-                            -- Hook frame tooltip to show Worth breakdown and payoffs on hover
-                            HookHoverTooltip(frame, function(f)
-                                local d = f.GetElementData and f:GetElementData()
-                                return d and ((d.info and d.info.questID) or d.questID)
-                            end)
-                        end
-                    end
+                    StripButtonWorthBadge(frame, fontString)
                 end
             end
         end
     end
 
-    -- 2. Classic GossipTitleButton fallback (GossipTitleButton1 to 32)
-    local availableQuests = C_GossipInfo and C_GossipInfo.GetAvailableQuests and C_GossipInfo.GetAvailableQuests()
-    if availableQuests and #availableQuests > 0 then
-        for i, qInfo in ipairs(availableQuests) do
-            local button = _G["GossipTitleButton" .. i]
-            if button and button:IsShown() and qInfo.questID then
-                local worth, breakdown = addon.Engine.CalculateWorth(qInfo.questID)
-                if worth then
-                    local isComplete = (breakdown and breakdown.isComplete)
-                    local isHard = (breakdown and breakdown.isHard)
-                    local isBankable = (breakdown and breakdown.isBankable)
-                    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
-                    local raw = button:GetText() or ""
-                    local clean = Utils.CleanQuestTitle(raw)
-                    local target = badge .. " " .. clean
-                    if raw ~= target then
-                        button:SetText(target)
-                    end
-
-                    button._worthItQuestID = qInfo.questID
-                    HookHoverTooltip(button, function(b) return b._worthItQuestID end)
-                end
-            end
+    for i = 1, 32 do
+        local button = _G["GossipTitleButton" .. i]
+        if button then
+            StripButtonWorthBadge(button)
         end
     end
 end
 
--- Update available quests in QuestFrameGreetingPanel (Classic multiple quest offer)
+-- Clean any stale Worth % badges from QuestFrameGreetingPanel (pre-selection multi-quest greeting)
 local function UpdateQuestGreetingPanel()
-    if not (addon.db and addon.db.enabled) then return end
+    if titleHoverFrame then titleHoverFrame:Hide() end
     if not QuestFrameGreetingPanel or not QuestFrameGreetingPanel:IsShown() then return end
 
-    local numAvailable = (GetNumAvailableQuests and GetNumAvailableQuests()) or 0
-    if numAvailable > 0 then
-        for i = 1, numAvailable do
-            local button = _G["QuestTitleButton" .. i]
-            local title = GetAvailableTitle and GetAvailableTitle(i)
-            if button and button:IsShown() and title then
-                -- Match questID by title from C_GossipInfo
-                local qID = nil
-                local availableQuests = C_GossipInfo and C_GossipInfo.GetAvailableQuests and C_GossipInfo.GetAvailableQuests()
-                if availableQuests then
-                    for _, q in ipairs(availableQuests) do
-                        if q.title == title then qID = q.questID; break end
-                    end
-                end
-
-                if qID and qID > 0 then
-                    local worth, breakdown = addon.Engine.CalculateWorth(qID)
-                    if worth then
-                        local isComplete = (breakdown and breakdown.isComplete)
-                        local isHard = (breakdown and breakdown.isHard)
-                        local isBankable = (breakdown and breakdown.isBankable)
-                        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
-                        local raw = button:GetText() or ""
-                        local clean = Utils.CleanQuestTitle(raw)
-                        local target = badge .. " " .. clean
-                        if raw ~= target then
-                            button:SetText(target)
-                        end
-
-                        button._worthItQuestID = qID
-                        HookHoverTooltip(button, function(b) return b._worthItQuestID end)
-                    end
-                end
-            end
+    for i = 1, 32 do
+        local button = _G["QuestTitleButton" .. i]
+        if button then
+            StripButtonWorthBadge(button)
         end
     end
 end

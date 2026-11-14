@@ -1482,6 +1482,82 @@ mockQuestLog = savedLogObj
 addonTable.db.highlightQuestObjects = savedHighlightOpt
 addonTable.UI.ApplyQuestObjectHighlight()
 
+-- 9. Multi-quest NPC Gossip/Greeting lists do NOT show inaccurate pre-selection Worth % badges
+do
+local savedGossipFrame = _G.GossipFrame
+local savedGreetingPanel = _G.QuestFrameGreetingPanel
+local savedCGossipInfo = _G.C_GossipInfo
+local savedGossipBtn1, savedGossipBtn2 = _G.GossipTitleButton1, _G.GossipTitleButton2
+local savedQuestBtn1, savedQuestBtn2 = _G.QuestTitleButton1, _G.QuestTitleButton2
+
+_G.GossipFrame = _G.CreateFrame("Frame", "GossipFrame")
+_G.GossipTitleButton1 = _G.CreateFrame("Button", "GossipTitleButton1", _G.GossipFrame)
+_G.GossipTitleButton2 = _G.CreateFrame("Button", "GossipTitleButton2", _G.GossipFrame)
+_G.GossipTitleButton1:SetText("The Price of Shoes")
+_G.GossipTitleButton2:SetText("|cff00ff00[95%]|r Return to MacKinley")
+_G.GossipTitleButton2._worthItQuestID = 609
+
+_G.QuestFrameGreetingPanel = _G.CreateFrame("Frame", "QuestFrameGreetingPanel", QuestFrame)
+_G.QuestTitleButton1 = _G.CreateFrame("Button", "QuestTitleButton1", _G.QuestFrameGreetingPanel)
+_G.QuestTitleButton2 = _G.CreateFrame("Button", "QuestTitleButton2", _G.QuestFrameGreetingPanel)
+_G.QuestTitleButton1:SetText("The Price of Shoes")
+_G.QuestTitleButton2:SetText("|cffff3333[25%]|r Return to MacKinley")
+_G.QuestTitleButton2._worthItQuestID = 609
+
+_G.C_GossipInfo = {
+    GetAvailableQuests = function()
+        return {
+            { questID = 608, title = "The Price of Shoes", questLevel = 32 },
+            { questID = 609, title = "Return to MacKinley", questLevel = 33 },
+        }
+    end
+}
+mockQuestDB[608] = { title = "The Price of Shoes", level = 32, xp = 2400, money = 0 }
+mockQuestDB[609] = { title = "Return to MacKinley", level = 33, xp = 600, money = 0 }
+
+GossipFrame:Show()
+addonTable.UI.UpdateGossipAvailableQuests()
+local gb1 = _G.GossipTitleButton1:GetText() or ""
+local gb2 = _G.GossipTitleButton2:GetText() or ""
+assert_true(string.find(gb1, "%[%d+%%%]") == nil, "Gossip multi-quest list omits pre-selection Worth % badge on quest 1")
+assert_true(string.find(gb2, "%[%d+%%%]") == nil and gb2 == "Return to MacKinley", "Gossip multi-quest list strips any stale Worth % badge on quest 2")
+assert_true(_G.GossipTitleButton2._worthItQuestID == nil, "Gossip button clears _worthItQuestID")
+
+GossipFrame:Hide()
+QuestFrame:Show()
+QuestFrameGreetingPanel:Show()
+addonTable.UI.UpdateQuestOfferDialog()
+addonTable.UI.UpdateQuestGreetingPanel()
+local qb1 = _G.QuestTitleButton1:GetText() or ""
+local qb2 = _G.QuestTitleButton2:GetText() or ""
+assert_true(string.find(qb1, "%[%d+%%%]") == nil, "QuestGreeting multi-quest list omits pre-selection Worth % badge on quest 1")
+assert_true(string.find(qb2, "%[%d+%%%]") == nil and qb2 == "Return to MacKinley", "QuestGreeting multi-quest list strips any stale Worth % badge on quest 2")
+local greetingHover = _G["WorthIt_QuestOfferTitleHover"]
+assert_true(not greetingHover or not greetingHover:IsShown(), "Title hover frame remains hidden while QuestFrameGreetingPanel is shown")
+
+-- Selecting a quest afterwards into QuestFrameDetailPanel DOES show accurate Worth %
+QuestFrameGreetingPanel:Hide()
+QuestFrameDetailPanel:Show()
+currentOfferQuestID = 608
+currentOfferTitle = "The Price of Shoes"
+currentOfferXP = 2400
+currentOfferMoney = 0
+QuestInfoTitleHeader:SetText("The Price of Shoes")
+addonTable.UI.UpdateQuestOfferDialog()
+local selectedHeader = QuestInfoTitleHeader:GetText() or ""
+assert_true(string.find(selectedHeader, "%[%d+%%%]") ~= nil, "Selected quest offer in QuestFrameDetailPanel displays accurate Worth % badge")
+QuestFrame:Hide()
+currentOfferQuestID = nil
+currentOfferTitle = nil
+currentOfferXP = 0
+
+_G.GossipFrame = savedGossipFrame
+_G.QuestFrameGreetingPanel = savedGreetingPanel
+_G.C_GossipInfo = savedCGossipInfo
+_G.GossipTitleButton1, _G.GossipTitleButton2 = savedGossipBtn1, savedGossipBtn2
+_G.QuestTitleButton1, _G.QuestTitleButton2 = savedQuestBtn1, savedQuestBtn2
+end
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L
@@ -1578,6 +1654,8 @@ local fuzzTargets = {
     { name = "UI.UpdateZoneAdvisor", fn = function(v) return addonTable.UI.UpdateZoneAdvisor(v) end },
     { name = "UI.ApplyQuestObjectHighlight", fn = function(v) return addonTable.UI.ApplyQuestObjectHighlight(v) end },
     { name = "UI.AddWorldObjectQuestLines", fn = function(v) return addonTable.UI.AddWorldObjectQuestLines(v) end },
+    { name = "UI.UpdateGossipAvailableQuests", fn = function(v) return addonTable.UI.UpdateGossipAvailableQuests(v) end },
+    { name = "UI.UpdateQuestGreetingPanel", fn = function(v) return addonTable.UI.UpdateQuestGreetingPanel(v) end },
 }
 
 local fuzzErrors = 0
