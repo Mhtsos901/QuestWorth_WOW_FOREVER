@@ -465,7 +465,7 @@ local OBJECT_HIGHLIGHT_CVARS = {
     graphicsOutlineMode = "2",
     SoftTargetInteract = "3",
     SoftTargetIconQuest = "1",
-    SoftTargetIconGameObject = "0",
+    SoftTargetIconGameObject = "1",
     SoftTargetIconEnemy = "0",
     SoftTargetEnemy = "0",
     SoftTargetFriend = "0",
@@ -522,13 +522,10 @@ function UI.ApplyQuestObjectHighlight()
                 addon._savedObjectCVars[k] = SafeGetCVar(k)
             end
         end
-        addon._savedObjectCVars.SoftTargetIconGameObject = "0"
         for k, v in pairs(OBJECT_HIGHLIGHT_CVARS) do
             SafeSetCVar(k, v)
         end
-        if UI.UpdateSoftTargetQuestObjectIcon then
-            UI.UpdateSoftTargetQuestObjectIcon(false)
-        end
+        _softTargetIconActive = true
         return true
     else
         if addon._savedObjectCVars then
@@ -804,37 +801,9 @@ function UI.UpdateSoftTargetQuestObjectIcon(hoveredMatched)
         return false
     end
 
-    if hoveredMatched == true then
-        _softTargetIconActive = true
-        SafeSetCVar("SoftTargetIconGameObject", "1")
-        return true
-    end
-
-    local softName = nil
-    if UnitName then
-        local ok, n = pcall(UnitName, "softinteract")
-        if ok and type(n) == "string" and n ~= "" then
-            softName = n
-        end
-    end
-
-    local isEnemy = false
-    if softName and UnitIsEnemy then
-        local okE, en = pcall(UnitIsEnemy, "player", "softinteract")
-        if okE and en then
-            isEnemy = true
-        end
-    end
-
-    if softName and not isEnemy and UI.MatchWorldObjectToActiveQuest(softName) then
-        _softTargetIconActive = true
-        SafeSetCVar("SoftTargetIconGameObject", "1")
-        return true
-    end
-
-    _softTargetIconActive = false
-    SafeSetCVar("SoftTargetIconGameObject", "0")
-    return false
+    _softTargetIconActive = true
+    SafeSetCVar("SoftTargetIconGameObject", "1")
+    return true
 end
 
 function UI.AddWorldObjectQuestLines(tooltip)

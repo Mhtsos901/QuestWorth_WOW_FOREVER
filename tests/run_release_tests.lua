@@ -1404,7 +1404,7 @@ addonTable.UI.ApplyQuestObjectHighlight()
 assert_eq(mockCVars.Outline, "2", "Quest object highlight enables 3D Outline CVar (2)")
 assert_eq(mockCVars.questPOI, "1", "Quest object highlight enables questPOI CVar (1)")
 assert_eq(mockCVars.SoftTargetInteract, "3", "Quest object highlight enables SoftTargetInteract for nearby objects (3)")
-assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Quest object highlight keeps floating SoftTargetIconGameObject OFF globally (0) so unrelated objects get no icon")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Quest object highlight enables floating SoftTargetIconGameObject (1) so objects are visible from afar")
 assert_eq(mockCVars.SoftTargetIconEnemy, "0", "Quest object highlight keeps SoftTargetIconEnemy disabled for mobs (0)")
 
 addonTable.db.highlightQuestObjects = false
@@ -1459,24 +1459,24 @@ for _, line in ipairs(GameTooltip.lines or {}) do
     end
 end
 assert_true(objTooltipFound, "Hovering quest world object injects 'QUEST OBJECT (Interact!)' banner into GameTooltip")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Hovering an active quest object dynamically enables SoftTargetIconGameObject (1)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Hovering an active quest object keeps SoftTargetIconGameObject enabled (1)")
 
--- Clearing tooltip resets floating icon when not soft-targeting an active quest object
+-- Clearing tooltip keeps global GameObject icon ON while feature is enabled
 GameTooltip:ClearLines()
-assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Clearing tooltip resets SoftTargetIconGameObject back to 0")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Clearing tooltip keeps SoftTargetIconGameObject enabled (1) while highlightQuestObjects is active")
 
--- Soft-targeting via PLAYER_SOFT_INTERACT_CHANGED: enables ONLY for active quest objects, OFF for unrelated objects
+-- Soft-targeting via PLAYER_SOFT_INTERACT_CHANGED stays enabled without errors
 mockSoftTargetName = "Mailbox"
 pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
-assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Soft-targeting unrelated world object ('Mailbox') keeps SoftTargetIconGameObject OFF (0)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "SoftTargetIconGameObject remains enabled (1) for distant world object visibility")
 
 mockSoftTargetName = "Techbot's Memory Core"
 pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
-assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Soft-targeting active quest object ('Techbot's Memory Core') enables SoftTargetIconGameObject (1)")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Soft-targeting active quest object ('Techbot's Memory Core') keeps SoftTargetIconGameObject enabled (1)")
 
 mockSoftTargetName = nil
 pcall(onEvent, eventFrame, "PLAYER_SOFT_INTERACT_CHANGED")
-assert_eq(mockCVars.SoftTargetIconGameObject, "0", "Clearing soft-target resets SoftTargetIconGameObject back to 0")
+assert_eq(mockCVars.SoftTargetIconGameObject, "1", "Clearing soft-target keeps SoftTargetIconGameObject enabled (1) while highlightQuestObjects is active")
 
 -- Negative test 1: mob-kill objective name must NOT be tagged as Quest Object
 GameTooltip:ClearLines()
