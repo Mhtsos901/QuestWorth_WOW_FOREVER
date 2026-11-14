@@ -145,7 +145,7 @@ _G.CreateFrame = function(frameType, name, parent, template)
     function f:GetParent() return self.parent end
     function f:SetParent(p) self.parent = p end
     function f:Show() self.shown = true end
-    function f:Hide() self.shown = false end
+    function f:Hide() self.shown = false; self.owner = nil end
     function f:IsShown() return self.shown end
     function f:IsVisible() return self.shown end
     function f:SetSize(w, h) self.width = w; self.height = h end
@@ -235,6 +235,7 @@ _G.CreateFrame = function(frameType, name, parent, template)
     function f:SetText(t) self:GetFontString():SetText(t) end
     function f:GetText() return self:GetFontString():GetText() end
     function f:SetOwner(owner, anchor) self.owner = owner end
+    function f:GetOwner() return self.owner end
     function f:ClearLines()
         if self.name and self.lines then
             for idx = 1, #self.lines do
@@ -1383,6 +1384,7 @@ mockQuestLog = savedLogKirin
 addonTable.Player.Update()
 
 -- 8. Quest World Object Highlight (3D Glow/Sparkles CVars + GameObject Tooltip Banner, excluding Mobs)
+do
 local savedLogObj = mockQuestLog
 local savedHighlightOpt = addonTable.db.highlightQuestObjects
 addonTable.db.highlightQuestObjects = true
@@ -1425,6 +1427,7 @@ mockQuestDB[2929] = {
 
 -- Positive test: world interactable GameObject matching active non-kill objective
 GameTooltip:ClearLines()
+GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
 GameTooltip._worthItAddedQuestID = nil
 GameTooltip._worthItAddedItemID = nil
 GameTooltip._worthItAddedObjectText = nil
@@ -1481,6 +1484,7 @@ GameTooltip:ClearLines()
 mockQuestLog = savedLogObj
 addonTable.db.highlightQuestObjects = savedHighlightOpt
 addonTable.UI.ApplyQuestObjectHighlight()
+end
 
 -- 9. Multi-quest NPC Gossip/Greeting lists do NOT show inaccurate pre-selection Worth % badges
 do
@@ -1556,6 +1560,79 @@ _G.QuestFrameGreetingPanel = savedGreetingPanel
 _G.C_GossipInfo = savedCGossipInfo
 _G.GossipTitleButton1, _G.GossipTitleButton2 = savedGossipBtn1, savedGossipBtn2
 _G.QuestTitleButton1, _G.QuestTitleButton2 = savedQuestBtn1, savedQuestBtn2
+end
+
+-- 10. Cross-mechanic compatibility: GetQuestTitle/Level, 0/1 item non-TalkTo, Dungeon Suitability, and 2D UI Tooltip Owner guard
+do
+local savedLvl10 = mockPlayerState.level
+local savedLog10 = mockQuestLog
+mockQuestDB[2926] = {
+    title = "Gnogaine",
+    level = 27,
+    xp = 3150,
+    money = 0,
+    isDungeon = true,
+    objectiveText = "0/1 Full Leaden Collection Phial",
+    objectives = { { text = "0/1 Full Leaden Collection Phial", type = "item", finished = false } },
+}
+mockQuestLog = {
+    { title = "Gnomeregan (1)", isHeader = true, isCollapsed = false },
+    { title = "Gnogaine", questID = 2926, level = 27, isHeader = false, isComplete = 0 },
+}
+addonTable.Utils.ClearQuestBasicInfoCache(2926)
+assert_eq(addonTable.Utils.GetQuestTitle(2926), "Gnogaine", "Utils.GetQuestTitle resolves quest title")
+assert_eq(addonTable.Utils.GetQuestLevel(2926), 27, "Utils.GetQuestLevel resolves quest level")
+
+local savedGetQuestText10 = _G.GetQuestText
+_G.GetQuestText = function()
+    return "Use the Empty Leaden Collection Phial on Irradiated Invaders. Once it is full, take it back to Ozzie Togglevolt in Kharanos."
+end
+currentOfferQuestID = 2926
+currentOfferTitle = "Gnogaine"
+QuestFrame:Show()
+addonTable.Utils.ClearTalkToCache(2926)
+assert_true(addonTable.Utils.IsTalkToQuest(2926) == false, "0/1 item objective ('0/1 Full Leaden Collection Phial') is NOT misclassified as Talk-To despite 'take it back to' description")
+QuestFrame:Hide()
+currentOfferQuestID = nil
+currentOfferTitle = nil
+_G.GetQuestText = savedGetQuestText10
+
+mockPlayerState.level = 30
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+GameTooltip:ClearLines()
+addonTable.UI.ShowQuestTooltip(GameTooltip, 2926)
+local foundDungeonSuitability = false
+for _, line in ipairs(GameTooltip.lines or {}) do
+    local txt = (line.left or "") .. " " .. (line.right or "")
+    if string.find(txt, "Do Now (Dungeon Group)", 1, true) then
+        foundDungeonSuitability = true
+    end
+end
+assert_true(foundDungeonSuitability, "High-worth Dungeon quest displays 'Do Now (Dungeon Group)' in Tooltip Suitability")
+
+-- 2D UI frame owner guard on AddWorldObjectQuestLines
+local uiBtn = _G.CreateFrame("Button", "WorthIt_TestUIButton", UIParent)
+GameTooltip:ClearLines()
+GameTooltip._worthItAddedQuestID = nil
+GameTooltip._worthItAddedItemID = nil
+GameTooltip._worthItAddedObjectText = nil
+GameTooltip:SetOwner(uiBtn, "ANCHOR_RIGHT")
+GameTooltip:AddLine("Full Leaden Collection Phial", 1, 1, 1)
+addonTable.UI.AddWorldObjectQuestLines(GameTooltip)
+local uiFrameTaggedAsWorldObj = false
+for _, line in ipairs(GameTooltip.lines or {}) do
+    if line.left and string.find(line.left, "QUEST OBJECT", 1, true) then
+        uiFrameTaggedAsWorldObj = true
+    end
+end
+assert_true(uiFrameTaggedAsWorldObj == false, "2D UI button tooltip (owner ~= UIParent/WorldFrame) is NOT tagged as a 3D Quest World Object")
+GameTooltip:Hide()
+
+mockPlayerState.level = savedLvl10
+mockQuestLog = savedLog10
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
 end
 
 -- Restore state before Scenario 4

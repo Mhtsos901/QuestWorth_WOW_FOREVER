@@ -194,8 +194,17 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             adviceText = "|cff00ff00" .. (L["TALK_TO_SUITABILITY"] or "Do Now (Talk to NPC)") .. "|r"
         end
     elseif worth >= 0.70 then
-        local clusterNote = (b.details and b.details.density and b.details.density.clusterCount and b.details.density.clusterCount >= 3) and "Quest Hub" or "High XP"
-        adviceText = string.format("|cff00ff00Do Now (%s)|r", clusterNote)
+        if b.isHard then
+            local dDetails = b.details and b.details.difficulty
+            if dDetails and dDetails.isDungeon then
+                adviceText = "|cff00ccffDo Now (Dungeon Group)|r"
+            else
+                adviceText = "|cffff9900Do Now (Group / Elite)|r"
+            end
+        else
+            local clusterNote = (b.details and b.details.density and b.details.density.clusterCount and b.details.density.clusterCount >= 3) and "Quest Hub" or "High XP"
+            adviceText = string.format("|cff00ff00Do Now (%s)|r", clusterNote)
+        end
     elseif b.isHard then
         adviceText = "|cffff5533Bring Group / Elite Mob|r"
     elseif worth < 0.35 then
@@ -203,7 +212,7 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
         if dColor == "red" or (dDelta and dDelta >= 4) then
             adviceText = "|cffff3333Too High Level (Skip for Now)|r"
-        elseif dColor == "gray" or (dDelta and dDelta <= -5) then
+        elseif dColor == "gray" then
             adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
         else
             adviceText = "|cffaaaaaaLow Reward (Optional)|r"
@@ -659,7 +668,9 @@ function UI.AddWorldObjectQuestLines(tooltip)
     if tooltip._worthItInObjectCheck then return end
     if tooltip._worthItAddedQuestID or tooltip._worthItAddedItemID or tooltip._worthItAddedObjectText then return end
 
-    -- Exclude units/mobs, items, and spells strictly
+    -- Exclude 2D UI widget tooltips (buttons, map pins, frames) and units/items/spells strictly
+    local owner = tooltip.GetOwner and tooltip:GetOwner()
+    if owner and owner ~= UIParent and owner ~= WorldFrame then return end
     if tooltip.GetUnit and select(1, tooltip:GetUnit()) then return end
     if tooltip.GetItem and select(2, tooltip:GetItem()) then return end
     if tooltip.GetSpell and select(1, tooltip:GetSpell()) then return end

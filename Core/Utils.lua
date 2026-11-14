@@ -606,6 +606,16 @@ function Utils.GetQuestBasicInfo(questID)
     return res
 end
 
+function Utils.GetQuestTitle(questID)
+    local info = Utils.GetQuestBasicInfo(questID)
+    return info and info.title or nil
+end
+
+function Utils.GetQuestLevel(questID)
+    local info = Utils.GetQuestBasicInfo(questID)
+    return info and info.level or nil
+end
+
 function Utils.ClearQuestBasicInfoCache(questID)
     if questID then
         _basicInfoCache[questID] = nil
@@ -622,24 +632,6 @@ addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
 -- so they are NEVER penalized as high-level combat / orange / red / elite.
 -- =========================================================================
 local _talkToCache = {}
-
-local function HasCombatOrMultiObjective(text)
-    local lower = string.lower(text or "")
-    if string.find(lower, "slain") or string.find(lower, "kill") or
-       string.find(lower, "defeat") or string.find(lower, "destroy") or
-       string.find(lower, "collect") or string.find(lower, "gather") or
-       string.find(lower, "loot") or string.find(lower, "mine") or
-       string.find(lower, "fish") or string.find(lower, "steal") or
-       string.find(lower, "σκοτώστε") or string.find(lower, "νικήστε") or
-       string.find(lower, "συλλέξτε") or string.find(lower, "μαζέψτε") then
-        return true
-    end
-    local _, maxCount = string.match(lower, "(%d+)%s*/%s*(%d+)")
-    if maxCount and tonumber(maxCount) and tonumber(maxCount) > 1 then
-        return true
-    end
-    return false
-end
 
 local function MatchesTalkToPhrase(lower)
     return (
@@ -675,6 +667,29 @@ local function MatchesTalkToPhrase(lower)
         string.find(lower, "αναφέρετε") or
         string.find(lower, "επιστρέψτε")
     ) ~= nil
+end
+
+local function HasCombatOrMultiObjective(text)
+    local lower = string.lower(text or "")
+    if string.find(lower, "slain") or string.find(lower, "kill") or
+       string.find(lower, "defeat") or string.find(lower, "destroy") or
+       string.find(lower, "collect") or string.find(lower, "gather") or
+       string.find(lower, "loot") or string.find(lower, "mine") or
+       string.find(lower, "fish") or string.find(lower, "steal") or
+       string.find(lower, "obtain") or string.find(lower, "recover") or
+       string.find(lower, "acquire") or string.find(lower, "retrieve") or
+       string.find(lower, "capture") or string.find(lower, "use ") or
+       string.find(lower, "σκοτώστε") or string.find(lower, "νικήστε") or
+       string.find(lower, "συλλέξτε") or string.find(lower, "μαζέψτε") then
+        return true
+    end
+    local _, maxCount = string.match(lower, "(%d+)%s*/%s*(%d+)")
+    if maxCount and tonumber(maxCount) then
+        if tonumber(maxCount) > 1 or not MatchesTalkToPhrase(lower) then
+            return true
+        end
+    end
+    return false
 end
 
 function Utils.IsTalkToQuest(questID)

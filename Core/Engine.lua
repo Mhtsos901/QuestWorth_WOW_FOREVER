@@ -102,6 +102,9 @@ function Engine.InvalidateCache(questID)
     if addon.Scores and addon.Scores.InvalidateRewardCache then
         addon.Scores.InvalidateRewardCache()
     end
+    if addon.Scores and addon.Scores.InvalidateDensityCache then
+        addon.Scores.InvalidateDensityCache()
+    end
     if addon.Utils and addon.Utils.ClearTalkToCache then
         addon.Utils.ClearTalkToCache()
     end
@@ -390,7 +393,8 @@ function Engine.CalculateWorth(questID)
 
     -- Milestone / Prequest / Attunement / Major Reward Boost:
     -- Ensures prequests for Dungeons, Raids, Key Unlocks, Class Quests, and Major Chain Rewards reach 90%+
-    if isMilestone and (isTalkTo or (color ~= "red" and color ~= "orange" and delta < 3)) and (color ~= "gray" or rScore >= 0.60) then
+    local isEssentialUnlock = cDetails and (cDetails.isClassOrProfession or cDetails.hasUnlock)
+    if isMilestone and (isTalkTo or (color ~= "red" and color ~= "orange" and delta < 3)) and (color ~= "gray" or rScore >= 0.60 or isEssentialUnlock) then
         local milestoneFloor = (cDetails and (cDetails.isClassOrProfession or cDetails.isCap or cDetails.hasUnlock)) and 0.92 or 0.90
         totalWorth = math.max(totalWorth, milestoneFloor)
     end
