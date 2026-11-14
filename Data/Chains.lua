@@ -98,6 +98,21 @@ Data.KnownChains = {
         quests = { 227, 228, 229, 230 },
         isImportant = true,
     },
+    -- [1075] Nesingwary Safari: Tiger Mastery -> Big Game Hunter
+    [1075] = {
+        quests = { 185, 186, 187, 188, 208 },
+        isImportant = true,
+    },
+    -- [1076] Nesingwary Safari: Panther Mastery -> Big Game Hunter
+    [1076] = {
+        quests = { 190, 191, 192, 193, 208 },
+        isImportant = true,
+    },
+    -- [1077] Nesingwary Safari: Raptor Mastery -> Big Game Hunter
+    [1077] = {
+        quests = { 194, 195, 196, 197, 208 },
+        isImportant = true,
+    },
 }
 
 -- Build the fast lookup reverse index (deterministic priority: longer chain wins, curated < 3000 wins ties)
@@ -616,6 +631,12 @@ Data.QuestPayoffs = {
     [93]   = { reward = "Recipe: Seasoned Wolf Kabobs", note = "Farmed from Duskwood wolves (Starving/Rabid Dire Wolf) or bought on AH (tradeable meat).", summary = "Cooking Recipe Quest" },
     [377]  = { unlock = "Dungeon: The Stockade", note = "Stockade prison dungeon quest in Stormwind.", summary = "Dungeon: The Stockade", isKeyUnlock = true },
     [332]  = { reward = "Midnight Orb", note = "Elite quest to defeat Morganth in Tower of Azora / Redridge.", summary = "Redridge Elite Quest", isKeyUnlock = true },
+
+    -- Stranglethorn Vale: Nesingwary Safari Mastery Chains
+    [185]  = { chain = "Tiger Mastery (Step 1/4)", unlock = "Big Game Hunter Finale", summary = "Nesingwary Safari • Tiger Mastery (1/4)" },
+    [190]  = { chain = "Panther Mastery (Step 1/4)", unlock = "Big Game Hunter Finale", summary = "Nesingwary Safari • Panther Mastery (1/4)" },
+    [194]  = { chain = "Raptor Mastery (Step 1/4)", unlock = "Big Game Hunter Finale", summary = "Nesingwary Safari • Raptor Mastery (1/4)" },
+    [208]  = { reward = "Master Hunter's Bow / Rifle (Rare)", chain = "Big Game Hunter (Safari Finale)", summary = "Safari Finale • Master Hunter's Bow / Rifle", isKeyUnlock = true },
 }
 
 -- Title-based matching (handles custom Forever servers or varying quest IDs)

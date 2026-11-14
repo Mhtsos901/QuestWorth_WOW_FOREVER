@@ -1847,6 +1847,20 @@ local wChainLow, bChainLow = addonTable.Engine.CalculateWorth(2922)
 assert_true(bChainLow and bChainLow.isLowValue == false, "Low-level chain/dungeon quest 2922 is NOT flagged isLowValue")
 assert_true(wChainLow >= 0.90, "Low-level chain/dungeon quest 2922 retains >= 0.90 Worth: " .. tostring(wChainLow))
 
+-- Nesingwary Safari Tips & Chain Mapping (Tiger Mastery 185 vs Green Hills 338/340)
+local tip185 = addonTable.Data.GetQuestTip(185, "Tiger Mastery")
+assert_true(tip185 and string.find(tip185, "Young Stranglethorn Tigers", 1, true) ~= nil, "Tip for 185 Tiger Mastery mentions Young Stranglethorn Tigers")
+assert_true(tip185 and string.find(tip185, "Chapter pages", 1, true) == nil, "Tip for 185 Tiger Mastery does NOT confuse it with Green Hills pages")
+
+local tip338 = addonTable.Data.GetQuestTip(338, "The Green Hills of Stranglethorn")
+assert_true(tip338 and string.find(tip338, "Chapter pages 1-27", 1, true) ~= nil and string.find(tip338, "Auction House", 1, true) ~= nil, "Tip for 338 Green Hills mentions Chapter pages 1-27 & AH")
+
+local tip340 = addonTable.Data.GetQuestTip(340, "Chapter II")
+assert_true(tip340 and string.find(tip340, "pages 10, 11, 14, 16", 1, true) ~= nil, "Tip for 340 Chapter II lists pages 10, 11, 14, 16")
+
+local c185 = addonTable.Scores.CalculateChain(185)
+assert_true(c185 >= 0.70, "Tiger Mastery (185) recognized as Nesingwary Safari Chain (Chain >= 0.70): " .. tostring(c185))
+
 mockQuestDB[9992] = nil
 mockQuestDB[9993] = nil
 mockPlayerState.level = savedLvl13

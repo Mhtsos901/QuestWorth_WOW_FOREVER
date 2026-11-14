@@ -68,8 +68,20 @@ Data.QuestTips = {
     [1241] = "Question Innkeeper Allison in Menethil Harbor, then travel to Stormwind to confront Dashel Stonefist.",
 
     -- Stranglethorn Vale
+    [185]  = "NORTH STV (Nesingwary): Young Stranglethorn Tigers prowl right around Nesingwary's Expedition camp (Step 1/4 of Tiger Mastery).",
+    [186]  = "NORTH STV: Stranglethorn Tigers prowl between Nesingwary's camp and Tkashi Ruins (Step 2/4 of Tiger Mastery).",
+    [187]  = "CENTRAL STV: Elder Stranglethorn Tigers prowl west of Bambala and around Tkashi Ruins (Step 3/4 of Tiger Mastery).",
+    [188]  = "NORTH STV: Sin'Dall (Lvl 37 Tiger) is atop the hill just south of Nesingwary's Expedition (32, 17).",
+    [190]  = "NORTH STV (Nesingwary): Young Panthers prowl north and east of Nesingwary's Expedition (Step 1/4 of Panther Mastery).",
+    [194]  = "NORTH STV (Nesingwary): Stranglethorn Raptors roam west of Nesingwary's Expedition toward Zul'Kunda (Step 1/4 of Raptor Mastery).",
     [201]  = "NORTH STV: Locate the hunters' camp north across the river from Nesingwary's Expedition (Lvl 31-33 zone).",
     [213]  = "NORTH STV: Tumbled Crystals drop from Venture Co. geologists in central/north STV around Lake Nazferiti (Lvl 35-36 mobs).",
+    [338]  = "Collect Chapter pages 1-27. Pages can be traded or bought directly from other players on the Auction House.",
+    [339]  = "Chapter I requires pages 1, 4, 6, 8. Pages can be traded or bought on the Auction House.",
+    [340]  = "Chapter II requires pages 10, 11, 14, 16. Pages can be traded or bought on the Auction House.",
+    [341]  = "Chapter III requires pages 18, 20, 21, 24. Pages can be traded or bought on the Auction House.",
+    [342]  = "Chapter IV requires pages 25, 26, 27. Pages can be traded or bought on the Auction House.",
+    [348]  = "SOUTH STV: Witch Doctor Unbagwa is inside the Mistvale Gorilla cave outside Booty Bay (Lvl 40-42 mobs).",
     [575]  = "NORTH STV: Large River Crocolisk Skins drop from young/river crocolisks along the northern STV river (Lvl 30-32, NOT South STV).",
     [578]  = "NORTHWEST STV: The haunted island is off the northwestern coast (west of Zul'Kunda), guarded by Level 37-39 Water Elementals.",
     [605]  = "NORTH STV: Singing Crystal Shards drop from Basilisks around the crystal mines north of Lake Nazferiti (Lvl 34-36).",
@@ -78,8 +90,6 @@ Data.QuestTips = {
     [625]  = "Cortello's Riddle 1: The scroll is hidden under the stone bridge along the main road in Stranglethorn.",
     [626]  = "Cortello's Riddle 2: The scroll is hidden inside a cave in Swamp of Sorrows near the pool.",
     [627]  = "Cortello's Riddle 3: The treasure chest is submerged under the waterfall in the Hinterlands.",
-    [185]  = "Collect Chapter pages 1-27. Pages can be traded or bought directly from other players on the Auction House.",
-    [194]  = "Mistvale Giblets drop from elder mistvale gorillas in the valley south of Booty Bay.",
 
     -- Tanaris & Un'Goro
     [2605] = "Dew Glands drop from Wasps and Scorpids throughout the Tanaris desert dunes.",
@@ -141,7 +151,14 @@ Data.QuestTipsByTitle = {
     ["costly menace"]                     = "Mountain Lions prowl in the hills and grassy highlands north of Southshore.",
 
     -- Stranglethorn
+    ["tiger mastery"]                     = "NORTH STV (Nesingwary): Young Stranglethorn Tigers prowl around Nesingwary's Expedition; chain leads to Sin'Dall & Big Game Hunter.",
+    ["panther mastery"]                   = "NORTH STV (Nesingwary): Young Panthers prowl north/east of Nesingwary's Expedition; chain leads to Bhag'thera & Big Game Hunter.",
+    ["raptor mastery"]                    = "NORTH STV (Nesingwary): Stranglethorn Raptors roam west of Nesingwary's Expedition; chain leads to Tethis & Big Game Hunter.",
     ["the green hills of stranglethorn"]  = "Collect Chapter pages 1-27. Pages can be traded or bought directly from other players on the Auction House.",
+    ["chapter i"]                         = "Chapter I requires pages 1, 4, 6, 8. Pages can be traded or bought on the Auction House.",
+    ["chapter ii"]                        = "Chapter II requires pages 10, 11, 14, 16. Pages can be traded or bought on the Auction House.",
+    ["chapter iii"]                       = "Chapter III requires pages 18, 20, 21, 24. Pages can be traded or bought on the Auction House.",
+    ["chapter iv"]                        = "Chapter IV requires pages 25, 26, 27. Pages can be traded or bought on the Auction House.",
     ["cortello's riddle"]                 = "Step 1: Under bridge in STV. Step 2: Swamp of Sorrows cave. Step 3: Hinterlands waterfall.",
     ["supply and demand"]                 = "NORTH STV: River Crocolisks swim in the northern STV river (Lvl 30-32). Pick up in Booty Bay, hunt in the north!",
     ["investigate the camp"]              = "NORTH STV: Locate Nesingwary's Expedition north across the river (Lvl 31-33 area).",
@@ -249,22 +266,20 @@ function Data.GetQuestTip(questID, questTitle)
         end
     end
 
-    -- 1. Exact questID lookup
-    if targetID and Data.QuestTips[targetID] then
-        return Data.QuestTips[targetID]
-    end
-
-    -- 2. Exact Title lookup
-    if cleanTitle and cleanTitle ~= "" and Data.QuestTipsByTitle[cleanTitle] then
-        return Data.QuestTipsByTitle[cleanTitle]
-    end
-
-    -- Flexible Title lookup (without 'the ' prefix)
-    if cleanTitle and cleanTitle ~= "" then
+    -- 1. Exact Title lookup first (prevents stale IDs from overriding a distinct known quest title)
+    if cleanTitle and cleanTitle ~= "" and not string.find(cleanTitle, "^quest #") then
+        if Data.QuestTipsByTitle[cleanTitle] then
+            return Data.QuestTipsByTitle[cleanTitle]
+        end
         local noThe = string.gsub(cleanTitle, "^the%s+", "")
         if Data.QuestTipsByTitle[noThe] then
             return Data.QuestTipsByTitle[noThe]
         end
+    end
+
+    -- 2. Exact questID lookup
+    if targetID and Data.QuestTips[targetID] then
+        return Data.QuestTips[targetID]
     end
 
     -- 3. Check Quest Log objectives if quest is in active player's log
