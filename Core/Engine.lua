@@ -386,9 +386,10 @@ function Engine.CalculateWorth(questID)
     local isBankable = false
     local isHard = not isTalkTo and (color == "red" or color == "orange" or delta >= 3 or (dDetails and (dDetails.isElite or dDetails.isDungeon == true)))
 
-    -- Gear Upgrade Boost (ensure genuine upgrades reach the 82% - 95% bracket)
+    -- Gear Upgrade Boost (ensure genuine upgrades reach the 82% - 95% bracket; tempered at +2 level delta)
     if hasGearUpgrade and fScore >= 0.80 and not (color == "red" or color == "orange" or delta >= 3) then
-        totalWorth = math.max(totalWorth, 0.78 + (fScore - 0.75) * 0.60)
+        local gearFloor = (delta >= 2) and (0.72 + (fScore - 0.75) * 0.48) or (0.78 + (fScore - 0.75) * 0.60)
+        totalWorth = math.max(totalWorth, gearFloor)
     end
 
     -- Milestone / Prequest / Attunement / Major Reward Boost:
@@ -727,12 +728,19 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     end
 
     local readyCount = 0
+    local viableCount = 0
     if activeCount and activeCount > 0 and addon.Scores and addon.Scores.GetQuestsForZone then
         local zQuests = addon.Scores.GetQuestsForZone(zoneName)
         if zQuests then
             for _, qID in ipairs(zQuests) do
-                if Engine.IsQuestComplete(qID) then
+                local _, qBreak = Engine.CalculateWorth(qID)
+                if Engine.IsQuestComplete(qID) or (qBreak and qBreak.isComplete) then
                     readyCount = readyCount + 1
+                    viableCount = viableCount + 1
+                elseif qBreak and qBreak.isHard then
+                    viableCount = viableCount + 0.25
+                else
+                    viableCount = viableCount + 1
                 end
             end
         end
@@ -911,6 +919,18 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         end
     end
 
+    -- Stranglethorn Vale is split between North STV (30-36) and South STV outside Booty Bay (38-45)
+    if zoneName == "Stranglethorn Vale" then
+        if playerLevel <= 36 then
+            hubName = (playerFaction == "Horde") and "North STV: Grom'gol & Nesingwary (30-36)" or "North STV: Rebel Camp & Nesingwary (30-36)"
+            if playerLevel >= 30 then
+                recommendation = "Go NORTH to Rebel Camp / Grom'gol & Nesingwary Expedition (Lvl 30-36 mobs). Do NOT fight outside Booty Bay yet (South STV mobs are Lvl 38-45; only pick up quests in town)!"
+            end
+        else
+            hubName = (playerFaction == "Horde") and "South STV: Booty Bay & Grom'gol (37-45)" or "South STV: Booty Bay & Rebel Camp (37-45)"
+        end
+    end
+
     -- Zone Hub Density modifier
     local hubMod = 0.00
     if applyHubMod or (rawHubMod < 0 and effectiveMin and playerLevel >= (effectiveMin - 1)) then
@@ -942,7 +962,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     local finalWorth
     if zoneInfo and activeWorth and activeCount and activeCount > 0 then
         if baseZoneScore >= 0.55 then
-            activeBonus = math.min(0.10, (activeCount * 0.022) * (0.50 + 0.50 * activeWorth) + (readyCount * 0.02))
+            activeBonus = math.min(0.10, (viableCount * 0.022) * (0.50 + 0.50 * activeWorth) + (readyCount * 0.02))
             finalWorth = math.min(1.00, baseZoneScore + activeBonus)
         else
             finalWorth = math.max(baseZoneScore, (0.55 * activeWorth) + (0.45 * baseZoneScore))

@@ -68,12 +68,18 @@ Data.QuestTips = {
     [1241] = "Question Innkeeper Allison in Menethil Harbor, then travel to Stormwind to confront Dashel Stonefist.",
 
     -- Stranglethorn Vale
+    [201]  = "NORTH STV: Locate the hunters' camp north across the river from Nesingwary's Expedition (Lvl 31-33 zone).",
+    [213]  = "NORTH STV: Tumbled Crystals drop from Venture Co. geologists in central/north STV around Lake Nazferiti (Lvl 35-36 mobs).",
+    [575]  = "NORTH STV: Large River Crocolisk Skins drop from young/river crocolisks along the northern STV river (Lvl 30-32, NOT South STV).",
+    [578]  = "NORTHWEST STV: The haunted island is off the northwestern coast (west of Zul'Kunda), guarded by Level 37-39 Water Elementals.",
+    [605]  = "NORTH STV: Singing Crystal Shards drop from Basilisks around the crystal mines north of Lake Nazferiti (Lvl 34-36).",
+    [606]  = "SOUTH STV: Mistvale Giblets drop from Elder Mistvale Gorillas in the valley outside Booty Bay (Lvl 40-42 mobs).",
+    [617]  = "Akiris reeds grow in large bundles along the riverbanks and naga coast in northern Stranglethorn.",
     [625]  = "Cortello's Riddle 1: The scroll is hidden under the stone bridge along the main road in Stranglethorn.",
     [626]  = "Cortello's Riddle 2: The scroll is hidden inside a cave in Swamp of Sorrows near the pool.",
     [627]  = "Cortello's Riddle 3: The treasure chest is submerged under the waterfall in the Hinterlands.",
     [185]  = "Collect Chapter pages 1-27. Pages can be traded or bought directly from other players on the Auction House.",
     [194]  = "Mistvale Giblets drop from elder mistvale gorillas in the valley south of Booty Bay.",
-    [578]  = "Akiris reeds grow in large bundles along the riverbanks in northern Stranglethorn.",
 
     -- Tanaris & Un'Goro
     [2605] = "Dew Glands drop from Wasps and Scorpids throughout the Tanaris desert dunes.",
@@ -137,8 +143,13 @@ Data.QuestTipsByTitle = {
     -- Stranglethorn
     ["the green hills of stranglethorn"]  = "Collect Chapter pages 1-27. Pages can be traded or bought directly from other players on the Auction House.",
     ["cortello's riddle"]                 = "Step 1: Under bridge in STV. Step 2: Swamp of Sorrows cave. Step 3: Hinterlands waterfall.",
-    ["scaring shaky"]                     = "Mistvale Giblets drop from elder mistvale gorillas in the valley south of Booty Bay.",
-    ["akiris by the bundle"]              = "Akiris reeds grow in large bundles along the riverbanks in northern Stranglethorn.",
+    ["supply and demand"]                 = "NORTH STV: River Crocolisks swim in the northern STV river (Lvl 30-32). Pick up in Booty Bay, hunt in the north!",
+    ["investigate the camp"]              = "NORTH STV: Locate Nesingwary's Expedition north across the river (Lvl 31-33 area).",
+    ["singing blue shards"]               = "NORTH STV: Singing Crystal Shards drop from Basilisks around the crystal mines north of Lake Nazferiti (Lvl 34-36).",
+    ["hostile takeover"]                  = "NORTH STV: Tumbled Crystals drop from Venture Co. geologists in central/north STV near Lake Nazferiti (Lvl 35-36 mobs).",
+    ["the stone of the tides"]            = "NORTHWEST STV: The haunted island is off the northwestern coast (west of Zul'Kunda), guarded by Level 37-39 Water Elementals.",
+    ["scaring shaky"]                     = "SOUTH STV: Mistvale Giblets drop from Elder Mistvale Gorillas in the valley outside Booty Bay (Lvl 40-42 mobs).",
+    ["akiris by the bundle"]              = "Akiris reeds grow in large bundles along the riverbanks and naga coast in northern Stranglethorn.",
 
     -- Tanaris & Un'Goro
     ["noggenfogger elixir"]               = "Dew Glands drop from Wasps and Scorpids throughout the Tanaris desert dunes.",

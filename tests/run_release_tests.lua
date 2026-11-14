@@ -1635,6 +1635,67 @@ addonTable.Player.Update()
 addonTable.Engine.InvalidateCache()
 end
 
+-- 11. Stranglethorn Vale Level 34 Sub-Zone Guidance & Exploration Quest Scoring
+do
+local savedLvl11 = mockPlayerState.level
+local savedFaction11 = mockPlayerState.faction
+local savedLog11 = mockQuestLog
+mockPlayerState.level = 34
+mockPlayerState.faction = "Alliance"
+addonTable.Player.Update()
+
+mockQuestLog = {
+    { title = "Stranglethorn Vale (2)", isHeader = true, isCollapsed = false },
+    { title = "The Stone of the Tides", questID = 578, level = 37, isHeader = false, isComplete = 0 },
+    { title = "Investigate the Camp", questID = 201, level = 32, isHeader = false, isComplete = 0 },
+}
+mockQuestDB[578] = {
+    title = "The Stone of the Tides",
+    level = 37,
+    xp = 2700,
+    money = 0,
+    objectives = { { text = "Locate the haunted island", type = "object", finished = false } },
+}
+mockQuestDB[201] = {
+    title = "Investigate the Camp",
+    level = 32,
+    xp = 1350,
+    money = 0,
+    objectives = { { text = "Locate the hunters' camp", type = "object", finished = false } },
+}
+
+addonTable.Utils.ClearTalkToCache(578)
+addonTable.Utils.ClearTalkToCache(201)
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+
+local is578Talk = addonTable.Utils.IsTalkToQuest(578)
+local w578, b578 = addonTable.Engine.CalculateWorth(578)
+assert_true(is578Talk == false, "The Stone of the Tides [37] ('Locate the haunted island') is NOT misclassified as Talk-To")
+assert_true(b578 and b578.isHard == true, "The Stone of the Tides [37] at Lvl 34 is flagged isHard = true")
+assert_true(b578 and b578.isBankable == true, "The Stone of the Tides [37] high-XP orange quest is Bankable")
+assert_true(w578 >= 0.53 and w578 <= 0.60, "The Stone of the Tides [37] at Lvl 34 scores in Bankable Orange range [0.53, 0.60]: " .. tostring(w578))
+
+local is201Talk = addonTable.Utils.IsTalkToQuest(201)
+local w201 = addonTable.Engine.CalculateWorth(201)
+assert_true(is201Talk == false, "Investigate the Camp [32] ('Locate the hunters' camp') is NOT misclassified as Talk-To")
+assert_true(w201 <= 0.76, "Investigate the Camp [32] standalone exploration quest stays capped <= 0.76: " .. tostring(w201))
+
+local stvTip = addonTable.Data.GetQuestTip(578, "The Stone of the Tides")
+assert_true(stvTip and string.find(string.lower(stvTip), "haunted island", 1, true) ~= nil, "Tip for 578 describes haunted island (not Akiris reeds)")
+
+local stvZone = addonTable.Engine.CalculateWorldMapZoneWorth("Stranglethorn Vale")
+assert_eq(stvZone and stvZone.hubName, "North STV: Rebel Camp & Nesingwary (30-36)", "STV at Lvl 34 highlights North STV hubs (30-36)")
+assert_true(stvZone and stvZone.recommendation and string.find(stvZone.recommendation, "NORTH", 1, true) ~= nil and string.find(stvZone.recommendation, "30-36", 1, true) ~= nil, "STV at Lvl 34 recommends North STV (30-36) and warns about Booty Bay south mobs")
+
+mockPlayerState.level = savedLvl11
+mockPlayerState.faction = savedFaction11
+mockQuestLog = savedLog11
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+end
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

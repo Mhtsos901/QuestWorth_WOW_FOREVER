@@ -633,7 +633,7 @@ addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
 -- =========================================================================
 local _talkToCache = {}
 
-local function MatchesTalkToPhrase(lower)
+local function MatchesExplicitTalkToPhrase(lower)
     return (
         string.find(lower, "speak with") or
         string.find(lower, "speak to") or
@@ -652,21 +652,46 @@ local function MatchesTalkToPhrase(lower)
         string.find(lower, "consult ") or
         string.find(lower, "confer with") or
         string.find(lower, "check in with") or
-        string.find(lower, "seek out ") or
-        string.find(lower, "locate ") or
         string.find(lower, "meet with ") or
-        string.find(lower, "find ") or
-        string.find(lower, "meet ") or
         string.find(lower, "inform ") or
-        string.find(lower, "travel to") or
-        string.find(lower, "go to ") or
-        string.find(lower, "visit ") or
         string.find(lower, "μιλήστε με") or
         string.find(lower, "μίλησε με") or
         string.find(lower, "παραδώστε") or
         string.find(lower, "αναφέρετε") or
         string.find(lower, "επιστρέψτε")
     ) ~= nil
+end
+
+local function MatchesTalkToPhrase(lower)
+    if MatchesExplicitTalkToPhrase(lower) then
+        return true
+    end
+    return (
+        string.find(lower, "seek out ") or
+        string.find(lower, "locate ") or
+        string.find(lower, "find ") or
+        string.find(lower, "meet ") or
+        string.find(lower, "travel to") or
+        string.find(lower, "go to ") or
+        string.find(lower, "visit ")
+    ) ~= nil
+end
+
+local EXPLORATION_HAZARD_WORDS = {
+    "island", "haunted", "camp", "cave", "mine", "ruins", "stronghold",
+    "den", "lair", "tomb", "crypt", "cemetery", "graveyard", "wreck",
+    "barrow", "oasis", "fissure", "altar", "shrine", "monument",
+    "chest", "crate", "barrel",
+}
+
+local function HasExplorationOrHazardTarget(lower)
+    local padded = " " .. (lower or "") .. " "
+    for _, word in ipairs(EXPLORATION_HAZARD_WORDS) do
+        if string.find(padded, "[^%a]" .. word .. "s?[^%a]") then
+            return true
+        end
+    end
+    return false
 end
 
 local function HasCombatOrMultiObjective(text)
@@ -809,29 +834,32 @@ function Utils.IsTalkToQuest(questID)
     if #objectiveTexts > 0 then
         -- Talk-to / courier quests typically have 1 (rarely 2) simple instructions
         if #objectiveTexts <= 2 then
+            local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+            local qLevel = (basicInfo and basicInfo.level and basicInfo.level > 0) and basicInfo.level or pLevel
+            local delta = qLevel - pLevel
+            local phraseMatcher = (delta >= 3) and MatchesExplicitTalkToPhrase or MatchesTalkToPhrase
+
             local allTalkTo = true
             local hasPositivePhrase = false
             for _, text in ipairs(objectiveTexts) do
-                if HasCombatOrMultiObjective(text) then
+                local lowerText = string.lower(text)
+                if HasCombatOrMultiObjective(text) or HasExplorationOrHazardTarget(lowerText) then
                     allTalkTo = false
                     break
                 end
-                if MatchesTalkToPhrase(string.lower(text)) then
+                if phraseMatcher(lowerText) then
                     hasPositivePhrase = true
                 end
             end
 
             if allTalkTo and not hasPositivePhrase and offerDescription and offerDescription ~= "" then
-                if MatchesTalkToPhrase(string.lower(offerDescription)) then
+                if phraseMatcher(string.lower(offerDescription)) then
                     hasPositivePhrase = true
                 end
             end
 
             -- Breadcrumb XP fallback: Non-combat single objective at player level giving pure delivery XP (<= 3.6x mobXP)
             if allTalkTo and not hasPositivePhrase then
-                local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
-                local qLevel = (basicInfo and basicInfo.level and basicInfo.level > 0) and basicInfo.level or pLevel
-                local delta = qLevel - pLevel
                 local liveXP = 0
                 if matchesOffer and GetRewardXP then
                     local okXP, val = pcall(GetRewardXP)
