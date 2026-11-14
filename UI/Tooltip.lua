@@ -461,9 +461,10 @@ end
 local OBJECT_HIGHLIGHT_CVARS = {
     questPOI = "1",
     Outline = "2",
-    OutlineEngineMode = "1",
+    OutlineEngineMode = "2",
     graphicsOutlineMode = "2",
     SoftTargetInteract = "3",
+    SoftTargetIconQuest = "1",
     SoftTargetIconGameObject = "0",
     SoftTargetIconEnemy = "0",
     SoftTargetEnemy = "0",
@@ -917,9 +918,12 @@ function UI.InitializeTooltips()
         addon.Debug("Hooked TooltipDataProcessor for Quest, Item, and Object tooltips.")
     end
 
-    -- Hook GameTooltip Clear & Hide
+    -- Hook GameTooltip Clear, SetText & Hide
     if GameTooltip and hooksecurefunc then
         pcall(hooksecurefunc, GameTooltip, "ClearLines", OnTooltipCleared)
+        pcall(hooksecurefunc, GameTooltip, "SetText", function(self)
+            UI.AddWorldObjectQuestLines(self)
+        end)
     end
     if ItemRefTooltip and hooksecurefunc then
         pcall(hooksecurefunc, ItemRefTooltip, "ClearLines", OnTooltipCleared)
