@@ -413,7 +413,7 @@ function Utils.FormatScore(score)
     return string.format("|cff%s%d%%|r", hex, pct)
 end
 
-function Utils.FormatBadge(score, isComplete, isHard, isBankable)
+function Utils.FormatBadge(score, isComplete, isHard, isBankable, isLowValue)
     if isComplete then
         return "|cff1aff4d[OK]|r"
     end
@@ -433,6 +433,8 @@ function Utils.FormatBadge(score, isComplete, isHard, isBankable)
     local badge = string.format("|cff%s[%d%%]|r", hex, pct)
     if isHard then
         return "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t " .. badge
+    elseif isLowValue then
+        return "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t " .. badge
     end
     return badge
 end

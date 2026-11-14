@@ -148,7 +148,8 @@ local function UpdateQuestOfferDialog()
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
     local isBankable = (breakdown and breakdown.isBankable)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+    local isLowValue = (breakdown and breakdown.isLowValue)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
 
     -- Attach mouseover tooltip only when the corresponding detail title header is visible
     local visibleAnchor = (QuestInfoTitleHeader and ((QuestInfoTitleHeader.IsVisible and QuestInfoTitleHeader:IsVisible()) or (QuestInfoTitleHeader.IsShown and QuestInfoTitleHeader:IsShown())) and QuestInfoTitleHeader)

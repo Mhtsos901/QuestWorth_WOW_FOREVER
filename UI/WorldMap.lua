@@ -346,7 +346,7 @@ local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showCli
                 local qWorth, qBreak = addon.Engine.CalculateWorth(qID)
                 local info = Utils.GetQuestBasicInfo(qID)
                 if info and qWorth then
-                    local badge = Utils.FormatBadge(qWorth, qBreak and qBreak.isComplete, qBreak and qBreak.isHard, qBreak and qBreak.isBankable)
+                    local badge = Utils.FormatBadge(qWorth, qBreak and qBreak.isComplete, qBreak and qBreak.isHard, qBreak and qBreak.isBankable, qBreak and qBreak.isLowValue)
                     tooltip:AddLine(string.format("  * %s %s", badge, info.title), 0.8, 0.8, 0.8)
                 end
             end

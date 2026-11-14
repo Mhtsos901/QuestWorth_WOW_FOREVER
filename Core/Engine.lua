@@ -276,6 +276,7 @@ function Engine.CalculateWorth(questID)
             wH = wH,
             isComplete = true,
             isHard = false,
+            isLowValue = false,
             details = { note = "Ready for turn-in!" }
         }
         if Engine.CacheSize >= MAX_CACHE_SIZE then
@@ -400,6 +401,7 @@ function Engine.CalculateWorth(questID)
     local delta = (dDetails and dDetails.levelDelta) or 0
     local isBankable = false
     local isHard = not isTalkTo and (color == "red" or color == "orange" or delta >= 3 or (dDetails and (dDetails.isElite or dDetails.isDungeon == true)))
+    local hasChain = isMajorChain or isMilestone or isChainStarter or (cDetails and (cDetails.totalSteps and cDetails.totalSteps > 1)) or (cScore and cScore >= 0.35)
 
     -- Gear Upgrade Boost (ensure genuine upgrades reach the 82% - 95% bracket; tempered at +2 level delta)
     if hasGearUpgrade and fScore >= 0.80 and not (color == "red" or color == "orange" or delta >= 3) then
@@ -465,6 +467,22 @@ function Engine.CalculateWorth(questID)
         totalWorth = math.min(0.76, totalWorth)
     end
 
+    -- Low-Level / Small-Reward Standalone Quest Penalty (no chain):
+    -- Steeply reduces Worth % and flags isLowValue so UI displays a red down-arrow indicator
+    local isLowValue = false
+    if not hasChain and not hasGearUpgrade and not isTalkTo and not isHard and not isBankable and not (dDetails and dDetails.isDungeon) then
+        if color == "gray" then
+            isLowValue = true
+            totalWorth = math.min(0.15, totalWorth * 0.25)
+        elseif color == "deep_green" or delta <= -4 then
+            isLowValue = true
+            totalWorth = math.min(0.22, totalWorth * 0.38)
+        elseif (delta == -3 and rScore < 0.65) or (rScore < 0.42 and fScore < 0.70) then
+            isLowValue = true
+            totalWorth = math.min(0.28, totalWorth * 0.48)
+        end
+    end
+
     -- Chain Start Floor:
     -- If quest is the start of a chain (step 1 of >1) and not red, floor at 0.35 to save player from skipping and backtracking
     if cDetails and cDetails.step == 1 and (cDetails.totalSteps or 0) > 1 and color ~= "red" and delta < 5 then
@@ -488,6 +506,7 @@ function Engine.CalculateWorth(questID)
         isComplete = false,
         isBankable = isBankable,
         isHard = isHard,
+        isLowValue = isLowValue,
         isTalkTo = isTalkTo,
         details = {
             difficulty = dDetails,
@@ -752,7 +771,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
                 if Engine.IsQuestComplete(qID) or (qBreak and qBreak.isComplete) then
                     readyCount = readyCount + 1
                     viableCount = viableCount + 1
-                elseif qBreak and qBreak.isHard then
+                elseif qBreak and (qBreak.isHard or qBreak.isLowValue) then
                     viableCount = viableCount + 0.25
                 else
                     viableCount = viableCount + 1
@@ -1064,7 +1083,8 @@ function Engine.PrintBreakdown(questID)
     end
 
     local scoreColorHex = Utils.GetScoreColorHex(worth)
-    local skullPrefix = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t " or ""
+    local skullPrefix = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t "
+        or (b.isLowValue and "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t " or "")
     DEFAULT_CHAT_FRAME:AddMessage(string.format(L["DEBUG_BREAKDOWN_HEADER"], questID, info.title))
     DEFAULT_CHAT_FRAME:AddMessage(string.format("  |cffffff00Total Worth:|r %s|cff%s%.1f%%|r (Weights: R=%.0f%% F=%.0f%% C=%.0f%% H=%.0f%% D=%.0f%%)",
         skullPrefix, scoreColorHex, worth * 100, b.wR * 100, b.wF * 100, b.wC * 100, b.wH * 100, b.wD * 100))

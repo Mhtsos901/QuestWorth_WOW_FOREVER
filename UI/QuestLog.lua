@@ -353,7 +353,8 @@ local function HookQuestButtonText(button, fontString)
         local isComplete = (breakdown and breakdown.isComplete)
         local isHard = (breakdown and breakdown.isHard)
         local isBankable = (breakdown and breakdown.isBankable)
-        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+        local isLowValue = (breakdown and breakdown.isLowValue)
+        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
         local targetText = badge .. " " .. clean
 
         if text ~= targetText then
@@ -462,7 +463,8 @@ local function ProcessQuestButton(button, showTag)
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
     local isBankable = (breakdown and breakdown.isBankable)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+    local isLowValue = (breakdown and breakdown.isLowValue)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
     local targetText = badge .. " " .. cleanText
     if rawText ~= targetText then
         fontString._worthItSettingText = true
@@ -780,11 +782,13 @@ function UI.UpdateQuestLog(force)
                                         local comp = (breakdown and breakdown.isComplete) or isComplete
                                         local isHard = (breakdown and breakdown.isHard)
                                         local isBankable = (breakdown and breakdown.isBankable)
+                                        local isLowValue = (breakdown and breakdown.isLowValue)
                                         if not (rawTitle == fontString._qwLastTarget and fontString._qwLastID == id
                                            and fontString._qwLastWorth == worth and fontString._qwLastComp == comp
-                                           and fontString._qwLastHard == isHard and fontString._qwLastBankable == isBankable) then
+                                           and fontString._qwLastHard == isHard and fontString._qwLastBankable == isBankable
+                                           and fontString._qwLastLowValue == isLowValue) then
                                             local cleanTitle = Utils.CleanQuestTitle(rawTitle)
-                                            local badge = Utils.FormatBadge(worth, comp, isHard, isBankable)
+                                            local badge = Utils.FormatBadge(worth, comp, isHard, isBankable, isLowValue)
                                             local targetText = badge .. " " .. cleanTitle
                                             fontString._qwLastTarget = targetText
                                             fontString._qwLastID = id
@@ -792,6 +796,7 @@ function UI.UpdateQuestLog(force)
                                             fontString._qwLastComp = comp
                                             fontString._qwLastHard = isHard
                                             fontString._qwLastBankable = isBankable
+                                            fontString._qwLastLowValue = isLowValue
                                             if rawTitle ~= targetText then
                                                 fontString:SetText(targetText)
                                             end
@@ -832,7 +837,8 @@ function UI.UpdateQuestLog(force)
                                 local isComplete = (breakdown and breakdown.isComplete)
                                 local isHard = (breakdown and breakdown.isHard)
                                 local isBankable = (breakdown and breakdown.isBankable)
-                                local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+                                local isLowValue = (breakdown and breakdown.isLowValue)
+                                local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
                                 local targetText = badge .. " " .. cleanTitle
                                 if rawTitle ~= targetText then
                                     button.normalText:SetText(targetText)
@@ -1079,7 +1085,8 @@ local function HookBlockHeaderText(block)
         local isComplete = (breakdown and breakdown.isComplete)
         local isHard = (breakdown and breakdown.isHard)
         local isBankable = (breakdown and breakdown.isBankable)
-        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+        local isLowValue = (breakdown and breakdown.isLowValue)
+        local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
         local targetText = badge .. " " .. clean
 
         if text ~= targetText then
@@ -1126,7 +1133,8 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     local isComplete = (breakdown and breakdown.isComplete)
     local isHard = (breakdown and breakdown.isHard)
     local isBankable = (breakdown and breakdown.isBankable)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable)
+    local isLowValue = (breakdown and breakdown.isLowValue)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
     local targetText = badge .. " " .. cleanText
 
     if rawText ~= targetText then

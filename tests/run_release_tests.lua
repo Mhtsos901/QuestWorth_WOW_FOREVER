@@ -1794,6 +1794,68 @@ assert_eq(setCVarCount, countAfterReset, "20 GameTooltip:ClearLines() calls trig
 _G.C_CVar.SetCVar = origSetCVar12
 end
 
+-- 13. Low-Level & Small-Reward Standalone Quest Down-Arrow & Steep Worth Penalty
+do
+local savedLvl13 = mockPlayerState.level
+local savedLog13 = mockQuestLog
+mockPlayerState.level = 34
+addonTable.Player.Update()
+
+mockQuestDB[9992] = {
+    title = "Old Low-Level Task",
+    level = 27,
+    xp = 1350,
+    money = 500,
+    objectives = { { text = "0/10 Wolf Pelts", type = "item", finished = false } },
+}
+mockQuestDB[9993] = {
+    title = "Minimal Reward Errand",
+    level = 34,
+    xp = 350,
+    money = 0,
+    objectives = { { text = "0/8 River Scales", type = "item", finished = false } },
+}
+mockQuestLog = {
+    { title = "Stranglethorn Vale (2)", isHeader = true, isCollapsed = false },
+    { title = "Old Low-Level Task", questID = 9992, level = 27, isHeader = false, isComplete = 0 },
+    { title = "Minimal Reward Errand", questID = 9993, level = 34, isHeader = false, isComplete = 0 },
+}
+addonTable.Utils.ClearTalkToCache(9992)
+addonTable.Utils.ClearTalkToCache(9993)
+addonTable.Utils.ClearQuestBasicInfoCache(9992)
+addonTable.Utils.ClearQuestBasicInfoCache(9993)
+addonTable.Engine.InvalidateCache()
+addonTable.Scores.InvalidateDensityCache()
+
+local wLowLvl, bLowLvl = addonTable.Engine.CalculateWorth(9992)
+assert_true(bLowLvl and bLowLvl.isLowValue == true, "Low-level standalone quest (delta -7, no chain) flagged isLowValue = true")
+assert_true(wLowLvl <= 0.22, "Low-level standalone quest steeply penalized (worth <= 0.22): " .. tostring(wLowLvl))
+local badgeLowLvl = addonTable.Utils.FormatBadge(wLowLvl, bLowLvl.isComplete, bLowLvl.isHard, bLowLvl.isBankable, bLowLvl.isLowValue)
+assert_true(string.find(badgeLowLvl, "UI%-MicroStream%-Red") ~= nil, "Low-level standalone badge includes red down-arrow icon")
+assert_eq(addonTable.Utils.CleanQuestTitle(badgeLowLvl .. " Old Low-Level Task"), "Old Low-Level Task", "Utils.CleanQuestTitle strips down-arrow badge cleanly")
+
+local wSmallRew, bSmallRew = addonTable.Engine.CalculateWorth(9993)
+assert_true(bSmallRew and bSmallRew.isLowValue == true, "Small-reward standalone quest (no chain) flagged isLowValue = true")
+assert_true(wSmallRew <= 0.28, "Small-reward standalone quest steeply penalized (worth <= 0.28): " .. tostring(wSmallRew))
+local badgeSmallRew = addonTable.Utils.FormatBadge(wSmallRew, bSmallRew.isComplete, bSmallRew.isHard, bSmallRew.isBankable, bSmallRew.isLowValue)
+assert_true(string.find(badgeSmallRew, "UI%-MicroStream%-Red") ~= nil, "Small-reward standalone badge includes red down-arrow icon")
+
+-- Chain quest at low level (e.g. Gnomeregan prequest 2922 at Lvl 34) is NOT flagged isLowValue
+mockQuestDB[2922] = { title = "Save Techbot's Brain!", level = 26, xp = 2100, money = 0, isDungeon = true }
+addonTable.Engine.InvalidateCache(2922)
+local wChainLow, bChainLow = addonTable.Engine.CalculateWorth(2922)
+assert_true(bChainLow and bChainLow.isLowValue == false, "Low-level chain/dungeon quest 2922 is NOT flagged isLowValue")
+assert_true(wChainLow >= 0.90, "Low-level chain/dungeon quest 2922 retains >= 0.90 Worth: " .. tostring(wChainLow))
+
+mockQuestDB[9992] = nil
+mockQuestDB[9993] = nil
+mockPlayerState.level = savedLvl13
+mockQuestLog = savedLog13
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Scores.InvalidateDensityCache()
+end
+
 -- Restore state before Scenario 4
 mockPlayerState.level = savedLvl3L
 mockPlayerState.race = savedRace3L

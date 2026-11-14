@@ -153,7 +153,7 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
     if not worth or not b then return end
 
     local isBankable = b.isBankable
-    local badge = Utils.FormatBadge(worth, b.isComplete, b.isHard, isBankable)
+    local badge = Utils.FormatBadge(worth, b.isComplete, b.isHard, isBankable, b.isLowValue)
 
     tooltip:AddLine(" ")
 
@@ -207,6 +207,16 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         end
     elseif b.isHard then
         adviceText = "|cffff5533Bring Group / Elite Mob|r"
+    elseif b.isLowValue then
+        local dColor = b.details and b.details.difficulty and b.details.difficulty.colorName
+        local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
+        if dColor == "gray" then
+            adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
+        elseif dDelta and dDelta <= -3 then
+            adviceText = "|cffaaaaaaLow Level • No Chain (Skip)|r"
+        else
+            adviceText = "|cffaaaaaaLow Reward • No Chain (Optional)|r"
+        end
     elseif worth < 0.35 then
         local dColor = b.details and b.details.difficulty and b.details.difficulty.colorName
         local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
@@ -839,7 +849,7 @@ function UI.AddWorldObjectQuestLines(tooltip)
     tooltip._worthItAddedObjectText = cleanObjName
 
     local worth, b = addon.Engine and addon.Engine.CalculateWorth and addon.Engine.CalculateWorth(matchedQuestID)
-    local badge = worth and Utils.FormatBadge(worth, b and b.isComplete, b and b.isHard, b and b.isBankable) or ""
+    local badge = worth and Utils.FormatBadge(worth, b and b.isComplete, b and b.isHard, b and b.isBankable, b and b.isLowValue) or ""
     local titleDisplay = badge ~= "" and string.format("%s |cffffffff%s|r", badge, matchedQuestTitle) or ("|cffffffff" .. matchedQuestTitle .. "|r")
 
     tooltip:AddLine(" ")
