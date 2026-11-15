@@ -775,7 +775,6 @@ local function CreateZoneAdvisorPanel(parent)
 
     -- Filter Buttons using Blizzard UIPanelButtonTemplate
     local filterAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    local filterOpt = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     local filterQ   = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 
     local function SetupFilterBtn(btn, text, width)
@@ -786,16 +785,14 @@ local function CreateZoneAdvisorPanel(parent)
         end
     end
 
-    SetupFilterBtn(filterAll, "All", 54)
-    SetupFilterBtn(filterOpt, "Optimal (70%+)", 122)
-    SetupFilterBtn(filterQ,   "Dungeons", 78)
+    SetupFilterBtn(filterAll, "All", 129)
+    SetupFilterBtn(filterQ,   "Dungeons", 129)
 
     filterAll:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -34)
-    filterOpt:SetPoint("LEFT", filterAll, "RIGHT", 4, 0)
-    filterQ:SetPoint("LEFT", filterOpt, "RIGHT", 4, 0)
+    filterQ:SetPoint("LEFT", filterAll, "RIGHT", 4, 0)
 
     local function UpdateFilterVisuals()
-        local cur = addon.db and addon.db.zoneAdvisorFilter or "ALL"
+        local cur = (addon.db and addon.db.zoneAdvisorFilter == "DUNGEONS") and "DUNGEONS" or "ALL"
         local function styleBtn(btn, isActive)
             local fs = btn:GetFontString()
             if fs then
@@ -807,22 +804,11 @@ local function CreateZoneAdvisorPanel(parent)
             end
         end
         styleBtn(filterAll, cur == "ALL")
-        styleBtn(filterOpt, cur == "OPTIMAL")
         styleBtn(filterQ, cur == "DUNGEONS")
     end
 
     filterAll:SetScript("OnClick", function()
         if addon.db then addon.db.zoneAdvisorFilter = "ALL" end
-        if panel.scrollFrame and panel.slider then
-            panel.scrollFrame:SetVerticalScroll(0)
-            panel.slider:SetValue(0)
-        end
-        UpdateFilterVisuals()
-        UI.UpdateZoneAdvisor()
-    end)
-
-    filterOpt:SetScript("OnClick", function()
-        if addon.db then addon.db.zoneAdvisorFilter = "OPTIMAL" end
         if panel.scrollFrame and panel.slider then
             panel.scrollFrame:SetVerticalScroll(0)
             panel.slider:SetValue(0)
@@ -985,9 +971,7 @@ function UI.UpdateZoneAdvisor()
                 local res = addon.Engine and addon.Engine.CalculateWorldMapZoneWorth and addon.Engine.CalculateWorldMapZoneWorth(name)
                 if res then
                     local include = true
-                    if curFilter == "OPTIMAL" then
-                        include = (res.worth >= 0.70) and not (isDung and res.isCompletedDungeon)
-                    elseif curFilter == "DUNGEONS" then
+                    if curFilter == "DUNGEONS" then
                         include = isDung
                     elseif isDung and (res.worth < 0.70 or res.isCompletedDungeon) then
                         -- In "ALL" view, hide dungeons that are completed or not worth running (< 70%) compared to World Questing
@@ -1127,8 +1111,6 @@ function UI.UpdateZoneAdvisor()
             local msg
             if curFilter == "DUNGEONS" then
                 msg = "No dungeons in your\ncurrent level bracket."
-            elseif curFilter == "OPTIMAL" then
-                msg = "No optimal (70%+)\nzones found."
             else
                 msg = "No zones available."
             end

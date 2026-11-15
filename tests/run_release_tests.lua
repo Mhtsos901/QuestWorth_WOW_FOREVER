@@ -1266,9 +1266,6 @@ assert_eq(evalCompleted.status, "Completed Dungeon", "Completed dungeon sets Com
 assert_true(not evalCompleted.isLowValue, "Completed dungeon is not flagged as Low Value")
 
 assert_true(findAdvisorRow(clickedDungName, nil) == nil, "Completed dungeon is hidden from 'ALL' view")
-addonTable.db.zoneAdvisorFilter = "OPTIMAL"
-addonTable.UI.UpdateZoneAdvisor()
-assert_true(findAdvisorRow(clickedDungName, nil) == nil, "Completed dungeon is hidden from 'OPTIMAL' view")
 
 addonTable.db.zoneAdvisorFilter = "DUNGEONS"
 addonTable.UI.UpdateZoneAdvisor()
