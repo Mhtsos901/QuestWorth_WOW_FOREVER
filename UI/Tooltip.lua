@@ -31,7 +31,7 @@ local function GetReasonSummary(b)
         if fReason == "Gear Upgrade" then
             table.insert(reasons, "|cff1aff4dGear Upgrade!|r")
         elseif fReason == "Unusable Items" then
-            table.insert(reasons, "|cff888888No Gear Upgrades|r")
+            table.insert(reasons, "|cffccccccNo Gear Upgrades|r")
         else
             table.insert(reasons, fReason)
         end
@@ -75,7 +75,7 @@ local function GetReasonSummary(b)
         elseif rReason == "Good Gold" then
             table.insert(reasons, "|cffffcc00Good Gold|r")
         elseif rReason == "Low XP" then
-            table.insert(reasons, "|cffaaaaaaLow XP|r")
+            table.insert(reasons, "|cffccccccLow XP|r")
         elseif rReason ~= "Talk-To" then
             table.insert(reasons, rReason)
         end
@@ -125,7 +125,7 @@ local function GetReasonSummary(b)
         elseif dReason == "High Level" or dReason == "Hard Mob" then
             table.insert(reasons, "|cffff4444Challenging|r")
         elseif dReason == "Trivial" then
-            table.insert(reasons, "|cffaaaaaaTrivial (Gray)|r")
+            table.insert(reasons, "|cffccccccTrivial (Gray)|r")
         else
             table.insert(reasons, dReason)
         end
@@ -170,7 +170,7 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
     elseif worth >= 0.50 then
         statusDesc = "|cffffff00Good Quest|r"
     else
-        statusDesc = "|cffaaaaaaLow Value|r"
+        statusDesc = "|cffd0d0d0Low Value|r"
     end
 
     tooltip:AddDoubleLine(
@@ -211,11 +211,11 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         local dColor = b.details and b.details.difficulty and b.details.difficulty.colorName
         local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
         if dColor == "gray" then
-            adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
+            adviceText = "|cffccccccSkip or Abandon (Outleveled)|r"
         elseif dDelta and dDelta <= -3 then
-            adviceText = "|cffaaaaaaLow Level • No Chain (Skip)|r"
+            adviceText = "|cffccccccLow Level • No Chain (Skip)|r"
         else
-            adviceText = "|cffaaaaaaLow Reward • No Chain (Optional)|r"
+            adviceText = "|cffccccccLow Reward • No Chain (Optional)|r"
         end
     elseif worth < 0.35 then
         local dColor = b.details and b.details.difficulty and b.details.difficulty.colorName
@@ -223,9 +223,9 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         if dColor == "red" or (dDelta and dDelta >= 4) then
             adviceText = "|cffff3333Too High Level (Skip for Now)|r"
         elseif dColor == "gray" then
-            adviceText = "|cff888888Skip or Abandon (Outleveled)|r"
+            adviceText = "|cffccccccSkip or Abandon (Outleveled)|r"
         else
-            adviceText = "|cffaaaaaaLow Reward (Optional)|r"
+            adviceText = "|cffccccccLow Reward (Optional)|r"
         end
     else
         adviceText = "|cffffcc00Standard Leveling|r"
@@ -244,68 +244,120 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         if reasons and #reasons > 0 then
             tooltip:AddDoubleLine(
                 "|cff00ccff" .. (L["HIGHLIGHTS"] or "Highlights") .. ":|r",
-                table.concat(reasons, " |cff666666•|r "),
+                table.concat(reasons, " |cffcccccc•|r "),
                 0.9, 0.9, 0.9,
                 1, 1, 1
             )
         end
     end
 
-    -- 4. Meta-Knowledge: Key Unlock, Quest Tip & Payoff details (Displayed right after Verdict!)
+    -- 4. Meta-Knowledge & Live Quest Details: Tip, Task Type, Objectives, Payout, Best Item & Chain/Unlock
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(questID)
     local questTip = addon.Data and addon.Data.GetQuestTip and addon.Data.GetQuestTip(questID)
     local tipText = (payoff and payoff.tip) or questTip
+    local liveInfo = Utils.GetQuestLiveSummary and Utils.GetQuestLiveSummary(questID)
 
-    if (payoff and (payoff.unlock or payoff.reward or payoff.chain or payoff.note or payoff.origin or payoff.tip)) or (tipText and tipText ~= "") then
-        tooltip:AddLine(" ")
-        tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
-
-        -- 1. Quest Tip / Objective Guide (Prominent & immediately visible!)
-        if tipText and tipText ~= "" then
-            tooltip:AddLine("  |cff1aff4d★ " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. tipText .. "|r", 0.9, 0.9, 0.9, true)
+    local rDetails = b.details and b.details.reward
+    local fDetails = b.details and b.details.classFit
+    local payoutParts = {}
+    if rDetails and rDetails.rewardXP and rDetails.rewardXP > 0 then
+        local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+        local mobXP = math.max(50, (pLevel * 5) + 45)
+        local mobKills = math.max(1, math.floor((rDetails.rewardXP / mobXP) + 0.5))
+        local xpMax = (UnitXPMax and UnitXPMax("player")) or 0
+        if xpMax and xpMax > 0 then
+            local lvlPct = (rDetails.rewardXP / xpMax) * 100
+            table.insert(payoutParts, string.format("%d XP (~%d Mob Kills, %.1f%% lvl)", rDetails.rewardXP, mobKills, lvlPct))
+        else
+            table.insert(payoutParts, string.format("%d XP (~%d Mob Kills)", rDetails.rewardXP, mobKills))
         end
+    end
+    local compactMoney = (rDetails and rDetails.totalMoney and rDetails.totalMoney > 0 and Utils.FormatMoneyCompact)
+        and Utils.FormatMoneyCompact(rDetails.totalMoney)
+        or nil
+    if compactMoney then
+        table.insert(payoutParts, compactMoney .. ((rDetails.vendorResell and rDetails.vendorResell > 0) and " (incl. Vendor)" or ""))
+    end
 
-        -- 2. Chain details
-        if payoff and payoff.chain then
-            tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r", 1, 1, 1, true)
-        end
+    tooltip:AddLine(" ")
+    tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
 
-        -- 3. Key / Dungeon Unlocks
-        if payoff and payoff.unlock then
-            tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r", 1, 1, 1, true)
-        end
+    -- 1. Quest Tip / Objective Guide (Prominent & immediately visible!)
+    if tipText and tipText ~= "" then
+        tooltip:AddLine("  |cff1aff4d★ " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. tipText .. "|r", 1, 1, 1, true)
+    end
 
-        -- 4. Top Reward
-        if payoff and payoff.reward then
-            tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r", 1, 1, 1, true)
-        end
+    -- 2. Dynamic Task Classification
+    if liveInfo and liveInfo.taskType and liveInfo.taskType ~= "" then
+        tooltip:AddLine("  |cff00ccffTask:|r |cffffffff" .. liveInfo.taskType .. "|r", 1, 1, 1, true)
+    end
 
-        -- 5. Quest Origin / Type
-        if payoff and payoff.origin then
-            tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r", 1, 1, 1, true)
-        end
+    -- 3. Dynamic Objective Preview
+    if liveInfo and liveInfo.objectiveSummary and liveInfo.objectiveSummary ~= "" then
+        tooltip:AddLine("  |cff00ccffObjective:|r |cffffffff" .. liveInfo.objectiveSummary .. "|r", 1, 1, 1, true)
+    end
 
-        -- 6. Lore / Notes
-        if payoff and payoff.note and payoff.note ~= tipText then
-            tooltip:AddLine("  |cffcccccc" .. payoff.note .. "|r", 0.85, 0.85, 0.85, true)
+    -- 4. Dynamic XP & Gold Payout Context
+    if #payoutParts > 0 then
+        tooltip:AddLine("  |cff00ccffPayout:|r |cffffffff" .. table.concat(payoutParts, " • ") .. "|r", 1, 1, 1, true)
+    end
+
+    -- 5. Best Reward Item Evaluation (even before QuestPayoffs curation)
+    if fDetails and fDetails.hasItems and fDetails.bestLink then
+        local itemName = (addon.SafeGetItemInfo and addon.SafeGetItemInfo(fDetails.bestLink))
+            or string.match(tostring(fDetails.bestLink), "%[(.-)%]")
+        if itemName and itemName ~= "" then
+            local fitTag = (b.f and b.f >= 0.80) and "|cff1aff4d(Upgrade!)|r" or "|cffb8d8f8(Vendor / Offspec)|r"
+            tooltip:AddLine("  |cff00ccffBest Item:|r |cffffffff" .. itemName .. "|r " .. fitTag, 1, 1, 1, true)
         end
     end
 
-    -- 5. 5-Factor Score Breakdown (Clean, muted labels with prominent values)
+    -- 6. Chain details
+    if payoff and payoff.chain then
+        tooltip:AddLine("  |cff00ccff" .. L["PAYOFF_CHAIN"] .. "|r |cffffffff" .. payoff.chain .. "|r", 1, 1, 1, true)
+    end
+
+    -- 7. Key / Dungeon Unlocks
+    if payoff and payoff.unlock then
+        tooltip:AddLine("  |cff00ffff" .. L["PAYOFF_UNLOCKS"] .. "|r |cffffffff" .. payoff.unlock .. "|r", 1, 1, 1, true)
+    end
+
+    -- 8. Top Reward
+    if payoff and payoff.reward then
+        tooltip:AddLine("  |cffffd100" .. L["PAYOFF_REWARD"] .. "|r |cffffffff" .. payoff.reward .. "|r", 1, 1, 1, true)
+    end
+
+    -- 9. Quest Origin / Type
+    if payoff and payoff.origin then
+        tooltip:AddLine("  |cffffaa00" .. (L["PAYOFF_TYPE"] or "Type:") .. "|r |cffffffff" .. payoff.origin .. "|r", 1, 1, 1, true)
+    end
+
+    -- 10. Lore / Zone Notes
+    if payoff and payoff.note and payoff.note ~= tipText then
+        tooltip:AddLine("  |cffe6e6e6" .. payoff.note .. "|r", 0.95, 0.95, 0.95, true)
+    end
+
+    -- 5. 5-Factor Score Breakdown (High-contrast legible labels with prominent values)
     if not b.isComplete and addon.db.showBreakdown then
         tooltip:AddLine(" ")
-        tooltip:AddLine("|cff888888" .. L["BREAKDOWN"] .. ":|r")
+        tooltip:AddLine("|cffffd100" .. L["BREAKDOWN"] .. ":|r")
 
         local rNote = ""
-        if b.details and b.details.reward and b.details.reward.rewardXP and b.details.reward.rewardXP > 0 then
-            rNote = string.format(" |cff888888(%d XP)|r", b.details.reward.rewardXP)
+        if rDetails and ((rDetails.rewardXP and rDetails.rewardXP > 0) or compactMoney) then
+            if rDetails.rewardXP and rDetails.rewardXP > 0 and compactMoney then
+                rNote = string.format(" |cffb8d8f8(%d XP, %s)|r", rDetails.rewardXP, compactMoney)
+            elseif rDetails.rewardXP and rDetails.rewardXP > 0 then
+                rNote = string.format(" |cffb8d8f8(%d XP)|r", rDetails.rewardXP)
+            else
+                rNote = string.format(" |cffb8d8f8(%s)|r", compactMoney)
+            end
         end
 
         local fNote = ""
-        if b.details and b.details.classFit and b.details.classFit.hasItems then
-            fNote = (b.f >= 0.80) and " |cff1aff4d(Upgrade)|r" or " |cff888888(Vendor)|r"
+        if fDetails and fDetails.hasItems then
+            fNote = (b.f >= 0.80) and " |cff1aff4d(Upgrade)|r" or " |cffb8d8f8(Vendor)|r"
         else
-            fNote = " |cff888888(No Gear)|r"
+            fNote = " |cffb8d8f8(No Gear)|r"
         end
 
         local cNote = ""
@@ -313,13 +365,13 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             if b.details.chain.isClassOrProfession then
                 cNote = " |cff00ffff(Class)|r"
             elseif b.details.chain.totalSteps and b.details.chain.totalSteps > 1 then
-                cNote = string.format(" |cff888888(Step %d/%d)|r", b.details.chain.step or 1, b.details.chain.totalSteps)
+                cNote = string.format(" |cffb8d8f8(Step %d/%d)|r", b.details.chain.step or 1, b.details.chain.totalSteps)
             end
         end
 
         local hNote = ""
         if b.details and b.details.density and b.details.density.clusterCount then
-            hNote = string.format(" |cff888888(%d in zone)|r", b.details.density.clusterCount)
+            hNote = string.format(" |cffb8d8f8(%d in zone)|r", b.details.density.clusterCount)
         end
 
         local diffText
@@ -329,34 +381,34 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
             diffText = b.isHard and "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:11:11:0:0|t |cffff3333Hard|r" or "|cff00ff00Normal|r"
         else
             local deltaStr = (b.details and b.details.difficulty and b.details.difficulty.levelDelta) and string.format(" (%+d)", b.details.difficulty.levelDelta) or ""
-            diffText = Utils.FormatScore(b.d) .. "|cff888888" .. deltaStr .. "|r"
+            diffText = Utils.FormatScore(b.d) .. "|cffb8d8f8" .. deltaStr .. "|r"
         end
 
         tooltip:AddDoubleLine(
-            "  |cffa0a0a0" .. L["REWARD"] .. ":|r",
+            "  |cffe8e8e8" .. L["REWARD"] .. ":|r",
             Utils.FormatScore(b.r) .. rNote,
-            0.85, 0.85, 0.85, 1, 1, 1
+            0.95, 0.95, 0.95, 1, 1, 1
         )
         tooltip:AddDoubleLine(
-            "  |cffa0a0a0" .. L["CLASS_FIT"] .. ":|r",
+            "  |cffe8e8e8" .. L["CLASS_FIT"] .. ":|r",
             Utils.FormatScore(b.f) .. fNote,
-            0.85, 0.85, 0.85, 1, 1, 1
+            0.95, 0.95, 0.95, 1, 1, 1
         )
         tooltip:AddDoubleLine(
-            "  |cffa0a0a0" .. L["CHAIN"] .. ":|r",
+            "  |cffe8e8e8" .. L["CHAIN"] .. ":|r",
             Utils.FormatScore(b.c) .. cNote,
-            0.85, 0.85, 0.85, 1, 1, 1
+            0.95, 0.95, 0.95, 1, 1, 1
         )
         tooltip:AddDoubleLine(
-            "  |cffa0a0a0" .. (L["DENSITY"] or "Hub Density") .. ":|r",
+            "  |cffe8e8e8" .. (L["DENSITY"] or "Hub Density") .. ":|r",
             Utils.FormatScore(b.h or 0.5) .. hNote,
-            0.85, 0.85, 0.85, 1, 1, 1
+            0.95, 0.95, 0.95, 1, 1, 1
         )
         if (b.wD and b.wD > 0.001) or b.isHard or b.isTalkTo or (b.details and b.details.difficulty and b.details.difficulty.isTalkTo) then
             tooltip:AddDoubleLine(
-                "  |cffa0a0a0" .. L["DIFFICULTY"] .. ":|r",
+                "  |cffe8e8e8" .. L["DIFFICULTY"] .. ":|r",
                 diffText,
-                0.85, 0.85, 0.85, 1, 1, 1
+                0.95, 0.95, 0.95, 1, 1, 1
             )
         end
     end

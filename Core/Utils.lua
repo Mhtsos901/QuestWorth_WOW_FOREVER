@@ -758,36 +758,8 @@ local function HasCombatOrMultiObjective(text)
     return false
 end
 
-function Utils.IsTalkToQuest(questID)
-    if not Utils.IsValidQuestID(questID) then return false end
-    if _talkToCache[questID] ~= nil then
-        return _talkToCache[questID]
-    end
-
-    -- 1. Metadata check in Data.QuestPayoffs
-    if addon.Data and addon.Data.QuestPayoffs and addon.Data.QuestPayoffs[questID] then
-        local p = addon.Data.QuestPayoffs[questID]
-        if p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true then
-            _talkToCache[questID] = true
-            return true
-        end
-    end
-
-    -- 2. Title check in Data.QuestPayoffsByTitle
-    local basicInfo = Utils.GetQuestBasicInfo(questID)
-    local title = basicInfo and basicInfo.title
-    if title and addon.Data and addon.Data.QuestPayoffsByTitle then
-        local cleanTitle = Utils.CleanQuestTitle and Utils.CleanQuestTitle(title) or title
-        cleanTitle = string.gsub(cleanTitle, "^%s*%[%d+%]%s*", "")
-        local lowerTitle = string.lower(string.gsub(cleanTitle, "^%s*(.-)%s*$", "%1"))
-        local p = addon.Data.QuestPayoffsByTitle[lowerTitle]
-        if p and (p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true) then
-            _talkToCache[questID] = true
-            return true
-        end
-    end
-
-    -- 3. Live Objective Text Inspection
+-- Shared helper to extract live objective texts from QuestFrame, C_QuestLog, or active QuestLog
+local function CollectQuestObjectiveTexts(questID, titleHint)
     local objectiveTexts = {}
     local offerDescription = nil
     local matchesOffer = false
@@ -798,7 +770,7 @@ function Utils.IsTalkToQuest(questID)
         if okOn then isOnQuest = onQ end
     end
 
-    -- Priority 3A: Check QuestFrame FIRST when viewing an offer/detail dialog (prevents QuestLog bleed!)
+    -- Priority 1: Check QuestFrame FIRST when viewing an offer/detail dialog (prevents QuestLog bleed!)
     if QuestFrame and QuestFrame:IsShown() then
         if GetQuestID then
             local okID, cID = pcall(GetQuestID)
@@ -807,9 +779,9 @@ function Utils.IsTalkToQuest(questID)
         if not matchesOffer and QuestFrame.questID and QuestFrame.questID == questID then
             matchesOffer = true
         end
-        if not matchesOffer and title and GetTitleText then
+        if not matchesOffer and titleHint and GetTitleText then
             local frameTitle = GetTitleText()
-            if frameTitle and Utils.CleanQuestTitle(frameTitle) == Utils.CleanQuestTitle(title) then
+            if frameTitle and Utils.CleanQuestTitle(frameTitle) == Utils.CleanQuestTitle(titleHint) then
                 matchesOffer = true
             end
         end
@@ -841,19 +813,19 @@ function Utils.IsTalkToQuest(questID)
         end
     end
 
-    -- Priority 3B: Check modern C_QuestLog objectives
+    -- Priority 2: Check modern C_QuestLog objectives
     if #objectiveTexts == 0 and C_QuestLog and C_QuestLog.GetQuestObjectives then
         local okObjs, objs = pcall(C_QuestLog.GetQuestObjectives, questID)
         if okObjs and type(objs) == "table" and #objs > 0 then
             for _, obj in ipairs(objs) do
-                if obj and obj.text then
+                if obj and obj.text and obj.text ~= "" then
                     table.insert(objectiveTexts, obj.text)
                 end
             end
         end
     end
 
-    -- Priority 3C: Check active QuestLog leaderboards ONLY when quest is actually in the Quest Log
+    -- Priority 3: Check active QuestLog leaderboards ONLY when quest is actually in the Quest Log
     if #objectiveTexts == 0 and isOnQuest and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
         Utils.WithSelectedQuest(questID, function()
             local numLB = GetNumQuestLeaderBoards() or 0
@@ -865,6 +837,41 @@ function Utils.IsTalkToQuest(questID)
             end
         end)
     end
+
+    return objectiveTexts, offerDescription, matchesOffer
+end
+
+function Utils.IsTalkToQuest(questID)
+    if not Utils.IsValidQuestID(questID) then return false end
+    if _talkToCache[questID] ~= nil then
+        return _talkToCache[questID]
+    end
+
+    -- 1. Metadata check in Data.QuestPayoffs
+    if addon.Data and addon.Data.QuestPayoffs and addon.Data.QuestPayoffs[questID] then
+        local p = addon.Data.QuestPayoffs[questID]
+        if p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true then
+            _talkToCache[questID] = true
+            return true
+        end
+    end
+
+    -- 2. Title check in Data.QuestPayoffsByTitle
+    local basicInfo = Utils.GetQuestBasicInfo(questID)
+    local title = basicInfo and basicInfo.title
+    if title and addon.Data and addon.Data.QuestPayoffsByTitle then
+        local cleanTitle = Utils.CleanQuestTitle and Utils.CleanQuestTitle(title) or title
+        cleanTitle = string.gsub(cleanTitle, "^%s*%[%d+%]%s*", "")
+        local lowerTitle = string.lower(string.gsub(cleanTitle, "^%s*(.-)%s*$", "%1"))
+        local p = addon.Data.QuestPayoffsByTitle[lowerTitle]
+        if p and (p.isTalkTo == true or p.isCourier == true or p.isDiscovery == true) then
+            _talkToCache[questID] = true
+            return true
+        end
+    end
+
+    -- 3. Live Objective Text Inspection
+    local objectiveTexts, offerDescription, matchesOffer = CollectQuestObjectiveTexts(questID, title)
 
     -- Fallback: If QuestFrame offered a description but no objective text, analyze description
     if #objectiveTexts == 0 and offerDescription and offerDescription ~= "" then
@@ -935,3 +942,107 @@ function Utils.ClearTalkToCache(questID)
     end
 end
 addon.ClearTalkToCache = Utils.ClearTalkToCache
+
+-- Compact currency formatter (e.g. "1g 25s", "42s", "85c")
+function Utils.FormatMoneyCompact(copper)
+    local amount = math.floor(tonumber(copper) or 0)
+    if amount <= 0 then return nil end
+    local g = math.floor(amount / 10000)
+    local s = math.floor((amount % 10000) / 100)
+    local c = amount % 100
+    local parts = {}
+    if g > 0 then table.insert(parts, g .. "g") end
+    if s > 0 then table.insert(parts, s .. "s") end
+    if c > 0 and g == 0 then table.insert(parts, c .. "c") end
+    return (#parts > 0) and table.concat(parts, " ") or nil
+end
+
+-- Live dynamic quest summary (objectives, task classification, object detection)
+function Utils.GetQuestLiveSummary(questID)
+    if not Utils.IsValidQuestID(questID) then return nil end
+    local basicInfo = Utils.GetQuestBasicInfo(questID)
+    local title = basicInfo and basicInfo.title
+    local objectiveTexts, offerDescription = CollectQuestObjectiveTexts(questID, title)
+
+    local cleanLines = {}
+    for _, raw in ipairs(objectiveTexts or {}) do
+        for part in string.gmatch(tostring(raw), "[^\r\n]+") do
+            local trimmed = part:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", ""):match("^%s*(.-)%s*$")
+            if trimmed and trimmed ~= "" then
+                table.insert(cleanLines, trimmed)
+            end
+        end
+    end
+
+    local objectiveSummary = nil
+    if #cleanLines > 0 then
+        local preview = (#cleanLines <= 2)
+            and table.concat(cleanLines, " • ")
+            or (cleanLines[1] .. " • " .. cleanLines[2] .. string.format(" (+%d)", #cleanLines - 2))
+        if #preview > 140 then
+            preview = preview:sub(1, 137) .. "..."
+        end
+        objectiveSummary = preview
+    end
+
+    local scanText = string.lower(table.concat(cleanLines, " "))
+    if scanText == "" and offerDescription and offerDescription ~= "" then
+        scanText = string.lower(offerDescription)
+    elseif scanText == "" and title then
+        scanText = string.lower(title)
+    end
+
+    local hasKill = (
+        string.find(scanText, "slain") or string.find(scanText, "kill")
+        or string.find(scanText, "slay") or string.find(scanText, "defeat")
+    ) ~= nil
+    local hasCollect = (
+        string.find(scanText, "collect") or string.find(scanText, "gather")
+        or string.find(scanText, "obtain") or string.find(scanText, "loot")
+        or string.find(scanText, "recover") or string.find(scanText, "retrieve")
+        or string.find(scanText, "bring")
+    ) ~= nil
+    local hasObject = (
+        string.find(scanText, "open ") or string.find(scanText, "search ")
+        or string.find(scanText, "examine ") or string.find(scanText, "interact")
+        or string.find(scanText, "activate") or string.find(scanText, "plant ")
+        or string.find(scanText, "place ") or string.find(scanText, "chest")
+        or string.find(scanText, "crate") or string.find(scanText, "tablet")
+        or string.find(scanText, "book") or string.find(scanText, "supplies")
+    ) ~= nil
+    local hasExplore = (
+        string.find(scanText, "locate ") or string.find(scanText, "find ")
+        or string.find(scanText, "explore") or string.find(scanText, "investigate")
+    ) ~= nil
+
+    local isTalkTo = Utils.IsTalkToQuest and Utils.IsTalkToQuest(questID)
+    local taskType
+    if isTalkTo then
+        taskType = "Talk to NPC / Delivery (Fast XP)"
+    elseif basicInfo and basicInfo.isDungeon then
+        taskType = "5-Player Dungeon Quest"
+    elseif basicInfo and (basicInfo.isElite or basicInfo.isGroup) then
+        taskType = "Elite / Group Quest"
+    elseif hasKill and hasCollect then
+        taskType = "Kill & Collect Quest"
+    elseif hasObject and hasKill then
+        taskType = "Combat & Object Interaction"
+    elseif hasObject then
+        taskType = "Object Interaction Quest"
+    elseif hasKill then
+        taskType = "Combat / Kill Quest"
+    elseif hasCollect then
+        taskType = "Item / Object Collection"
+    elseif hasExplore then
+        taskType = "Exploration / Recon Quest"
+    else
+        taskType = "Standard Quest"
+    end
+
+    return {
+        taskType = taskType,
+        objectiveSummary = objectiveSummary,
+        objectives = cleanLines,
+        hasObjectObjective = hasObject,
+    }
+end

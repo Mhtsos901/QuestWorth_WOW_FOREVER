@@ -170,20 +170,50 @@ local function UpdateQuestOfferDialog()
     end
 
     local hintText = L["HOVER_TITLE_HINT"] or "Hover title for Worth details & score breakdown"
-    local hintLine = "\n|cff888888<" .. hintText .. ">|r"
+    local hintLine = "\n|cff331a00<" .. hintText .. ">|r"
+
+    local cleanOfferName = Utils.CleanQuestTitle(
+        (QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader:GetText())
+        or (QuestDetailTitleText and QuestDetailTitleText.GetText and QuestDetailTitleText:GetText())
+        or ""
+    )
+    local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, cleanOfferName)
+    local payoffLine = ""
+    if payoff and payoff.tip and payoff.tip ~= "" then
+        payoffLine = "\n|cff004d14• Tip: " .. payoff.tip .. "|r"
+    elseif payoff and payoff.summary and payoff.summary ~= "" then
+        payoffLine = "\n|cff5a1807• " .. payoff.summary .. "|r"
+    else
+        local liveInfo = Utils.GetQuestLiveSummary and Utils.GetQuestLiveSummary(qID)
+        local dynParts = {}
+        if liveInfo and liveInfo.taskType then
+            table.insert(dynParts, liveInfo.taskType)
+        end
+        local rDetails = breakdown and breakdown.details and breakdown.details.reward
+        if rDetails and rDetails.rewardXP and rDetails.rewardXP > 0 then
+            table.insert(dynParts, string.format("%d XP", rDetails.rewardXP))
+        end
+        if rDetails and rDetails.totalMoney and rDetails.totalMoney > 0 and Utils.FormatMoneyCompact then
+            local moneyStr = Utils.FormatMoneyCompact(rDetails.totalMoney)
+            if moneyStr then table.insert(dynParts, moneyStr) end
+        end
+        if breakdown and breakdown.f and breakdown.f >= 0.80 then
+            table.insert(dynParts, "Gear Upgrade!")
+        elseif payoff and payoff.note and payoff.note ~= "" then
+            table.insert(dynParts, payoff.note)
+        elseif breakdown and breakdown.details and breakdown.details.density and breakdown.details.density.clusterCount and breakdown.details.density.clusterCount >= 2 then
+            table.insert(dynParts, string.format("Zone Hub (%dQ)", breakdown.details.density.clusterCount))
+        end
+        if #dynParts > 0 then
+            payoffLine = "\n|cff103055• " .. table.concat(dynParts, " • ") .. "|r"
+        end
+    end
 
     -- 1. Badge QuestInfoTitleHeader at the top of the quest offer parchment
     if QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader.SetText then
         local rawTitle = QuestInfoTitleHeader:GetText() or ""
         if rawTitle ~= "" then
             local clean = Utils.CleanQuestTitle(rawTitle)
-            local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
-            local payoffLine = ""
-            if payoff and payoff.tip and payoff.tip ~= "" then
-                payoffLine = "\n|cff1aff4d• Tip: " .. payoff.tip .. "|r"
-            elseif payoff and payoff.summary and payoff.summary ~= "" then
-                payoffLine = "\n|cffffd100• " .. payoff.summary .. "|r"
-            end
             local targetTitle = badge .. " " .. clean .. hintLine .. payoffLine
             if rawTitle ~= targetTitle then
                 QuestInfoTitleHeader:SetText(targetTitle)
@@ -196,13 +226,6 @@ local function UpdateQuestOfferDialog()
         local raw = QuestDetailTitleText:GetText() or ""
         if raw ~= "" then
             local clean = Utils.CleanQuestTitle(raw)
-            local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, clean)
-            local payoffLine = ""
-            if payoff and payoff.tip and payoff.tip ~= "" then
-                payoffLine = "\n|cff1aff4d• Tip: " .. payoff.tip .. "|r"
-            elseif payoff and payoff.summary and payoff.summary ~= "" then
-                payoffLine = "\n|cffffd100• " .. payoff.summary .. "|r"
-            end
             local target = badge .. " " .. clean .. hintLine .. payoffLine
             if raw ~= target then
                 QuestDetailTitleText:SetText(target)

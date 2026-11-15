@@ -1478,6 +1478,77 @@ do
     addonTable.Engine.InvalidateCache()
 end
 
+-- 2C. High-Contrast Parchment/Tooltip Colors & Rich Dynamic Quest Summary
+do
+    local savedLvl = mockPlayerState.level
+    local savedOfferQID = currentOfferQuestID
+    local savedOfferTitle = currentOfferTitle
+    local savedOfferXP = currentOfferXP
+    local savedOfferMoney = currentOfferMoney
+    local savedQFShown = QuestFrame:IsShown()
+    local savedDPShown = QuestFrameDetailPanel:IsShown()
+
+    assert_eq(addonTable.Utils.FormatMoneyCompact(12540), "1g 25s", "FormatMoneyCompact formats gold+silver cleanly")
+    assert_eq(addonTable.Utils.FormatMoneyCompact(4200), "42s", "FormatMoneyCompact formats silver cleanly")
+    assert_eq(addonTable.Utils.FormatMoneyCompact(4285), "42s 85c", "FormatMoneyCompact formats silver+copper cleanly")
+    assert_eq(addonTable.Utils.FormatMoneyCompact(85), "85c", "FormatMoneyCompact formats copper cleanly")
+
+    mockPlayerState.level = 38
+    addonTable.Player.Update()
+    mockQuestDB[99994] = {
+        title = "Foreman's Plight",
+        level = 38,
+        xp = 2214,
+        money = 3500,
+        objectiveText = "Collect Foreman's Tools: 0/5",
+        objectives = { { text = "Collect Foreman's Tools: 0/5", finished = false } },
+    }
+    currentOfferQuestID = 99994
+    currentOfferTitle = "Foreman's Plight"
+    currentOfferXP = 2214
+    currentOfferMoney = 3500
+    QuestFrame:Show()
+    QuestFrameDetailPanel:Show()
+    QuestInfoTitleHeader:SetText("Foreman's Plight")
+
+    addonTable.UI.UpdateQuestOfferDialog()
+    local offerTxt = QuestInfoTitleHeader:GetText() or ""
+    assert_true(string.find(offerTxt, "|cff331a00", 1, true) ~= nil, "Quest Offer uses high-contrast dark espresso ink on parchment")
+    assert_true(string.find(offerTxt, "|cff888888", 1, true) == nil, "Quest Offer omits illegible dim gray |cff888888")
+    assert_true(string.find(offerTxt, "2214 XP", 1, true) ~= nil, "Unlisted custom quest Offer displays live XP payout")
+    assert_true(string.find(offerTxt, "Collection", 1, true) ~= nil, "Unlisted custom quest Offer displays dynamic task classification")
+
+    local liveSummary = addonTable.Utils.GetQuestLiveSummary(99994)
+    assert_not_nil(liveSummary, "GetQuestLiveSummary resolves custom quest 99994")
+    assert_eq(liveSummary.taskType, "Item / Object Collection", "Classifies collection objective accurately")
+    assert_eq(liveSummary.objectiveSummary, "Collect Foreman's Tools: 0/5", "Extracts live objective preview")
+
+    addonTable.UI.ShowQuestTooltip(GameTooltip, 99994)
+    local allTipText = {}
+    for _, line in ipairs(GameTooltip.lines or {}) do
+        table.insert(allTipText, (line.left or "") .. " " .. (line.right or ""))
+    end
+    local joinedTip = table.concat(allTipText, "\n")
+    assert_true(string.find(joinedTip, "Task:", 1, true) ~= nil, "Tooltip displays Task classification for custom quest")
+    assert_true(string.find(joinedTip, "Objective:", 1, true) ~= nil, "Tooltip displays live Objective line")
+    assert_true(string.find(joinedTip, "Payout:", 1, true) ~= nil and string.find(joinedTip, "2214 XP", 1, true) ~= nil,
+        "Tooltip displays Payout with XP and Mob Kills context")
+    assert_true(string.find(joinedTip, "|cff888888", 1, true) == nil and string.find(joinedTip, "|cffa0a0a0", 1, true) == nil,
+        "Tooltip eliminates dim |cff888888 and |cffa0a0a0 gray codes")
+    GameTooltip:Hide()
+
+    mockQuestDB[99994] = nil
+    currentOfferQuestID = savedOfferQID
+    currentOfferTitle = savedOfferTitle
+    currentOfferXP = savedOfferXP
+    currentOfferMoney = savedOfferMoney
+    if not savedQFShown then QuestFrame:Hide() end
+    if not savedDPShown then QuestFrameDetailPanel:Hide() end
+    mockPlayerState.level = savedLvl
+    addonTable.Player.Update()
+    addonTable.Engine.InvalidateCache()
+end
+
 -- 3. Objective Tracker recycled block updates _worthItActiveQuestID & uses live quest ID on OnEnter
 local savedShowTracker3M = addonTable.db.showInTracker
 addonTable.db.enabled = true
