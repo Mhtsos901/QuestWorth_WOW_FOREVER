@@ -87,6 +87,13 @@ local function GetQuestXP(questID)
         return xp
     end
 
+    local fallbackXP = (addon.Data and addon.Data.QuestXPFallback and addon.Data.QuestXPFallback[questID])
+        or (_G.ForeverDungeonJournal_NS and _G.ForeverDungeonJournal_NS.FOREVER_QUEST_XP_FALLBACK and _G.ForeverDungeonJournal_NS.FOREVER_QUEST_XP_FALLBACK[questID])
+        or (_G.ForeverDungeonJournal and _G.ForeverDungeonJournal.FOREVER_QUEST_XP_FALLBACK and _G.ForeverDungeonJournal.FOREVER_QUEST_XP_FALLBACK[questID])
+    if type(fallbackXP) == "number" and fallbackXP > 0 then
+        return fallbackXP
+    end
+
     -- Fallback for unaccepted quests not currently open in QuestFrame (e.g. Gossip listing):
     -- Estimate baseline standard XP based on quest level so reward score doesn't artificially crash to 0.05.
     -- DO NOT memoize in _xpCache so live XP replaces it immediately once dialog or log opens.

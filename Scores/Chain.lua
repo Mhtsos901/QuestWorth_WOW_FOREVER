@@ -17,6 +17,15 @@ local Scores = addon.Scores
 local Data = addon.Data
 local Utils = addon.Utils
 
+-- Distinguish meaningful gear/bag/key rewards from minor Recipe: rewards
+local function IsMajorReward(payoff)
+    if not payoff or not payoff.reward then return false end
+    if payoff.isKeyUnlock or payoff.unlock then return true end
+    local r = string.lower(tostring(payoff.reward))
+    if string.find(r, "^recipe:") then return false end
+    return true
+end
+
 -- Check if quest is marked as Class or Profession quest
 local function IsClassOrProfessionQuest(questID)
     if C_QuestLog and C_QuestLog.GetQuestTagInfo then
@@ -105,7 +114,7 @@ function Scores.CalculateChain(questID)
         local total = chainInfo.totalSteps or 1
 
         local hasUnlock = chainInfo.hasUnlock or (payoff and (payoff.unlock ~= nil or payoff.isKeyUnlock == true)) or false
-        local hasMajorReward = chainInfo.hasMajorReward or (payoff and payoff.reward ~= nil) or false
+        local hasMajorReward = chainInfo.hasMajorReward or IsMajorReward(payoff)
         local isMilestone = (chainInfo.isImportant == true) or isCap or hasUnlock or hasMajorReward
 
         -- Dynamic Step Progression Curve:
@@ -211,8 +220,9 @@ function Scores.CalculateChain(questID)
     end
 
     -- Priority 5: Curated single-step Unlock / Attunement / Key / Major Reward
-    if payoff and (payoff.unlock or payoff.isKeyUnlock or payoff.reward) then
+    if payoff and (payoff.unlock or payoff.isKeyUnlock or IsMajorReward(payoff)) then
         local hasUnlock = (payoff.unlock ~= nil or payoff.isKeyUnlock == true)
+        local hasMajorReward = IsMajorReward(payoff)
         local score = hasUnlock and 0.95 or 0.90
         return score, {
             source = "PayoffDB",
@@ -220,7 +230,7 @@ function Scores.CalculateChain(questID)
             isCap = true,
             isMilestone = true,
             hasUnlock = hasUnlock,
-            hasMajorReward = (payoff.reward ~= nil),
+            hasMajorReward = hasMajorReward,
             final = score,
             reason = "Chain Finale",
         }

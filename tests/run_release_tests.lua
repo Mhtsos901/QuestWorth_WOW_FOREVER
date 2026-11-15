@@ -659,31 +659,46 @@ assert_true(customDung.isDungeon == true, "Hall of Thanes has isDungeon == true"
 
 -- 3E: Cryptic & Item Sourcing Quest Tips
 print(" [3E] Cryptic, Hidden Object & Item Sourcing Quest Tips:")
-local valorPayoff = addonTable.Data.GetQuestPayoff(226, "The Valor Family")
-assert_not_nil(valorPayoff, "Payoff retrieved for The Valor Family")
-assert_not_nil(valorPayoff.tip, "The Valor Family has actionable tip")
-assert_true(string.find(valorPayoff.tip, "Raven Hill Tome") ~= nil, "The Valor Family tip mentions Raven Hill Tome: " .. tostring(valorPayoff.tip))
+;(function()
+    local valorPayoff = addonTable.Data.GetQuestPayoff(nil, "The Valor Family")
+    assert_not_nil(valorPayoff, "Payoff retrieved for The Valor Family")
+    assert_not_nil(valorPayoff.tip, "The Valor Family has actionable tip")
+    assert_true(string.find(valorPayoff.tip, "Raven Hill Tome") ~= nil, "The Valor Family tip mentions Raven Hill Tome: " .. tostring(valorPayoff.tip))
 
-local kabobPayoff = addonTable.Data.GetQuestPayoff(93, "Seasoned Wolf Kabobs")
-assert_not_nil(kabobPayoff, "Payoff retrieved for Seasoned Wolf Kabobs")
-assert_not_nil(kabobPayoff.tip, "Seasoned Wolf Kabobs has actionable tip")
-assert_true(string.find(kabobPayoff.tip, "Lean Wolf Flank") ~= nil, "Seasoned Wolf Kabobs tip mentions Lean Wolf Flanks: " .. tostring(kabobPayoff.tip))
+    local morladimPayoff = addonTable.Data.GetQuestPayoff(228, "Mor'Ladim")
+    assert_not_nil(morladimPayoff, "Payoff retrieved for Mor'Ladim (228)")
+    assert_true(morladimPayoff.isTalkTo ~= true, "Mor'Ladim (228) is not misflagged as Talk-To")
 
-local starsTip = addonTable.Data.GetQuestTip(174, "Look to the Stars")
-assert_not_nil(starsTip, "Look to the Stars tip found")
-assert_true(string.find(starsTip, "Bronze Tube") ~= nil, "Look to the Stars tip mentions Bronze Tube: " .. tostring(starsTip))
+    local kabobPayoff = addonTable.Data.GetQuestPayoff(90, "Seasoned Wolf Kabobs")
+    assert_not_nil(kabobPayoff, "Payoff retrieved for Seasoned Wolf Kabobs (90)")
+    assert_not_nil(kabobPayoff.tip, "Seasoned Wolf Kabobs has actionable tip")
+    assert_true(string.find(kabobPayoff.tip, "Lean Wolf Flank") ~= nil, "Seasoned Wolf Kabobs tip mentions Lean Wolf Flanks: " .. tostring(kabobPayoff.tip))
 
-local blanchyTip = addonTable.Data.GetQuestTip(151, "Poor Old Blanchy")
-assert_not_nil(blanchyTip, "Poor Old Blanchy tip found")
-assert_true(string.find(blanchyTip, "Oats") ~= nil, "Blanchy tip mentions Oats: " .. tostring(blanchyTip))
+    local crabPayoff = addonTable.Data.GetQuestPayoff(93, "Dusky Crab Cakes")
+    assert_not_nil(crabPayoff, "Payoff retrieved for Dusky Crab Cakes (93)")
+    assert_not_nil(crabPayoff.tip, "Dusky Crab Cakes has actionable tip")
+    assert_true(string.find(crabPayoff.tip, "Gooey Spider Legs") ~= nil, "Dusky Crab Cakes tip mentions Gooey Spider Legs: " .. tostring(crabPayoff.tip))
 
-local cluckTip = addonTable.Data.GetQuestTip(106, "Cluck!")
-assert_not_nil(cluckTip, "Cluck! chicken quest tip found")
-assert_true(string.find(cluckTip, "Chicken Feed") ~= nil, "Cluck! tip mentions chicken feed: " .. tostring(cluckTip))
+    local starsTip = addonTable.Data.GetQuestTip(174, "Look to the Stars")
+    assert_not_nil(starsTip, "Look to the Stars tip found")
+    assert_true(string.find(starsTip, "Bronze Tube") ~= nil, "Look to the Stars tip mentions Bronze Tube: " .. tostring(starsTip))
 
-local itemTip = addonTable.Data.ObjectiveItemTips["soothing spices"]
-assert_not_nil(itemTip, "Soothing Spices vendor tip indexed")
-assert_true(string.find(itemTip, "Cooking Supplies") ~= nil, "Soothing Spices tip points to cooking vendors")
+    local blanchyTip = addonTable.Data.GetQuestTip(151, "Poor Old Blanchy")
+    assert_not_nil(blanchyTip, "Poor Old Blanchy tip found")
+    assert_true(string.find(blanchyTip, "Oats") ~= nil, "Blanchy tip mentions Oats: " .. tostring(blanchyTip))
+
+    local cluckTip = addonTable.Data.GetQuestTip(3861, "CLUCK!")
+    assert_not_nil(cluckTip, "CLUCK! (3861) chicken quest tip found")
+    assert_true(string.find(cluckTip, "Chicken Feed") ~= nil, "CLUCK! tip mentions chicken feed: " .. tostring(cluckTip))
+
+    local loversTip = addonTable.Data.GetQuestTip(106, "Young Lovers")
+    assert_not_nil(loversTip, "Young Lovers (106) tip found")
+    assert_true(string.find(loversTip, "Maybell") ~= nil or string.find(loversTip, "Tommy Joe") ~= nil, "Young Lovers tip mentions Maybell/Tommy Joe: " .. tostring(loversTip))
+
+    local itemTip = addonTable.Data.ObjectiveItemTips["soothing spices"]
+    assert_not_nil(itemTip, "Soothing Spices vendor tip indexed")
+    assert_true(string.find(itemTip, "Cooking Supplies") ~= nil, "Soothing Spices tip points to cooking vendors")
+end)()
 
 -- 3F: Logic Edge Cases, Zero-Difficulty Guarantee & Dungeon Guidance
 print(" [3F] Deep Logic Audit: Zero-Difficulty Guarantee & Dungeon Advisor Guidance:")
@@ -892,11 +907,11 @@ assert_eq(dBreak.reason, "Talk-To", "Difficulty reason classified as 'Talk-To'")
 local rScore, rBreak = addonTable.Scores.CalculateReward(227)
 assert_true(rScore >= 0.85, "Talk-To breadcrumb 721 XP achieves high reward score (>= 0.85): " .. tostring(rScore))
 
--- 4. Chain score: Recognized as Step 1 of 4 in Mor'Ladim / Archeus chain
+-- 4. Chain score: Recognized as Step 2 of 5 in Mor'Ladim / Archeus chain
 local cScore, cBreak = addonTable.Scores.CalculateChain(227)
 assert_true(cScore >= 0.70, "Chain starter in Mor'Ladim Archeus chain scores >= 0.70: " .. tostring(cScore))
-assert_eq(cBreak.step, 1, "Chain step is 1")
-assert_eq(cBreak.totalSteps, 4, "Total chain steps is 4")
+assert_eq(cBreak.step, 2, "Chain step is 2")
+assert_eq(cBreak.totalSteps, 5, "Total chain steps is 5")
 
 -- 5. Overall Engine Worth: No orange/red damping, isHard == false, worth >= 0.70
 local wScore, wBreak = addonTable.Engine.CalculateWorth(227)
@@ -2369,6 +2384,104 @@ assert_true(uiElapsed < 0.250, string.format("1,000 full UI refresh cycles compl
 assert_true(uiMemDelta < 100, string.format("UI refresh loop net memory growth %.2f KB is healthy (< 100 KB)", uiMemDelta))
 addonTable.UI.ToggleZoneAdvisor(false)
 WorldMapFrame:Hide()
+
+;(function()
+    print("\n [4] Classic & WoW Forever Quest Audit Regression Tests:")
+    local Data = addonTable.Data
+    local Utils = addonTable.Utils
+    local Scores = addonTable.Scores
+
+    -- 4A: Zero truncated scraper / beta placeholder strings across tips and payoffs
+    local badSubstrings = {
+        "Optional introductory quest:",
+        "later offers:",
+        "recorded in the beta",
+        "not known yet",
+        "not confirmed yet",
+    }
+    local badCount = 0
+    for qid, tip in pairs(Data.QuestTips or {}) do
+        for _, bad in ipairs(badSubstrings) do
+            if type(tip) == "string" and string.find(tip, bad, 1, true) then
+                badCount = badCount + 1
+                print("  BAD TIP [" .. tostring(qid) .. "]: " .. tip)
+            end
+        end
+    end
+    for qid, p in pairs(Data.QuestPayoffs or {}) do
+        if type(p) == "table" then
+            for _, field in ipairs({ "tip", "note", "summary", "reward" }) do
+                local val = p[field]
+                if type(val) == "string" then
+                    for _, bad in ipairs(badSubstrings) do
+                        if string.find(val, bad, 1, true) then
+                            badCount = badCount + 1
+                            print("  BAD PAYOFF [" .. tostring(qid) .. "." .. field .. "]: " .. val)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    assert_eq(badCount, 0, "Zero truncated scraper or beta placeholder strings in QuestTips and QuestPayoffs")
+
+    -- 4B: Classic Quest IDs, Talk-To flags, and Chain mappings
+    assert_true(Utils.IsTalkToQuest(228) == false, "Mor'Ladim (228) is not misflagged as Talk-To")
+    assert_true(Utils.IsTalkToQuest(226) == false, "Wolves at Our Heels (226) is not misflagged as Talk-To")
+    assert_true(Utils.IsTalkToQuest(227) == true, "Morgan Ladimore (227) is Talk-To")
+
+    local p627 = Data.GetQuestPayoff(627)
+    assert_true(not (p627 and p627.unlock and string.find(p627.unlock, "Cortello", 1, true)), "Favor for Krazek (627) does not claim Cortello's Riddle unlock")
+    local c624 = Data.ChainIndex and Data.ChainIndex[624]
+    assert_not_nil(c624, "Cortello's Riddle 624 indexed in chain")
+    local p903 = Data.GetQuestPayoff(903)
+    assert_true(not (p903 and p903.unlock and string.find(p903.unlock, "Wailing Caverns", 1, true)), "Prowlers of the Barrens (903) does not claim Wailing Caverns unlock")
+    local c914 = Data.ChainIndex and Data.ChainIndex[914]
+    assert_not_nil(c914, "Leaders of the Fang (914) indexed in Wailing Caverns chain")
+
+    local p55 = Data.GetQuestPayoff(55)
+    local p101 = Data.GetQuestPayoff(101)
+    assert_not_nil(p55, "Morbent Fel (55) has payoff")
+    assert_not_nil(p101, "The Totem of Infliction (101) has payoff")
+
+    -- 4C: WoW Forever Custom & Dungeon Quest Tips, Payoffs, and Talk-To Accuracy
+    assert_not_nil(Data.GetQuestPayoff(95943), "Foreman's Plight (95943) has payoff")
+    assert_not_nil(Data.GetQuestTip(95943), "Foreman's Plight (95943) has tip")
+    assert_true(Utils.IsTalkToQuest(95943) == false, "Foreman's Plight (95943) is NOT Talk-To")
+
+    assert_true(Utils.IsTalkToQuest(98230) == true, "Howin Kindfeather breadcrumb (98230) is Talk-To")
+    assert_true(Utils.IsTalkToQuest(98189) == true, "Menethil Statuette step 1 (98189) is Talk-To")
+    assert_true(Utils.IsTalkToQuest(94613) == true, "A Grim Discovery (94613) is Talk-To")
+    assert_true(Utils.IsTalkToQuest(93443) == true, "Powderfuse Port (93443) is Talk-To")
+
+    for _, qid in ipairs({ 94877, 95991, 98216, 92456, 92489, 96395, 95928, 95250, 79976, -97100 }) do
+        assert_not_nil(Data.GetQuestTip(qid), "Forever quest tip present for " .. tostring(qid))
+        assert_not_nil(Data.GetQuestPayoff(qid), "Forever quest payoff present for " .. tostring(qid))
+    end
+
+    -- 4D: QuestXPFallback Lookup in Scores.CalculateReward
+    assert_not_nil(Data.QuestXPFallback, "Data.QuestXPFallback exported")
+    assert_eq(Data.QuestXPFallback[92456], 3950, "City of Dalaran quest 92456 fallback XP is 3950")
+    assert_eq(Data.QuestXPFallback[95928], 17650, "Shaper's Terrace quest 95928 fallback XP is 17650")
+
+    local savedLvl = mockPlayerState.level
+    mockPlayerState.level = 55
+    addonTable.Player.Update()
+    addonTable.Scores.InvalidateRewardCache(95928)
+    addonTable.Engine.InvalidateCache(95928)
+    mockQuestDB[95928] = { xp = 0, money = 0 }
+    local rwScore, rwDetails = Scores.CalculateReward(95928)
+    assert_true(rwScore >= 0.85, "CalculateReward uses QuestXPFallback for 95928 (>= 0.85): " .. tostring(rwScore))
+    assert_eq(rwDetails.rewardXP, 17650, "CalculateReward details expose exact fallback XP 17650 for 95928")
+    mockQuestDB[95928] = nil
+    mockPlayerState.level = savedLvl
+    addonTable.Player.Update()
+
+    -- 4E: Minor Recipe: payoff does not trigger 0.90 Chain Finale override
+    local c90, c90Details = Scores.CalculateChain(90)
+    assert_true(c90 < 0.90, "Minor Recipe quest Seasoned Wolf Kabobs (90) does not get 0.90 Chain Finale boost: " .. tostring(c90))
+    assert_true(not (c90Details and c90Details.isMilestone), "Minor Recipe quest (90) is not flagged as isMilestone")
+end)()
 
 -- ============================================================================
 -- SUMMARY

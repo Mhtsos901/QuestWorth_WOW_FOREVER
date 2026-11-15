@@ -30,7 +30,7 @@ Data.KnownChains = {
     },
     -- [1007] Leaders of the Fang (Wailing Caverns)
     [1007] = {
-        quests = { 903, 904, 905, 906, 907 },
+        quests = { 870, 877, 880, 1489, 1490, 914 },
         isImportant = true,
     },
     -- [1010] The Missing Diplomat (Alliance Mystery)
@@ -40,12 +40,12 @@ Data.KnownChains = {
     },
     -- [1015] The Legend of Stalvan (Duskwood Murder Mystery)
     [1015] = {
-        quests = { 66, 67, 68, 69, 70, 71, 72, 73, 74, 75 },
+        quests = { 66, 67, 68, 69, 70, 71, 72, 74, 75, 78, 79, 80, 97, 98 },
         isImportant = true,
     },
     -- [1020] Cortello's Riddle (14-Slot Bag Treasure Hunt)
     [1020] = {
-        quests = { 625, 626, 627 },
+        quests = { 624, 625, 626 },
         isImportant = true,
     },
     -- [1025] Raene's Cleansing (Dartol's Rod Furbolg Form)
@@ -90,13 +90,28 @@ Data.KnownChains = {
     },
     -- [1065] The Hermit & Eliza (Duskwood Lore)
     [1065] = {
-        quests = { 148, 156, 157, 158 },
+        quests = { 165, 148, 149, 154, 157, 158, 156, 159, 133, 134, 160, 251, 401, 252, 253 },
         isImportant = true,
     },
     -- [1070] The Story of Morgan Ladimore (Mor'Ladim & Archeus)
     [1070] = {
-        quests = { 227, 228, 229, 230 },
+        quests = { 225, 227, 228, 229, 231 },
         isImportant = true,
+    },
+    -- [1071] Sven's Revenge & Morbent Fel (Duskwood)
+    [1071] = {
+        quests = { 95, 230, 262, 265, 266, 323, 268, 269, 270, 325, 55 },
+        isImportant = true,
+    },
+    -- [1072] Look to the Stars (Duskwood)
+    [1072] = {
+        quests = { 174, 175, 177, 181 },
+        isImportant = false,
+    },
+    -- [1073] Barrens Beast Mastery (Cry of the Thunderhawk)
+    [1073] = {
+        quests = { 903, 905, 907, 913 },
+        isImportant = false,
     },
     -- [1075] Nesingwary Safari: Tiger Mastery -> Big Game Hunter
     [1075] = {
@@ -253,18 +268,17 @@ Data.QuestPayoffs = {
     [144] = { unlock = "Dungeon: The Deadmines", note = "Interior Deadmines quest.", summary = "Deadmines Dungeon Quest" },
 
     -- Wailing Caverns
-    [907] = {
+    [914] = {
         unlock = "Dungeon: Wailing Caverns",
         reward = "Crescent Staff / Wingblade (Rare BiS)",
-        chain = "Leaders of the Fang (Step 5/5 Finale)",
+        chain = "Leaders of the Fang (Step 6/6 Finale)",
         note = "Horde & Neutral iconic dungeon weapon rewards.",
         summary = "Unlocks: Wailing Caverns • Crescent Staff / Wingblade (Rare)",
         isKeyUnlock = true,
     },
-    [903] = { chain = "Leaders of the Fang (Step 1/5)", summary = "Leads to: Crescent Staff / Wingblade (Rare)" },
-    [904] = { chain = "Leaders of the Fang (Step 2/5)", summary = "Leads to: Crescent Staff / Wingblade (Rare)" },
-    [905] = { chain = "Leaders of the Fang (Step 3/5)", summary = "Leads to: Crescent Staff / Wingblade (Rare)" },
-    [906] = { chain = "Leaders of the Fang (Step 4/5)", summary = "Leads to: Crescent Staff / Wingblade (Rare)" },
+    [903] = { chain = "Barrens Beast Mastery (Step 1/4)", note = "Prowlers of the Barrens near The Crossroads.", summary = "Leads to: Cry of the Thunderhawk" },
+    [905] = { chain = "Barrens Beast Mastery (Step 2/4)", note = "The Angry Scytheclaws (feathers from Barrens raptors).", summary = "Leads to: Cry of the Thunderhawk" },
+    [907] = { chain = "Barrens Beast Mastery (Step 3/4)", note = "Enraged Thunder Lizards (blood from Southern Barrens thunder lizards).", summary = "Leads to: Cry of the Thunderhawk" },
     [943] = { unlock = "Dungeon: Wailing Caverns", chain = "The Glowing Shard (Step 1/4)", summary = "WC Shard Chain" },
     [961] = { unlock = "Dungeon: Wailing Caverns", reward = "Talbar Mantle (Rare Shoulder)", chain = "The Glowing Shard (Step 4/4 Finale)", summary = "WC Shard Finale • Talbar Mantle (Rare)" },
     [882] = { unlock = "Dungeon: Wailing Caverns", reward = "Deviate Hide Pack (10-Slot Bag)", summary = "WC Quest • Deviate Hide Pack (10-Slot Bag)" },
@@ -483,10 +497,16 @@ Data.QuestPayoffs = {
         note = "Target immobilizer for PvP and emergency escapes.",
         summary = "Reward: 10x Really Sticky Glue (10s Root)",
     },
-    [101] = {
+    [1036] = {
         reward = "Light of Elune (10s Complete Invulnerability)",
         note = "Consumable 10-second Divine Shield / Immunity potion.",
         summary = "Reward: Light of Elune (10s Immunity)",
+        isKeyUnlock = true,
+    },
+    [101] = {
+        reward = "Totem of Infliction (Duskwood)",
+        note = "Gather 10 Ghoul Fangs, 10 Skeleton Fingers, and 5 Vials of Spider Venom for Madame Eva.",
+        summary = "Duskwood Reagent Quest • Madame Eva",
     },
 
     -- Badlands Trinkets
@@ -507,25 +527,30 @@ Data.QuestPayoffs = {
         note = "Early Westfall treasure hunt reward.",
         summary = "Reward: Captain Sanders' Booty Bag (8-Slot)",
     },
-    [625] = { chain = "Cortello's Riddle (Step 1/3)", summary = "Leads to: Explorer's Knapsack (14-Slot Bag)" },
-    [626] = { chain = "Cortello's Riddle (Step 2/3)", summary = "Leads to: Explorer's Knapsack (14-Slot Bag)" },
-    [627] = {
+    [624] = { chain = "Cortello's Riddle (Step 1/3)", summary = "Leads to: Explorer's Knapsack (14-Slot Bag)" },
+    [625] = { chain = "Cortello's Riddle (Step 2/3)", summary = "Leads to: Explorer's Knapsack (14-Slot Bag)" },
+    [626] = {
         reward = "Explorer's Knapsack (14-Slot Bag)",
         chain = "Cortello's Riddle (Step 3/3 Finale)",
-        note = "Treasure hunt finale in the Hinterlands waterfall.",
+        note = "Treasure hunt finale behind the Hinterlands waterfall.",
         summary = "Reward: Explorer's Knapsack (14-Slot Bag)",
         isKeyUnlock = true,
+    },
+    [627] = {
+        note = "Favor for Krazek in Booty Bay: requires 4 Lesser Bloodstone Ore.",
+        summary = "Booty Bay Ore Turn-In",
     },
 
     -- Major Lore Chains
     [1241] = { chain = "The Missing Diplomat (Step 1/11)", note = "Alliance epic investigation chain.", summary = "The Missing Diplomat Chain" },
     [1261] = { chain = "The Missing Diplomat (Finale)", summary = "The Missing Diplomat (Finale)" },
-    [66]   = { chain = "The Legend of Stalvan (Step 1/10)", note = "Duskwood classic murder mystery.", summary = "The Legend of Stalvan Chain" },
-    [75]   = { reward = "Stalvan's Reaper (2H Axe)", chain = "The Legend of Stalvan (Finale)", summary = "The Legend of Stalvan (Finale)" },
-    [227]  = { chain = "The Story of Morgan Ladimore (Step 1/4)", note = "Investigate the weathered grave in Raven Hill. Safe talk-to breadcrumb leading to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
-    [228]  = { chain = "The Story of Morgan Ladimore (Step 2/4)", note = "Speak with Commander Althea Ebonlocke in Darkshire. Safe talk-to step before Mor'ladim.", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
-    [229]  = { reward = "Mor'ladim's Skull", chain = "The Story of Morgan Ladimore (Step 3/4)", note = "Defeat Mor'Ladim in Raven Hill Cemetery. Pre-quest to Archeus.", summary = "Mor'ladim • Leads to Archeus (Rare Sword)", isKeyUnlock = true },
-    [230]  = { reward = "Archeus (Rare 2H Sword) / Lion's Heart", chain = "The Story of Morgan Ladimore (Step 4/4 Finale)", note = "Place Sarah's ring on Morgan Ladimore's grave in Raven Hill.", summary = "Mor'ladim Finale • Archeus (Rare Sword)", isKeyUnlock = true },
+    [66]   = { chain = "The Legend of Stalvan (Step 1/14)", note = "Duskwood classic murder mystery.", summary = "The Legend of Stalvan Chain", isTalkTo = true },
+    [98]   = { reward = "Ring of Precision / Stalvan's Reaper", chain = "The Legend of Stalvan (Finale)", summary = "The Legend of Stalvan (Finale)", isKeyUnlock = true },
+    [225]  = { chain = "The Story of Morgan Ladimore (Step 1/5)", note = "Inspect the weathered grave in Raven Hill. Safe talk-to breadcrumb leading to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
+    [227]  = { chain = "The Story of Morgan Ladimore (Step 2/5)", note = "Speak with Commander Althea Ebonlocke in Darkshire. Safe talk-to step before Mor'ladim.", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
+    [228]  = { reward = "Mor'ladim's Skull", chain = "The Story of Morgan Ladimore (Step 3/5)", note = "Defeat Level 35 Elite Mor'Ladim in Raven Hill Cemetery. Pre-quest to Archeus.", summary = "Mor'ladim • Leads to Archeus (Rare Sword)", isKeyUnlock = true },
+    [229]  = { chain = "The Story of Morgan Ladimore (Step 4/5)", note = "Deliver Morgan's skull to Watcher Sarah Ladimore on the Darkshire road.", summary = "Leads to: Archeus (Rare Sword)", isTalkTo = true },
+    [231]  = { reward = "Archeus (Rare 2H Sword) / Lion's Heart", chain = "The Story of Morgan Ladimore (Step 5/5 Finale)", note = "Place Sarah's ring on Morgan Ladimore's grave in Raven Hill.", summary = "Mor'ladim Finale • Archeus (Rare Sword)", isKeyUnlock = true },
     [5601] = { chain = "The Battle of Darrowshire (Step 1/6)", note = "Little Pamela in EPL.", summary = "Battle of Darrowshire Chain" },
     [5944] = {
         reward = "Mark of Fordring (BiS Neck) / Fordring's Seal",
@@ -605,7 +630,9 @@ Data.QuestPayoffs = {
     [176]  = { reward = "Redridge Machete / Footman's Boots", origin = "Wanted Poster", note = "Wanted poster outside Lion's Pride Inn in Elwynn.", summary = "Wanted Poster • Hogger Bounty", isKeyUnlock = true },
     [267]  = { reward = "Chok'sul's Cleaver", origin = "Wanted Poster", note = "Wanted poster in Thelsamar (Loch Modan).", summary = "Wanted Poster • Chok'sul Bounty", isKeyUnlock = true },
     [184]  = { origin = "Wanted Poster", note = "Wanted poster in Sentinel Hill (Westfall).", summary = "Wanted Poster • Lieutenant Valent Bounty" },
-    [125]  = { reward = "Blackrock Mace / Redridge Shield", origin = "Wanted Poster", note = "Wanted poster outside Lakeshire Town Hall.", summary = "Wanted Poster • Gath'Ilzogg Bounty", isKeyUnlock = true },
+    [169]  = { reward = "Blackrock Mace / Redridge Shield", origin = "Wanted Poster", note = "Wanted poster outside Lakeshire Town Hall (Gath'Ilzogg).", summary = "Wanted Poster • Gath'Ilzogg Bounty", isKeyUnlock = true },
+    [180]  = { origin = "Wanted Poster", note = "Wanted poster outside Lakeshire Town Hall (Lieutenant Fangore).", summary = "Wanted Poster • Lieutenant Fangore Bounty" },
+    [125]  = { note = "Oslow's Toolbox underwater in Lake Everstill east of the bridge.", summary = "Redridge Underwater Quest • The Lost Tools" },
     [563]  = { origin = "Wanted Poster", note = "Wanted poster in Southshore (Hillsbrad).", summary = "Wanted Poster • Baron Vardus Bounty" },
     [681]  = { origin = "Wanted Poster", note = "Wanted poster in Refuge Pointe (Arathi).", summary = "Wanted Poster • Syndicate Personnel Bounty" },
     [2781] = { origin = "Wanted Poster", note = "Wanted poster in Gadgetzan (Tanaris).", summary = "Wanted Poster • Caliph Scorpidsting" },
@@ -613,24 +640,29 @@ Data.QuestPayoffs = {
     [4740] = { origin = "Wanted Poster", note = "Wanted poster in Auberdine (Darkshore).", summary = "Wanted Poster • Murkdeep Bounty" },
     [2855] = { origin = "Wanted Poster", note = "Wanted poster in Aerie Peak (Hinterlands).", summary = "Wanted Poster • Vile Priestess Hexx" },
     [1070] = { origin = "Wanted Poster", note = "Wanted poster in Sun Rock Retreat / Stonetalon.", summary = "Wanted Poster • Besseleth Bounty" },
-    [231]  = { origin = "Wanted Poster", note = "Wanted poster in Darkshire (Duskwood).", summary = "Wanted Poster • Maggot Eye Bounty" },
 
     -- Duskwood Leveling Chains & Lore
     [56]   = { chain = "The Night Watch (Step 1/3)", note = "Darkshire undead defense series. Kill Skeletal Warriors and Mages.", summary = "The Night Watch (Step 1/3)" },
     [57]   = { chain = "The Night Watch (Step 2/3)", note = "Second step in Raven Hill cemetery against Skeletal Fiends and Horrors.", summary = "The Night Watch (Step 2/3)" },
     [58]   = { reward = "Ring of the Night Watch / Weapon", chain = "The Night Watch (Step 3/3 Finale)", note = "Final step in Dawning Wood Catacombs against Plague Spreaders.", summary = "The Night Watch Finale • Ring of the Night Watch", isKeyUnlock = true },
-    [226]  = { chain = "The Story of Morgan Ladimore (Pre-quest)", note = "Raven Hill cemetery investigation. Leads to Mor'ladim & Archeus (Rare 2H Sword).", summary = "Leads to: Mor'ladim & Archeus (Rare Sword)", isTalkTo = true },
-    [148]  = { chain = "The Hermit & Eliza (Step 1/4)", note = "Abercrombie in Raven Hill. Leads to the haunting of Eliza's Tomb.", summary = "The Hermit & Eliza Chain" },
-    [156]  = { chain = "The Hermit & Eliza (Step 2/4)", summary = "The Hermit & Eliza Chain" },
-    [157]  = { chain = "The Hermit & Eliza (Step 3/4)", summary = "The Hermit & Eliza Chain" },
-    [158]  = { chain = "The Hermit & Eliza (Finale)", summary = "The Hermit & Eliza Finale" },
+    [226]  = { note = "Kill 12 Starving Dire Wolves and 8 Rabid Dire Wolves along the northern riverbank near Sven's Camp.", summary = "Duskwood Wolf Hunt" },
+    [230]  = { chain = "Sven's Revenge (Step 2)", note = "Deliver the book from Sven's Farm to Sven Yorgen at Sven's Camp.", summary = "Sven's Revenge Chain", isTalkTo = true },
+    [55]   = { reward = "Tunic of Westfall / Morbent Fel Finale Gear", chain = "Sven's Revenge / Morbent Fel (Finale)", note = "Use Morbent's Bane to break Morbent Fel's shield in northern Raven Hill.", summary = "Morbent Fel Finale", isKeyUnlock = true },
+    [165]  = { chain = "The Hermit & Eliza (Step 1)", note = "Visit Abercrombie northeast of Raven Hill Cemetery.", summary = "The Hermit & Eliza Chain", isTalkTo = true },
+    [148]  = { chain = "The Hermit & Eliza (Step 2)", note = "Speak with Madame Eva in Darkshire.", summary = "The Hermit & Eliza Chain", isTalkTo = true },
+    [156]  = { chain = "The Hermit & Eliza", note = "Gather Rot Blossoms from skeletons in Raven Hill Cemetery.", summary = "The Hermit & Eliza Chain" },
+    [157]  = { chain = "The Hermit & Eliza", summary = "The Hermit & Eliza Chain", isTalkTo = true },
+    [158]  = { chain = "The Hermit & Eliza", summary = "The Hermit & Eliza Chain", isTalkTo = true },
+    [253]  = { reward = "Embalmer's Robes / Bride of the Embalmer Finale", chain = "The Hermit & Eliza (Finale)", note = "Slay Level 31 Elite Eliza at her grave northeast of Raven Hill.", summary = "Bride of the Embalmer Finale", isKeyUnlock = true },
     [163]  = { note = "Althea Ebonlocke's research into the Darkshire undead curse.", summary = "Duskwood Undead Defense" },
-    [174]  = { chain = "Look to the Stars (Step 1/3)", note = "Requires Bronze Tube from Engineering. Leads to telescope quest rewards.", summary = "Look to the Stars Chain" },
-    [175]  = { chain = "Look to the Stars (Step 2/3)", summary = "Look to the Stars Chain" },
-    [177]  = { chain = "Look to the Stars (Finale)", summary = "Look to the Stars (Finale)" },
-    [93]   = { reward = "Recipe: Seasoned Wolf Kabobs", note = "Farmed from Duskwood wolves (Starving/Rabid Dire Wolf) or bought on AH (tradeable meat).", summary = "Cooking Recipe Quest" },
+    [174]  = { chain = "Look to the Stars (Step 1/4)", note = "Requires Bronze Tube from Engineering. Leads to telescope quest rewards.", summary = "Look to the Stars Chain" },
+    [175]  = { chain = "Look to the Stars (Step 2/4)", summary = "Look to the Stars Chain", isTalkTo = true },
+    [177]  = { chain = "Look to the Stars (Step 3/4)", summary = "Look to the Stars Chain" },
+    [181]  = { reward = "Viktori's Telescope / Star Belt", chain = "Look to the Stars (Finale)", summary = "Look to the Stars (Finale)", isKeyUnlock = true },
+    [90]   = { reward = "Recipe: Seasoned Wolf Kabobs", note = "Farmed from Duskwood wolves or bought on AH (tradeable Lean Wolf Flanks).", summary = "Cooking Recipe Quest" },
+    [93]   = { reward = "Recipe: Gooey Spider Cake (Dusky Crab Cakes)", note = "6 Gooey Spider Legs from Pygmy Venom Web Spiders in northern Duskwood.", summary = "Cooking Recipe Quest" },
     [377]  = { unlock = "Dungeon: The Stockade", note = "Stockade prison dungeon quest in Stormwind.", summary = "Dungeon: The Stockade", isKeyUnlock = true },
-    [332]  = { reward = "Midnight Orb", note = "Elite quest to defeat Morganth in Tower of Azora / Redridge.", summary = "Redridge Elite Quest", isKeyUnlock = true },
+    [115]  = { reward = "Midnight Orb / Redridge Finale", note = "Elite quest inside Stonewatch Keep & Render's Rock in Redridge.", summary = "Redridge Elite Quest", isKeyUnlock = true },
 
     -- Stranglethorn Vale: Nesingwary Safari Mastery Chains
     [185]  = { chain = "Tiger Mastery (Step 1/4)", unlock = "Big Game Hunter Finale", summary = "Nesingwary Safari • Tiger Mastery (1/4)" },
@@ -769,8 +801,10 @@ Data.QuestPayoffsByTitle = {
         summary = "Reward: Light of Elune (10s Immunity)",
     },
     ["morbent fel"] = {
-        reward = "Light of Elune / Duskwood Finale",
-        summary = "Duskwood Finale • Light of Elune",
+        reward = "Morbent Fel Finale Gear",
+        note = "Use Morbent's Bane from your bags to strip Morbent Fel's shield in northern Raven Hill.",
+        summary = "Duskwood Finale • Morbent Fel",
+        isKeyUnlock = true,
     },
     ["forbidden knowledge"] = {
         reward = "Skull of Impending Doom (PvP CC Break)",
@@ -1012,7 +1046,7 @@ end
 -- Public API: Retrieve Meta-Knowledge Payoff for any quest (memoized)
 function Data.GetQuestPayoff(questID, questTitle)
     local numID = tonumber(questID)
-    local targetID = (numID and numID == numID and numID > 0 and numID < math.huge) and numID or nil
+    local targetID = (numID and numID == numID and numID ~= 0 and numID > -math.huge and numID < math.huge) and numID or nil
     if targetID and _payoffMemo[targetID] ~= nil then
         return _payoffMemo[targetID] or nil
     end
