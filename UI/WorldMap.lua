@@ -901,7 +901,7 @@ function UI.UpdateZoneAdvisor()
                 else
                     local minL = zData.min or 1
                     local maxL = zData.max or 60
-                    if pLevel < (minL - 5) or pLevel > (maxL + 3) then
+                    if pLevel < (minL - 8) or pLevel > (maxL + 6) then
                         skip = true
                     end
                 end
@@ -921,6 +921,9 @@ function UI.UpdateZoneAdvisor()
                         include = (res.worth >= 0.70)
                     elseif curFilter == "DUNGEONS" then
                         include = isDung
+                    elseif isDung and res.worth < 0.70 then
+                        -- In "ALL" view, hide dungeons that are not worth running (< 70%) compared to World Questing
+                        include = false
                     end
 
                     if include then
@@ -981,7 +984,9 @@ function UI.UpdateZoneAdvisor()
 
         -- Dynamic text hierarchy matching Quest Log styling (Gold for optimal, White for standard, Silver for low)
         local nameColor = (item.res.worth >= 0.70 and "|cffffd100") or (item.res.worth >= 0.50 and "|cffffffff") or "|cffaaaaaa"
-        local prefix = (i == 1 and item.res.worth >= 0.70) and "|cff00ff00#1 |r" or ""
+        local prefix = (i == 1 and item.res.worth >= 0.70 and "|cff00ff00#1 |r")
+            or (item.res.isLowValue and "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t ")
+            or ""
         row.Name:SetText(prefix .. nameColor .. item.name .. "|r")
 
         -- Line 2 explanation right inside the sidebar row

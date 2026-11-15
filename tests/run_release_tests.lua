@@ -1194,9 +1194,40 @@ addonTable.Engine.InvalidateCache()
 addonTable.Engine.WorldMapZoneCache = {}
 local drowned36 = addonTable.Engine.CalculateWorldMapZoneWorth("The Drowned City")
 local sm36 = addonTable.Engine.CalculateWorldMapZoneWorth("Scarlet Monastery")
+local rfk36 = addonTable.Engine.CalculateWorldMapZoneWorth("Razorfen Kraul")
+local rfd36 = addonTable.Engine.CalculateWorldMapZoneWorth("Razorfen Downs")
 assert_true(drowned36.worth >= 0.85, "The Drowned City is highly recommended at Lvl 36 (score: " .. tostring(drowned36.worth) .. ")")
 assert_true(sm36.worth >= 0.85, "Scarlet Monastery is highly recommended at Lvl 36 (score: " .. tostring(sm36.worth) .. ")")
+assert_true(rfk36.worth < 0.70, "Razorfen Kraul at Lvl 36 (past 30-35 sweet spot) scores < 70%: " .. tostring(rfk36.worth))
+assert_true(rfd36.worth < 0.70, "Razorfen Downs at Lvl 36 (upcoming 37+) scores < 70%: " .. tostring(rfd36.worth))
 assert_not_nil(drowned36.vsWorldQuesting, "Dungeon evaluation includes vsWorldQuesting comparison")
+
+-- Verify Zone Advisor hides < 70% dungeons in 'ALL' view and shows them in 'DUNGEONS' view
+if WorldMapFrame and WorldMapFrame.Show then WorldMapFrame:Show() end
+addonTable.UI.ToggleZoneAdvisor(true)
+addonTable.db.zoneAdvisorFilter = "ALL"
+addonTable.UI.UpdateZoneAdvisor()
+local foundLowDungInAll = false
+for i = 1, 30 do
+    local r = _G["WorthItAdvisorRow" .. i]
+    if r and r:IsShown() and r.isDungeon and r.data and r.data.worth < 0.70 then
+        foundLowDungInAll = true
+    end
+end
+assert_true(not foundLowDungInAll, "Zone Advisor 'ALL' filter hides dungeons with Worth < 70%")
+
+addonTable.db.zoneAdvisorFilter = "DUNGEONS"
+addonTable.UI.UpdateZoneAdvisor()
+local foundLowDungInDungeonsTab = false
+for i = 1, 30 do
+    local r = _G["WorthItAdvisorRow" .. i]
+    if r and r:IsShown() and r.isDungeon and r.data and r.data.worth < 0.70 then
+        foundLowDungInDungeonsTab = true
+    end
+end
+assert_true(foundLowDungInDungeonsTab, "Zone Advisor 'DUNGEONS' filter displays < 70% dungeons for inspection")
+addonTable.db.zoneAdvisorFilter = "ALL"
+addonTable.UI.UpdateZoneAdvisor()
 
 -- Duplicate zone aliases flagged so Advisor shows primary 'Riverglades' and omits alias 'Riverlands'
 assert_true(addonTable.Data.Zones["Riverglades"].isAlias == nil, "Riverglades is primary zone (not alias)")

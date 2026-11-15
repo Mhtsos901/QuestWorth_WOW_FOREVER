@@ -744,30 +744,37 @@ function Engine.GetClassDungeonModifier(zoneName, zoneInfo, playerClass, playerF
     end
 
     local questCount = prof.questCount or 3
-    local lootMod = prof.classMod or 0.04
+    local rawLootMod = prof.classMod or 0.04
+    local lootMod = rawLootMod
+    if rawLootMod <= 0.03 and questCount < 6 then
+        lootMod = -0.08
+    end
+
     local questXPMod = 0.00
     if questCount == 0 then
-        questXPMod = -0.08
+        questXPMod = -0.16
     elseif questCount <= 2 then
-        questXPMod = -0.02
+        questXPMod = -0.06
+    elseif questCount == 3 then
+        questXPMod = -0.01
     elseif questCount == 5 then
         questXPMod = 0.01
     elseif questCount >= 6 then
         questXPMod = 0.02
     end
 
-    local totalMod = math.max(-0.12, math.min(0.11, lootMod + questXPMod))
+    local totalMod = math.max(-0.18, math.min(0.11, lootMod + questXPMod))
     -- Dampen positive loot modifier when dungeon is outleveled or far above player level
-    if pLevel > maxLvl or pLevel < (effMin - 2) then
+    if pLevel > maxLvl or pLevel < effMin then
         if totalMod > 0 then
             totalMod = totalMod * 0.25
         end
     end
 
     local vsWorldQuesting
-    if (lootMod + questXPMod) >= 0.07 then
+    if (lootMod + questXPMod) >= 0.06 then
         vsWorldQuesting = "Beats World Questing (BiS Class Loot + High XP)"
-    elseif (lootMod + questXPMod) >= 0.04 then
+    elseif (lootMod + questXPMod) >= 0.03 then
         vsWorldQuesting = "High Value vs Questing (Strong Class Loot + Quests)"
     elseif (lootMod + questXPMod) >= 0.00 then
         vsWorldQuesting = "Worth 1 Quest Run (Good XP & Gear)"
@@ -867,7 +874,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         if effectiveMin and playerLevel < effectiveMin then
             local diff = effectiveMin - playerLevel
             if diff <= 2 then
-                bracketScore = 0.72 - (diff - 1) * 0.06
+                bracketScore = 0.62 - (diff - 1) * 0.06
                 status = string.format("Upcoming Dungeon (%d+)", effectiveMin)
                 recommendation = string.format("Prepare dungeon prequests (%d available). Recommended for 5-player groups at level %d+ (%s). Key %s Loot: %s.", dQuests, sweetMin or effectiveMin, vsWorldQuesting or "Good Loot/XP", playerClass, dLoot)
             else
@@ -880,12 +887,12 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
             if sweetMin and sweetMax and playerLevel >= sweetMin and playerLevel <= sweetMax then
                 local mid = (sweetMin + sweetMax) * 0.5
                 local dist = math.abs(playerLevel - mid)
-                bracketScore = math.max(0.80, 0.84 - dist * 0.012)
+                bracketScore = math.max(0.76, 0.82 - dist * 0.012)
             elseif sweetMin and playerLevel < sweetMin then
-                bracketScore = 0.78
+                bracketScore = 0.71
             else
                 local stepsPast = playerLevel - (sweetMax or effectiveMin)
-                bracketScore = math.max(0.70, 0.80 - stepsPast * 0.03)
+                bracketScore = math.max(0.50, 0.63 - (stepsPast - 1) * 0.06)
             end
             if (dungeonMod or 0) >= 0.00 then
                 status = "Recommended Dungeon"
@@ -1036,6 +1043,10 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
 
     -- Pure Zone & Dungeon Efficiency Score (strictly independent of quests already picked up in log)
     local finalWorth = math.max(0.0, math.min(1.0, baseZoneScore))
+    local isLowValue = false
+    if isDungeon and finalWorth < 0.62 and (not effectiveMin or playerLevel >= effectiveMin) then
+        isLowValue = true
+    end
 
     -- Concise 1-line explanation for Zone Advisor sidebar rows (never displays "X in Log")
     local shortReason
@@ -1046,14 +1057,16 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
             shortReason = string.format("Lvl %d+ (%dQ) • %s", effectiveMin, dQuests, dShort)
         elseif maxLevel and playerLevel > maxLevel then
             shortReason = string.format("%s • %s", status, dShort)
+        elseif finalWorth < 0.70 and sweetMax and playerLevel > sweetMax then
+            shortReason = string.format("Past Sweet Spot (%d-%d) • %s", sweetMin or effectiveMin, sweetMax, dShort)
+        elseif finalWorth < 0.70 or (dungeonMod or 0) < 0.00 then
+            shortReason = string.format("Below World Questing • %s", dShort)
         elseif (dungeonMod or 0) >= 0.07 then
             shortReason = string.format("BiS + %dQ: %s", dQuests, dShort)
         elseif (dungeonMod or 0) >= 0.04 then
             shortReason = string.format("Loot + %dQ: %s", dQuests, dShort)
-        elseif (dungeonMod or 0) >= 0.00 then
-            shortReason = string.format("%d Quests • %s", dQuests, dShort)
         else
-            shortReason = string.format("Low Loot/XP vs World • %s", dShort)
+            shortReason = string.format("%d Quests • %s", dQuests, dShort)
         end
     elseif rawHubMod <= -0.07 then
         shortReason = string.format("%s Quests • %s", densityLabel, hubName or status)
@@ -1066,6 +1079,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     local result = {
         zoneName = zoneName,
         worth = finalWorth,
+        isLowValue = isLowValue,
         minLevel = minLevel,
         maxLevel = maxLevel,
         effectiveMin = effectiveMin,
