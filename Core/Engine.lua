@@ -69,6 +69,33 @@ local function GetPlayerSpecID()
     return _cachedSpecID
 end
 
+local function EnsurePlayerContextFresh()
+    local curLvl = Player.level or (Player.GetLevel and Player.GetLevel()) or 1
+    local curCls = Player.class or (Player.GetClass and Player.GetClass()) or "WARRIOR"
+    local curFac = Player.faction or (Player.GetFaction and Player.GetFaction()) or "Alliance"
+    local curRace = Player.race or (Player.GetRace and Player.GetRace()) or "Human"
+
+    if Engine._ctxLevel ~= nil and (
+        Engine._ctxLevel ~= curLvl
+        or Engine._ctxClass ~= curCls
+        or Engine._ctxFaction ~= curFac
+        or Engine._ctxRace ~= curRace
+    ) then
+        Engine.InvalidateCache()
+        Engine.InvalidateSpecCache()
+        if addon.Scores then
+            if addon.Scores.InvalidateClassFitCache then addon.Scores.InvalidateClassFitCache() end
+            if addon.Scores.InvalidateMeleeCache then addon.Scores.InvalidateMeleeCache() end
+            if addon.Scores.InvalidateDensityCache then addon.Scores.InvalidateDensityCache() end
+        end
+    end
+
+    Engine._ctxLevel = curLvl
+    Engine._ctxClass = curCls
+    Engine._ctxFaction = curFac
+    Engine._ctxRace = curRace
+end
+
 function Engine.InvalidateSpecCache()
     _cachedSpecID = nil
 end
@@ -250,6 +277,8 @@ function Engine.CalculateWorth(questID)
     if db and not db.enabled then
         return nil, nil
     end
+
+    EnsurePlayerContextFresh()
 
     -- Fast path: Check Cache first (zero-allocation numeric key lookup!)
     local cached = Engine.Cache[questID]
@@ -789,6 +818,8 @@ end
 -- Calculate comprehensive World Map Zone Worth (sweet-spot level curve, hub density, class fit, dungeon loot/XP vs world questing)
 function Engine.CalculateWorldMapZoneWorth(zoneName)
     if type(zoneName) ~= "string" or zoneName == "" then return nil end
+
+    EnsurePlayerContextFresh()
 
     -- Fast path: cached zone evaluation
     if Engine.WorldMapZoneCache and Engine.WorldMapZoneCache[zoneName] then

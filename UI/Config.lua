@@ -48,6 +48,25 @@ local function CreateCheckbox(parent, label, point, relativeTo, relativePoint, x
     return cb
 end
 
+local function RefreshAllUI()
+    if addon.Engine and addon.Engine.InvalidateCache then
+        addon.Engine.InvalidateCache()
+    end
+    if addon.UI then
+        if addon.UI.UpdateQuestLog then addon.UI.UpdateQuestLog(true) end
+        if addon.UI.UpdateObjectiveTracker then addon.UI.UpdateObjectiveTracker(true) end
+        if addon.UI.UpdateWorldMapBanner then addon.UI.UpdateWorldMapBanner() end
+        if addon.UI.ToggleZoneAdvisor then
+            local showAdvisor = not addon.db or (addon.db.enabled ~= false and addon.db.showZoneAdvisor ~= false)
+            addon.UI.ToggleZoneAdvisor(showAdvisor)
+        elseif addon.UI.UpdateZoneAdvisor then
+            addon.UI.UpdateZoneAdvisor()
+        end
+        if addon.UI.UpdateQuestOfferDialog then addon.UI.UpdateQuestOfferDialog() end
+        if addon.UI.ApplyQuestObjectHighlight then addon.UI.ApplyQuestObjectHighlight() end
+    end
+end
+
 local function CreateWeightSlider(parent, label, point, relativeTo, relativePoint, x, y, getVal, setVal)
     local name = GetUniqueName("Slider")
     local slider = CreateFrame("Slider", name, parent, "OptionsSliderTemplate")
@@ -67,6 +86,7 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
     if highText then highText:SetText("100%") end
 
     local current = math.floor(getVal() * 100 + 0.5)
+    slider._lastVal = current
     slider:SetValue(current)
     if titleText then
         titleText:SetText(string.format("%s: %d%%", label, current))
@@ -79,7 +99,10 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
             titleText:SetText(string.format("%s: %d%%", label, value))
         end
         setVal(value / 100)
-        if addon.Engine and addon.Engine.InvalidateCache then
+        if self._lastVal ~= value then
+            self._lastVal = value
+            RefreshAllUI()
+        elseif addon.Engine and addon.Engine.InvalidateCache then
             addon.Engine.InvalidateCache()
         end
     end)
@@ -87,6 +110,7 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
     slider.SyncValue = function(self)
         self._syncing = true
         local val = math.floor(getVal() * 100 + 0.5)
+        self._lastVal = val
         self:SetValue(val)
         if titleText then
             titleText:SetText(string.format("%s: %d%%", label, val))
@@ -95,25 +119,6 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
     end
 
     return slider
-end
-
-local function RefreshAllUI()
-    if addon.Engine and addon.Engine.InvalidateCache then
-        addon.Engine.InvalidateCache()
-    end
-    if addon.UI then
-        if addon.UI.UpdateQuestLog then addon.UI.UpdateQuestLog(true) end
-        if addon.UI.UpdateObjectiveTracker then addon.UI.UpdateObjectiveTracker(true) end
-        if addon.UI.UpdateWorldMapBanner then addon.UI.UpdateWorldMapBanner() end
-        if addon.UI.ToggleZoneAdvisor then
-            local showAdvisor = not addon.db or (addon.db.enabled ~= false and addon.db.showZoneAdvisor ~= false)
-            addon.UI.ToggleZoneAdvisor(showAdvisor)
-        elseif addon.UI.UpdateZoneAdvisor then
-            addon.UI.UpdateZoneAdvisor()
-        end
-        if addon.UI.UpdateQuestOfferDialog then addon.UI.UpdateQuestOfferDialog() end
-        if addon.UI.ApplyQuestObjectHighlight then addon.UI.ApplyQuestObjectHighlight() end
-    end
 end
 
 local function CreateOptionsPanel()

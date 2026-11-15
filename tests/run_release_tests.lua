@@ -1371,6 +1371,113 @@ if _G.C_Map and _G.C_Map.GetMapInfo then
 end
 if not savedMapShown3M then WorldMapFrame:Hide() end
 
+-- 2B. Dynamic System-Wide Integration Checks (Auto Context Invalidation, Alias Sync, Advisor <-> Banner Live Sync)
+do
+    local savedLvl = mockPlayerState.level
+    local savedCls = mockPlayerState.classToken
+    local savedFac = mockPlayerState.faction
+    local savedRace = mockPlayerState.raceToken
+    local savedGetMapID = _G.WorldMapFrame.GetMapID
+    local savedGetMapInfo = _G.C_Map.GetMapInfo
+    local savedFilter = addonTable.db.zoneAdvisorFilter
+
+    -- a) Auto context cache invalidation without explicit Engine.InvalidateCache()
+    mockPlayerState.level = 1
+    mockPlayerState.classToken = "WARRIOR"
+    mockPlayerState.faction = "Alliance"
+    mockPlayerState.raceToken = "Human"
+    addonTable.Player.Update()
+    local elwynn1 = addonTable.Engine.CalculateWorldMapZoneWorth("Elwynn Forest")
+    assert_true(elwynn1 and elwynn1.worth >= 0.90, "Elwynn Forest is optimal at level 1")
+
+    -- Change player level without manually calling Engine.InvalidateCache()
+    mockPlayerState.level = 45
+    addonTable.Player.Update()
+    local elwynn45 = addonTable.Engine.CalculateWorldMapZoneWorth("Elwynn Forest")
+    assert_true(elwynn45 and elwynn45.worth <= 0.35 and elwynn45.status == "Outleveled",
+        "Engine automatically invalidates stale zone cache when Player level changes")
+
+    -- Same for quest cache on class/level transition
+    addonTable.Engine.CalculateWorth(5211)
+    assert_true(addonTable.Engine.Cache[5211] ~= nil, "Quest 5211 cached at L45 Warrior")
+    mockPlayerState.classToken = "MAGE"
+    addonTable.Player.Update()
+    addonTable.Engine.CalculateWorth(5211)
+    assert_true(addonTable.Engine._ctxClass == "MAGE", "Engine updates tracked player context to MAGE dynamically")
+
+    -- b) Dungeon alias synchronization across Data.GetDungeonProfile & Database completion state
+    local stProf = addonTable.Data.GetDungeonProfile("Sunken Temple", "DRUID", "Alliance")
+    local atalProf = addonTable.Data.GetDungeonProfile("The Temple of Atal'Hakkar", "DRUID", "Alliance")
+    assert_not_nil(atalProf, "Alias 'The Temple of Atal'Hakkar' resolves DungeonProfile cleanly")
+    assert_eq(atalProf and atalProf.questCount, stProf and stProf.questCount, "Alias profile questCount matches primary Sunken Temple")
+
+    addonTable.DB.SetDungeonCompleted("Sunken Temple", true)
+    assert_true(addonTable.DB.IsDungeonCompleted("The Temple of Atal'Hakkar"),
+        "Marking 'Sunken Temple' done propagates to alias 'The Temple of Atal'Hakkar'")
+    local atalEval = addonTable.Engine.CalculateWorldMapZoneWorth("The Temple of Atal'Hakkar")
+    assert_true(atalEval and atalEval.isCompletedDungeon == true, "Engine flags alias dungeon completed too")
+    addonTable.DB.SetDungeonCompleted("The Temple of Atal'Hakkar", false)
+    assert_true(not addonTable.DB.IsDungeonCompleted("Sunken Temple"),
+        "Unmarking alias cleanly clears primary dungeon completion")
+
+    -- c) Live sync between DoneBtn click, WorldMapBanner, and persistent visibility in DUNGEONS at Lvl 60
+    mockPlayerState.level = 20
+    mockPlayerState.classToken = "WARRIOR"
+    addonTable.Player.Update()
+    WorldMapFrame:Show()
+    addonTable.db.showZoneAdvisor = true
+    addonTable.db.zoneAdvisorFilter = "DUNGEONS"
+    _G.WorldMapFrame.GetMapID = function() return 291 end
+    _G.C_Map.GetMapInfo = function(id)
+        if id == 291 then return { name = "The Deadmines", mapID = 291 } end
+        return savedGetMapInfo(id)
+    end
+    addonTable.UI.ToggleZoneAdvisor(true)
+    addonTable.UI.UpdateWorldMapBanner()
+
+    local dmRow = nil
+    for r = 1, 100 do
+        local row = _G["WorthItAdvisorRow" .. r]
+        if not row or not row:IsShown() then break end
+        if row.data and row.data.zoneName == "The Deadmines" then dmRow = row; break end
+    end
+    assert_not_nil(dmRow, "The Deadmines appears in 'DUNGEONS' filter at level 20")
+    dmRow.DoneBtn:GetScript("OnClick")(dmRow.DoneBtn)
+    local banner = _G["WorthItWorldMapBanner"]
+    assert_true(banner and banner.data and banner.data.isCompletedDungeon == true and (banner.Text:GetText():find("Done") ~= nil),
+        "Clicking DoneBtn immediately updates WorldMapBanner to [Done]")
+
+    -- Level up to 60 (past Deadmines max+6 = 29): completed dungeon stays visible in 'DUNGEONS' tab to allow unmarking
+    mockPlayerState.level = 60
+    addonTable.Player.Update()
+    addonTable.UI.UpdateZoneAdvisor()
+    local dmRow60 = nil
+    for r = 1, 100 do
+        local row = _G["WorthItAdvisorRow" .. r]
+        if not row or not row:IsShown() then break end
+        if row.data and row.data.zoneName == "The Deadmines" then dmRow60 = row; break end
+    end
+    assert_not_nil(dmRow60, "Completed Deadmines stays visible in 'DUNGEONS' tab even at level 60")
+
+    -- Clicking DoneBtn again restores uncompleted state on both Advisor and WorldMapBanner
+    dmRow60.DoneBtn:GetScript("OnClick")(dmRow60.DoneBtn)
+    assert_true(not addonTable.DB.IsDungeonCompleted("The Deadmines"), "Unmarking at level 60 clears completion")
+    assert_true(banner and banner.data and not banner.data.isCompletedDungeon and (banner.Text:GetText():find("Done") == nil),
+        "Unmarking immediately restores WorldMapBanner away from [Done]")
+
+    -- Restore test state
+    _G.WorldMapFrame.GetMapID = savedGetMapID
+    _G.C_Map.GetMapInfo = savedGetMapInfo
+    if not savedMapShown3M then WorldMapFrame:Hide() end
+    addonTable.db.zoneAdvisorFilter = savedFilter
+    mockPlayerState.level = savedLvl
+    mockPlayerState.classToken = savedCls
+    mockPlayerState.faction = savedFac
+    mockPlayerState.raceToken = savedRace
+    addonTable.Player.Update()
+    addonTable.Engine.InvalidateCache()
+end
+
 -- 3. Objective Tracker recycled block updates _worthItActiveQuestID & uses live quest ID on OnEnter
 local savedShowTracker3M = addonTable.db.showInTracker
 addonTable.db.enabled = true

@@ -681,11 +681,18 @@ addon.Data.DungeonProfiles = {
 }
 addon.Data.DungeonProfiles["The Temple of Atal'Hakkar"] = addon.Data.DungeonProfiles["Sunken Temple"]
 
+local DUNGEON_PROFILE_ALIASES = {
+    ["the temple of atal'hakkar"] = "Sunken Temple",
+    ["temple of atal'hakkar"]     = "Sunken Temple",
+    ["stormwind stockade"]        = "The Stockade",
+}
+
 function addon.Data.GetDungeonProfile(zoneName, playerClass, playerFaction)
     if type(zoneName) ~= "string" or zoneName == "" then return nil end
-    local prof = addon.Data.DungeonProfiles[zoneName]
+    local canonicalName = DUNGEON_PROFILE_ALIASES[string.lower(zoneName)] or zoneName
+    local prof = addon.Data.DungeonProfiles[canonicalName] or addon.Data.DungeonProfiles[zoneName]
     if not prof then
-        local lower = string.lower(zoneName)
+        local lower = string.lower(canonicalName)
         local noThe = string.gsub(lower, "^the%s+", "")
         for k, v in pairs(addon.Data.DungeonProfiles) do
             local kLower = string.lower(k)

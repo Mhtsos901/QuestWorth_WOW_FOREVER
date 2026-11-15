@@ -481,8 +481,8 @@ function UI.UpdateWorldMapBanner()
         banner:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
     end
 
-    local badge = Utils.FormatBadge(res.worth, false)
-    local statusColor = (res.worth >= 0.70 and "|cff00ff00") or (res.worth >= 0.50 and "|cffffff00") or "|cffff3333"
+    local badge = res.isCompletedDungeon and "|cff00ff00[Done]|r" or Utils.FormatBadge(res.worth, false, false, false, res.isLowValue)
+    local statusColor = (res.isCompletedDungeon and "|cff88cc88") or (res.worth >= 0.70 and "|cff00ff00") or (res.worth >= 0.50 and "|cffffff00") or "|cffff3333"
 
     local levelStr = ""
     if res.minLevel and res.maxLevel and res.minLevel > 0 and res.maxLevel > 0 then
@@ -674,6 +674,9 @@ local function CreateAdvisorRow(index, parent)
         end
         if UI.UpdateZoneAdvisor then
             UI.UpdateZoneAdvisor()
+        end
+        if UI.UpdateWorldMapBanner then
+            UI.UpdateWorldMapBanner()
         end
         if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(self) then
             if self:IsShown() then
@@ -953,10 +956,13 @@ function UI.UpdateZoneAdvisor()
                 if not isDung then
                     skip = true
                 else
-                    local minL = zData.min or 1
-                    local maxL = zData.max or 60
-                    if pLevel < (minL - 8) or pLevel > (maxL + 6) then
-                        skip = true
+                    local isCompleted = addon.DB and addon.DB.IsDungeonCompleted and addon.DB.IsDungeonCompleted(name)
+                    if not isCompleted then
+                        local minL = zData.min or 1
+                        local maxL = zData.max or 60
+                        if pLevel < (minL - 8) or pLevel > (maxL + 6) then
+                            skip = true
+                        end
                     end
                 end
             elseif isDung then

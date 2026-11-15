@@ -113,6 +113,18 @@ function DB.Initialize()
     addon.db = WorthItDB
 end
 
+local DUNGEON_KEY_ALIASES = {
+    ["temple of atal'hakkar"] = "sunken temple",
+    ["stormwind stockade"]    = "stockade",
+}
+
+local function NormalizeDungeonToken(zoneName)
+    if type(zoneName) ~= "string" then return "" end
+    local token = zoneName:lower():match("^%s*(.-)%s*$") or ""
+    token = token:gsub("^the%s+", "")
+    return DUNGEON_KEY_ALIASES[token] or token
+end
+
 local function FindMatchingDungeonKey(tbl, zoneName)
     if type(tbl) ~= "table" or type(zoneName) ~= "string" or zoneName == "" then
         return nil
@@ -120,14 +132,11 @@ local function FindMatchingDungeonKey(tbl, zoneName)
     if tbl[zoneName] ~= nil then
         return zoneName
     end
-    local lower = zoneName:lower():match("^%s*(.-)%s*$")
-    local lowerNoThe = lower:gsub("^the%s+", "")
+    local targetToken = NormalizeDungeonToken(zoneName)
+    if targetToken == "" then return nil end
     for k in pairs(tbl) do
-        if type(k) == "string" then
-            local kl = k:lower():match("^%s*(.-)%s*$")
-            if kl == lower or kl:gsub("^the%s+", "") == lowerNoThe then
-                return k
-            end
+        if type(k) == "string" and NormalizeDungeonToken(k) == targetToken then
+            return k
         end
     end
     return nil
@@ -155,14 +164,10 @@ function DB.SetDungeonCompleted(zoneName, completed)
         local existing = FindMatchingDungeonKey(db.completedDungeons, zoneName)
         db.completedDungeons[existing or zoneName] = true
     else
-        local lower = zoneName:lower():match("^%s*(.-)%s*$")
-        local lowerNoThe = lower:gsub("^the%s+", "")
+        local targetToken = NormalizeDungeonToken(zoneName)
         for k in pairs(db.completedDungeons) do
-            if type(k) == "string" then
-                local kl = k:lower():match("^%s*(.-)%s*$")
-                if kl == lower or kl:gsub("^the%s+", "") == lowerNoThe then
-                    db.completedDungeons[k] = nil
-                end
+            if type(k) == "string" and NormalizeDungeonToken(k) == targetToken then
+                db.completedDungeons[k] = nil
             end
         end
         db.completedDungeons[zoneName] = nil
