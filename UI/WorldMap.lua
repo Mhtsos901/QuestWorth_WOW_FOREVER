@@ -112,6 +112,13 @@ local DUNGEON_SET = {
     ["ragefire chasm"] = true,
     ["hall of thanes"] = true,
     ["ruins of lordaeron"] = true,
+    ["excavation site: wetlands"] = true,
+    ["city of dalaran"] = true,
+    ["the drowned city"] = true, ["drowned city"] = true,
+    ["krol'dok stronghold"] = true,
+    ["alcaz prison"] = true,
+    ["blackmaw hold"] = true,
+    ["shaper's terrace"] = true,
 }
 
 local function IsDungeonZone(name)
@@ -265,8 +272,9 @@ local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showCli
         local modSign = d.classModifier > 0 and "+" or ""
         local modColor = d.classModifier > 0 and "|cff00ff00" or "|cffff4444"
         local reasonText = (d.classModifierReason and d.classModifierReason ~= "") and string.format(" |cffaaaaaa(%s)|r", d.classModifierReason) or ""
+        local classLabel = (isDungeonHint or d.isDungeon) and "  |cffa0a0a0Class Loot & XP:|r" or "  |cffa0a0a0Class & Terrain:|r"
         tooltip:AddDoubleLine(
-            "  |cffa0a0a0Class & Terrain:|r",
+            classLabel,
             string.format("%s%s%.0f%%%s|r", modColor, modSign, d.classModifier * 100, reasonText),
             0.8, 0.8, 0.8, 1, 1, 1
         )
@@ -289,23 +297,41 @@ local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showCli
         )
     end
 
-    if d.activeBonus and d.activeBonus > 0 then
-        tooltip:AddDoubleLine(
-            "  |cffa0a0a0Active Log Synergy:|r",
-            string.format("|cff00ff00+%.0f%%|r |cff888888(%d Qs in Log)|r", d.activeBonus * 100, d.activeCount or 0),
-            0.8, 0.8, 0.8, 1, 1, 1
-        )
-    end
-
-    -- Territory & Continent
-    tooltip:AddLine(" ")
+    -- Dungeon Class Loot & XP vs Open-World Questing
     if isDungeonHint or (d and d.isDungeon) or IsDungeonZone(d.zoneName) then
+        tooltip:AddLine(" ")
         local dungIcon = "|TInterface\\LFGFrame\\LFG-Eye:14:14:0:0:512:256:0:64:0:64|t"
         tooltip:AddDoubleLine(
             "|cff00ccffZone Type:|r",
-            dungIcon .. " |cffffd100Dungeon Instance|r",
+            dungIcon .. " |cffffd1005-Player Dungeon Instance|r",
             0.9, 0.9, 0.9, 1, 1, 1
         )
+        if d.vsWorldQuesting then
+            local vColor = ((d.classModifier or 0) >= 0.04 and "|cff00ff00") or ((d.classModifier or 0) >= 0.00 and "|cffffff00") or "|cffff6644"
+            tooltip:AddDoubleLine(
+                "|cff00ccffvs World Questing:|r",
+                vColor .. d.vsWorldQuesting .. "|r",
+                0.9, 0.9, 0.9, 1, 1, 1
+            )
+        end
+        if d.dungeonQuestCount then
+            local qCol = (d.dungeonQuestCount >= 5 and "|cff00ff00") or (d.dungeonQuestCount >= 3 and "|cffffff00") or "|cffff6644"
+            tooltip:AddDoubleLine(
+                "|cff00ccffDungeon Quests:|r",
+                string.format("%s%d Faction Quests|r", qCol, d.dungeonQuestCount),
+                0.9, 0.9, 0.9, 1, 1, 1
+            )
+        end
+        if d.dungeonLoot and d.dungeonLoot ~= "" then
+            local pClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass()) or "Class"
+            tooltip:AddDoubleLine(
+                string.format("|cff00ccffKey %s Loot:|r", pClass),
+                "|cffffd100" .. d.dungeonLoot .. "|r",
+                0.9, 0.9, 0.9, 1, 1, 1
+            )
+        end
+    else
+        tooltip:AddLine(" ")
     end
 
     local fColor = (d.faction == "Alliance" and "|cff0070dd") or (d.faction == "Horde" and "|cffc41f3b") or "|cffffff00"
@@ -328,33 +354,6 @@ local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showCli
         tooltip:AddDoubleLine(
             "|cff00ccffContinent:|r",
             allianceIcon .. " |cff0070ddEastern Kingdoms|r",
-            0.9, 0.9, 0.9, 1, 1, 1
-        )
-    end
-
-    -- Active Quests in Log
-    if d.activeCount and d.activeCount > 0 then
-        local qColorHex = Utils.GetScoreColorHex(d.activeWorth or 0.5)
-        tooltip:AddDoubleLine(
-            "|cff00ccffActive Quests in Log:|r",
-            string.format("|cff%s%d Quests (%.0f%% Avg)|r", qColorHex, d.activeCount, (d.activeWorth or 0) * 100),
-            0.9, 0.9, 0.9, 1, 1, 1
-        )
-        local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(d.zoneName)
-        if quests and #quests > 0 then
-            for _, qID in ipairs(quests) do
-                local qWorth, qBreak = addon.Engine.CalculateWorth(qID)
-                local info = Utils.GetQuestBasicInfo(qID)
-                if info and qWorth then
-                    local badge = Utils.FormatBadge(qWorth, qBreak and qBreak.isComplete, qBreak and qBreak.isHard, qBreak and qBreak.isBankable, qBreak and qBreak.isLowValue)
-                    tooltip:AddLine(string.format("  * %s %s", badge, info.title), 0.8, 0.8, 0.8)
-                end
-            end
-        end
-    elseif showClickHint == false then
-        tooltip:AddDoubleLine(
-            "|cff00ccffActive Quests in Log:|r",
-            "|cff8888880 Quests (Evaluated by Zone Bracket & Hubs)|r",
             0.9, 0.9, 0.9, 1, 1, 1
         )
     end
@@ -721,7 +720,7 @@ local function CreateZoneAdvisorPanel(parent)
 
     SetupFilterBtn(filterAll, "All", 54)
     SetupFilterBtn(filterOpt, "Optimal (70%+)", 122)
-    SetupFilterBtn(filterQ,   "In Log", 78)
+    SetupFilterBtn(filterQ,   "Dungeons", 78)
 
     filterAll:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -34)
     filterOpt:SetPoint("LEFT", filterAll, "RIGHT", 4, 0)
@@ -741,7 +740,7 @@ local function CreateZoneAdvisorPanel(parent)
         end
         styleBtn(filterAll, cur == "ALL")
         styleBtn(filterOpt, cur == "OPTIMAL")
-        styleBtn(filterQ, cur == "ACTIVE")
+        styleBtn(filterQ, cur == "DUNGEONS")
     end
 
     filterAll:SetScript("OnClick", function()
@@ -765,7 +764,7 @@ local function CreateZoneAdvisorPanel(parent)
     end)
 
     filterQ:SetScript("OnClick", function()
-        if addon.db then addon.db.zoneAdvisorFilter = "ACTIVE" end
+        if addon.db then addon.db.zoneAdvisorFilter = "DUNGEONS" end
         if panel.scrollFrame and panel.slider then
             panel.scrollFrame:SetVerticalScroll(0)
             panel.slider:SetValue(0)
@@ -875,6 +874,7 @@ function UI.UpdateZoneAdvisor()
     local playerFaction = (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or UnitFactionGroup("player") or "Alliance"
 
     if addon.Data and addon.Data.Zones then
+        local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
         for name, zData in pairs(addon.Data.Zones) do
             local isCity = zData.isCity
             local reqClass = zData.class
@@ -890,23 +890,26 @@ function UI.UpdateZoneAdvisor()
             if reqClass and reqClass ~= playerClass then
                 skip = true
             end
-            -- 3. Never show enemy faction zones unless player has active quests there
+            -- 3. Never show enemy faction zones
             if faction and faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction then
-                local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(name)
-                if not quests or #quests == 0 then
-                    skip = true
-                end
+                skip = true
             end
-            -- 4. For dungeons: if no active quests in log, only show if within player's level bracket
-            if isDung then
-                local quests = addon.Scores and addon.Scores.GetQuestsForZone and addon.Scores.GetQuestsForZone(name)
-                if not quests or #quests == 0 then
-                    local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+            -- 4. Filter by Dungeon vs Zone mode & level bracket (never count quests in log)
+            if curFilter == "DUNGEONS" then
+                if not isDung then
+                    skip = true
+                else
                     local minL = zData.min or 1
                     local maxL = zData.max or 60
-                    if pLevel < (minL - 2) or pLevel > (maxL + 2) then
+                    if pLevel < (minL - 5) or pLevel > (maxL + 3) then
                         skip = true
                     end
+                end
+            elseif isDung then
+                local minL = zData.min or 1
+                local maxL = zData.max or 60
+                if pLevel < (minL - 2) or pLevel > (maxL + 2) then
+                    skip = true
                 end
             end
 
@@ -916,8 +919,8 @@ function UI.UpdateZoneAdvisor()
                     local include = true
                     if curFilter == "OPTIMAL" then
                         include = (res.worth >= 0.70)
-                    elseif curFilter == "ACTIVE" then
-                        include = (res.activeCount and res.activeCount > 0)
+                    elseif curFilter == "DUNGEONS" then
+                        include = isDung
                     end
 
                     if include then
@@ -932,38 +935,6 @@ function UI.UpdateZoneAdvisor()
                 end
             end
             seen[name] = true
-        end
-    end
-
-    if addon.Scores and addon.Scores.ZoneQuests then
-        for zName in pairs(addon.Scores.ZoneQuests) do
-            if not seen[zName] and not (addon.Scores.IsNonZoneHeader and addon.Scores.IsNonZoneHeader(zName)) then
-                local zInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(zName)
-                local isCity = zInfo and zInfo.isCity
-                local reqClass = zInfo and zInfo.class
-                local isDung = (zInfo and zInfo.isDungeon) or IsDungeonZone(zName)
-                local skip = isCity or (reqClass and reqClass ~= playerClass)
-
-                if not skip then
-                    local res = addon.Engine and addon.Engine.CalculateWorldMapZoneWorth and addon.Engine.CalculateWorldMapZoneWorth(zName)
-                    if res and res.activeCount and res.activeCount > 0 then
-                        local include = true
-                        if curFilter == "OPTIMAL" and res.worth < 0.70 then
-                            include = false
-                        end
-                        if include then
-                            list[#list + 1] = {
-                                name = zName,
-                                res = res,
-                                mapID = nil,
-                                continent = zInfo and zInfo.continent,
-                                isDungeon = isDung,
-                            }
-                        end
-                    end
-                end
-                seen[zName] = true
-            end
         end
     end
 
@@ -1029,9 +1000,7 @@ function UI.UpdateZoneAdvisor()
         local cont = item.continent or (item.res and item.res.continent)
         UpdateRowContinentIcon(row.ContinentIcon, cont, item.isDungeon)
 
-        if item.res.activeCount and item.res.activeCount > 0 then
-            row.RightTag:SetText(string.format("|cffffcc00[%dQ]|r", item.res.activeCount))
-        elseif item.res.minLevel and item.res.maxLevel then
+        if item.res.minLevel and item.res.maxLevel then
             row.RightTag:SetText(string.format("|cff888888(%d-%d)|r", item.res.minLevel, item.res.maxLevel))
         else
             row.RightTag:SetText("")
@@ -1048,8 +1017,8 @@ function UI.UpdateZoneAdvisor()
     if #list == 0 then
         if advisorPanel.emptyText then
             local msg
-            if curFilter == "ACTIVE" then
-                msg = "No active quests in log\nfor any zone."
+            if curFilter == "DUNGEONS" then
+                msg = "No dungeons in your\ncurrent level bracket."
             elseif curFilter == "OPTIMAL" then
                 msg = "No optimal (70%+)\nzones found."
             else

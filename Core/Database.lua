@@ -60,7 +60,9 @@ local function SanitizeSettings(db)
     end
 
     -- Verify zoneAdvisorFilter
-    if type(db.zoneAdvisorFilter) ~= "string" or (db.zoneAdvisorFilter ~= "ALL" and db.zoneAdvisorFilter ~= "OPTIMAL" and db.zoneAdvisorFilter ~= "ACTIVE") then
+    if db.zoneAdvisorFilter == "ACTIVE" then
+        db.zoneAdvisorFilter = "DUNGEONS"
+    elseif type(db.zoneAdvisorFilter) ~= "string" or (db.zoneAdvisorFilter ~= "ALL" and db.zoneAdvisorFilter ~= "OPTIMAL" and db.zoneAdvisorFilter ~= "DUNGEONS") then
         db.zoneAdvisorFilter = "ALL"
     end
 

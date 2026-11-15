@@ -711,12 +711,9 @@ function Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effecti
 end
 
 -- Universal Race / Home Continent Travel Friction
--- Applies -8% when playerLevel <= 24 on opposite continent (no flight paths), or -2% above 24 when 0 quests in zone
-function Engine.GetTravelFrictionPenalty(zoneContinent, playerRace, playerLevel, activeCount)
+-- Applies -8% when playerLevel <= 24 on opposite continent (no flight paths), or -2% above 24
+function Engine.GetTravelFrictionPenalty(zoneContinent, playerRace, playerLevel)
     if not zoneContinent then return 0, nil end
-    if activeCount and activeCount > 0 then
-        return 0, nil
-    end
 
     local pLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or 1
     local pRace = playerRace or (addon.Player and addon.Player.GetRace and addon.Player.GetRace()) or "Human"
@@ -732,7 +729,57 @@ function Engine.GetTravelFrictionPenalty(zoneContinent, playerRace, playerLevel,
     return 0, nil
 end
 
--- Calculate comprehensive World Map Zone Worth (sweet-spot level curve, hub density, class fit, travel & log synergy)
+-- Class-Specific Dungeon Loot & Faction Quest XP Modifier vs Open-World Questing
+function Engine.GetClassDungeonModifier(zoneName, zoneInfo, playerClass, playerFaction, playerLevel)
+    if not zoneInfo or not zoneInfo.isDungeon then return 0, nil, nil, nil end
+    local pClass = playerClass or (addon.Player and addon.Player.GetClass and addon.Player.GetClass()) or "WARRIOR"
+    local pFaction = playerFaction or (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or "Alliance"
+    local pLevel = playerLevel or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or 1
+    local effMin = zoneInfo.min or 1
+    local maxLvl = zoneInfo.max or 60
+
+    local prof = addon.Data and addon.Data.GetDungeonProfile and addon.Data.GetDungeonProfile(zoneName, pClass, pFaction)
+    if not prof then
+        return 0.03, "5-Player Dungeon Gear & Quests", nil, "Equal to World Questing (1 Quest Run)"
+    end
+
+    local questCount = prof.questCount or 3
+    local lootMod = prof.classMod or 0.04
+    local questXPMod = 0.00
+    if questCount == 0 then
+        questXPMod = -0.08
+    elseif questCount <= 2 then
+        questXPMod = -0.02
+    elseif questCount == 5 then
+        questXPMod = 0.01
+    elseif questCount >= 6 then
+        questXPMod = 0.02
+    end
+
+    local totalMod = math.max(-0.12, math.min(0.11, lootMod + questXPMod))
+    -- Dampen positive loot modifier when dungeon is outleveled or far above player level
+    if pLevel > maxLvl or pLevel < (effMin - 2) then
+        if totalMod > 0 then
+            totalMod = totalMod * 0.25
+        end
+    end
+
+    local vsWorldQuesting
+    if (lootMod + questXPMod) >= 0.07 then
+        vsWorldQuesting = "Beats World Questing (BiS Class Loot + High XP)"
+    elseif (lootMod + questXPMod) >= 0.04 then
+        vsWorldQuesting = "High Value vs Questing (Strong Class Loot + Quests)"
+    elseif (lootMod + questXPMod) >= 0.00 then
+        vsWorldQuesting = "Worth 1 Quest Run (Good XP & Gear)"
+    else
+        vsWorldQuesting = "Below World Questing (Few Faction Quests / Class Drops)"
+    end
+
+    local reasonStr = string.format("%s (%d Qs)", prof.shortLoot or "Dungeon Loot", questCount)
+    return totalMod, reasonStr, prof, vsWorldQuesting
+end
+
+-- Calculate comprehensive World Map Zone Worth (sweet-spot level curve, hub density, class fit, dungeon loot/XP vs world questing)
 function Engine.CalculateWorldMapZoneWorth(zoneName)
     if type(zoneName) ~= "string" or zoneName == "" then return nil end
 
@@ -755,52 +802,31 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     end
 
     local zoneInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(zoneName)
-    local activeWorth, activeCount = Engine.CalculateZoneWorth(zoneName)
-
-    if not zoneInfo and not activeWorth then
+    if not zoneInfo then
         return nil
     end
 
-    local readyCount = 0
-    local viableCount = 0
-    if activeCount and activeCount > 0 and addon.Scores and addon.Scores.GetQuestsForZone then
-        local zQuests = addon.Scores.GetQuestsForZone(zoneName)
-        if zQuests then
-            for _, qID in ipairs(zQuests) do
-                local _, qBreak = Engine.CalculateWorth(qID)
-                if Engine.IsQuestComplete(qID) or (qBreak and qBreak.isComplete) then
-                    readyCount = readyCount + 1
-                    viableCount = viableCount + 1
-                elseif qBreak and (qBreak.isHard or qBreak.isLowValue) then
-                    viableCount = viableCount + 0.25
-                else
-                    viableCount = viableCount + 1
-                end
-            end
-        end
-    end
-
-    local minLevel = zoneInfo and zoneInfo.min or nil
-    local maxLevel = zoneInfo and zoneInfo.max or nil
+    local minLevel = zoneInfo.min or nil
+    local maxLevel = zoneInfo.max or nil
     local effectiveMin = Engine.GetEffectiveMinLevel(zoneInfo, playerFaction) or minLevel
     if effectiveMin and maxLevel and effectiveMin > maxLevel then
         effectiveMin = maxLevel
     end
-    local faction = zoneInfo and zoneInfo.faction or "Contested"
-    local isCity = zoneInfo and zoneInfo.isCity or false
-    local isDungeon = (zoneInfo and zoneInfo.isDungeon) or false
-    local reqClass = zoneInfo and zoneInfo.class or nil
-    local continent = zoneInfo and zoneInfo.continent or nil
-    local densityLabel = (zoneInfo and zoneInfo.density) or "Medium"
-    local rawHubMod = (zoneInfo and zoneInfo.hubMod) or 0.00
-    local hubName = zoneInfo and (
+    local faction = zoneInfo.faction or "Contested"
+    local isCity = zoneInfo.isCity or false
+    local isDungeon = zoneInfo.isDungeon or false
+    local reqClass = zoneInfo.class or nil
+    local continent = zoneInfo.continent or nil
+    local densityLabel = zoneInfo.density or "Medium"
+    local rawHubMod = zoneInfo.hubMod or 0.00
+    local hubName = (
         (playerFaction == "Alliance" and zoneInfo.allianceHub)
         or (playerFaction == "Horde" and zoneInfo.hordeHub)
         or zoneInfo.hub
         or zoneInfo.allianceHub
         or zoneInfo.hordeHub
     ) or nil
-    local zoneSummary = zoneInfo and zoneInfo.summary or nil
+    local zoneSummary = zoneInfo.summary or nil
 
     local bracketScore = 0.50
     local status = "Neutral Zone"
@@ -808,11 +834,15 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     local sweetMin, sweetMax = effectiveMin, maxLevel
     local applyHubMod = false
 
-    if not zoneInfo then
-        bracketScore = activeWorth or 0.50
-        status = (activeCount and activeCount > 0) and string.format("%d Quests in Log", activeCount) or "Zone"
-        recommendation = "Zone has active quests in your Quest Log."
-    elseif isCity then
+    local dungeonMod, dungeonModReason, dungeonProf, vsWorldQuesting = 0, nil, nil, nil
+    if isDungeon then
+        dungeonMod, dungeonModReason, dungeonProf, vsWorldQuesting = Engine.GetClassDungeonModifier(zoneName, zoneInfo, playerClass, playerFaction, playerLevel)
+        if dungeonProf and dungeonProf.sweetMin and dungeonProf.sweetMax then
+            sweetMin, sweetMax = dungeonProf.sweetMin, dungeonProf.sweetMax
+        end
+    end
+
+    if isCity then
         bracketScore = 0.15
         status = "Capital City"
         recommendation = "Major capital city (bank, auction house, trainers). Not a leveling zone."
@@ -831,34 +861,42 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
             recommendation = "Few or no friendly quests available."
         end
     elseif isDungeon then
-        -- Dungeon instance bracket suitability & prequest guidance
+        local dQuests = (dungeonProf and dungeonProf.questCount) or 3
+        local dLoot = (dungeonProf and dungeonProf.loot) or "Dungeon upgrades"
+        -- Dungeon instance bracket suitability & class loot/XP vs world questing
         if effectiveMin and playerLevel < effectiveMin then
             local diff = effectiveMin - playerLevel
             if diff <= 2 then
-                bracketScore = 0.76 - (diff - 1) * 0.06
+                bracketScore = 0.72 - (diff - 1) * 0.06
                 status = string.format("Upcoming Dungeon (%d+)", effectiveMin)
-                recommendation = string.format("Prepare dungeon prequests. Recommended for 5-player groups at level %d+.", effectiveMin)
+                recommendation = string.format("Prepare dungeon prequests (%d available). Recommended for 5-player groups at level %d+ (%s). Key %s Loot: %s.", dQuests, sweetMin or effectiveMin, vsWorldQuesting or "Good Loot/XP", playerClass, dLoot)
             else
                 bracketScore = math.max(0.05, 0.40 - (diff - 2) * 0.10)
                 status = string.format("High Level Dungeon (%d+)", effectiveMin)
-                recommendation = string.format("Dangerous instance enemies. Gather group & prequests at level %d+.", effectiveMin)
+                recommendation = string.format("Dangerous instance enemies. Gather group & prequests at level %d+. Key %s Loot: %s.", effectiveMin, playerClass, dLoot)
             end
         elseif effectiveMin and maxLevel and playerLevel >= effectiveMin and playerLevel <= maxLevel then
-            local mid = math.floor((effectiveMin + maxLevel) * 0.5)
-            local dist = math.abs(playerLevel - mid)
-            bracketScore = math.max(0.76, 0.87 - dist * 0.02)
             applyHubMod = true
-            if activeCount and activeCount > 0 then
-                status = "Ready for Dungeon!"
-                recommendation = string.format("5-player instance (%d-%d) with %d active quests in log. Form group and clear!", minLevel, maxLevel, activeCount)
+            if sweetMin and sweetMax and playerLevel >= sweetMin and playerLevel <= sweetMax then
+                local mid = (sweetMin + sweetMax) * 0.5
+                local dist = math.abs(playerLevel - mid)
+                bracketScore = math.max(0.80, 0.84 - dist * 0.012)
+            elseif sweetMin and playerLevel < sweetMin then
+                bracketScore = 0.78
             else
-                status = "Recommended Dungeon"
-                recommendation = string.format("5-player instance (%d-%d). Gather dungeon quests before entering!", minLevel, maxLevel)
+                local stepsPast = playerLevel - (sweetMax or effectiveMin)
+                bracketScore = math.max(0.70, 0.80 - stepsPast * 0.03)
             end
+            if (dungeonMod or 0) >= 0.00 then
+                status = "Recommended Dungeon"
+            else
+                status = "Low Value vs Questing"
+            end
+            recommendation = string.format("5-player instance (%d-%d) • %s (%d Quests). Key %s Loot: %s.", minLevel, maxLevel, vsWorldQuesting or "Recommended Run", dQuests, playerClass, dLoot)
         elseif maxLevel and playerLevel <= (maxLevel + 4) then
             bracketScore = 0.40
             status = "Low Level Dungeon"
-            recommendation = "Instance outleveled. Good for fast quest clears or helping friends."
+            recommendation = "Instance outleveled. Open-world questing gives much better XP/hour now."
         else
             bracketScore = 0.15
             status = "Outleveled Dungeon"
@@ -971,14 +1009,19 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         hubMod = rawHubMod
     end
 
-    -- Class mob modifier, friendly territory comfort bonus & continent travel friction
-    local classMod, classModReason = Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effectiveMin)
+    -- Class modifier (mob ecology for outdoor zones, Class Loot + Quest XP for dungeons)
+    local classMod, classModReason
+    if isDungeon then
+        classMod, classModReason = dungeonMod, dungeonModReason
+    else
+        classMod, classModReason = Engine.GetClassZoneModifier(zoneInfo, playerClass, playerLevel, effectiveMin)
+    end
     if isCity or (reqClass and reqClass ~= playerClass) or (faction ~= "Contested" and faction ~= "Neutral" and faction ~= playerFaction) then
         classMod = 0
         classModReason = nil
     end
 
-    local travelPenalty, travelReason = Engine.GetTravelFrictionPenalty(continent, playerRace, playerLevel, activeCount)
+    local travelPenalty, travelReason = Engine.GetTravelFrictionPenalty(continent, playerRace, playerLevel)
     if bracketScore <= 0.15 then
         travelPenalty = 0
     end
@@ -991,35 +1034,27 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     local baseZoneScore = bracketScore + hubMod + classMod + territoryBonus - travelPenalty
     baseZoneScore = math.max(0.05, math.min(0.98, baseZoneScore))
 
-    -- Active Quest Log Synergy: active quests in an appropriate zone BOOST its worth (never penalize it!)
-    local activeBonus = 0
-    local finalWorth
-    if zoneInfo and activeWorth and activeCount and activeCount > 0 then
-        if baseZoneScore >= 0.55 then
-            activeBonus = math.min(0.10, (viableCount * 0.022) * (0.50 + 0.50 * activeWorth) + (readyCount * 0.02))
-            finalWorth = math.min(1.00, baseZoneScore + activeBonus)
-        else
-            finalWorth = math.max(baseZoneScore, (0.55 * activeWorth) + (0.45 * baseZoneScore))
-            activeBonus = math.max(0, finalWorth - baseZoneScore)
-        end
-    elseif activeWorth and activeCount and activeCount > 0 then
-        finalWorth = activeWorth
-    else
-        finalWorth = baseZoneScore
-    end
+    -- Pure Zone & Dungeon Efficiency Score (strictly independent of quests already picked up in log)
+    local finalWorth = math.max(0.0, math.min(1.0, baseZoneScore))
 
-    finalWorth = math.max(0.0, math.min(1.0, finalWorth))
-
-    -- Concise 1-line explanation for Zone Advisor sidebar rows
+    -- Concise 1-line explanation for Zone Advisor sidebar rows (never displays "X in Log")
     local shortReason
-    if activeCount and activeCount > 0 then
-        if readyCount > 0 then
-            shortReason = string.format("%d in Log (%d Ready) • %s", activeCount, readyCount, hubName or status)
+    if isDungeon then
+        local dQuests = (dungeonProf and dungeonProf.questCount) or 3
+        local dShort = (dungeonProf and dungeonProf.shortLoot) or (hubName or status)
+        if effectiveMin and playerLevel < effectiveMin then
+            shortReason = string.format("Lvl %d+ (%dQ) • %s", effectiveMin, dQuests, dShort)
+        elseif maxLevel and playerLevel > maxLevel then
+            shortReason = string.format("%s • %s", status, dShort)
+        elseif (dungeonMod or 0) >= 0.07 then
+            shortReason = string.format("BiS + %dQ: %s", dQuests, dShort)
+        elseif (dungeonMod or 0) >= 0.04 then
+            shortReason = string.format("Loot + %dQ: %s", dQuests, dShort)
+        elseif (dungeonMod or 0) >= 0.00 then
+            shortReason = string.format("%d Quests • %s", dQuests, dShort)
         else
-            shortReason = string.format("%d in Log (%.0f%%) • %s", activeCount, (activeWorth or 0) * 100, hubName or status)
+            shortReason = string.format("Low Loot/XP vs World • %s", dShort)
         end
-    elseif isDungeon then
-        shortReason = string.format("5-Man Instance • %s", hubName or status)
     elseif rawHubMod <= -0.07 then
         shortReason = string.format("%s Quests • %s", densityLabel, hubName or status)
     elseif hubName then
@@ -1049,16 +1084,20 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         densityLabel = densityLabel,
         hubMod = hubMod,
         territoryBonus = territoryBonus,
-        activeCount = activeCount or 0,
-        readyCount = readyCount,
-        activeWorth = activeWorth,
-        activeBonus = activeBonus,
+        activeCount = 0,
+        readyCount = 0,
+        activeWorth = nil,
+        activeBonus = 0,
         bracketScore = bracketScore,
         baseZoneScore = baseZoneScore,
         classModifier = classMod,
         classModifierReason = classModReason,
         travelPenalty = travelPenalty,
         travelReason = travelReason,
+        dungeonQuestCount = dungeonProf and dungeonProf.questCount or nil,
+        dungeonLoot = dungeonProf and dungeonProf.loot or nil,
+        dungeonShortLoot = dungeonProf and dungeonProf.shortLoot or nil,
+        vsWorldQuesting = vsWorldQuesting,
     }
 
     if Engine.WorldMapZoneCache then

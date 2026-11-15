@@ -1150,7 +1150,7 @@ assert_not_nil(stv32.hubName, "Zone result provides faction-specific hubName")
 assert_eq(stv32.densityLabel, "Very High", "Stranglethorn Vale density tier is Very High")
 assert_not_nil(stv32.zoneSummary, "Zone result provides curated zoneSummary")
 
--- Active quests in an appropriate zone must BOOST worth (not penalize it)
+-- Zone Advisor does NOT count quests already picked up in the Quest Log
 mockQuestLog = {
     { title = "Stranglethorn Vale (2)", isHeader = true, isCollapsed = false },
     { title = "Welcome to the Jungle", questID = 583, level = 30, isHeader = false, isComplete = 1 },
@@ -1163,11 +1163,44 @@ addonTable.Engine.InvalidateCache()
 addonTable.Engine.WorldMapZoneCache = {}
 
 local stv32WithQuests = addonTable.Engine.CalculateWorldMapZoneWorth("Stranglethorn Vale")
-assert_true(stv32WithQuests.worth > stv32.worth, string.format("Active quests in STV boost worth (%.0f%% -> %.0f%%)", stv32.worth * 100, stv32WithQuests.worth * 100))
-assert_true((stv32WithQuests.activeBonus or 0) > 0, "activeBonus populated when quests are in log")
+assert_eq(stv32WithQuests.worth, stv32.worth, "Zone Worth is purely efficiency-based and independent of quests already in log")
+assert_eq(stv32WithQuests.activeCount, 0, "activeCount is 0 in Zone Advisor evaluation")
+assert_true(not string.find(stv32WithQuests.shortReason or "", "in Log"), "shortReason never displays 'in Log'")
 
--- Duplicate zone aliases flagged so Advisor omits duplicate rows
-assert_true(addonTable.Data.Zones["Riverglades"].isAlias == true, "Riverglades marked as alias")
+-- Class-Aware Dungeon Loot + XP Evaluation vs World Questing
+mockPlayerState.level = 34
+mockPlayerState.class = "Rogue"
+mockPlayerState.classToken = "ROGUE"
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+local gnomeRogue = addonTable.Engine.CalculateWorldMapZoneWorth("Gnomeregan")
+assert_not_nil(gnomeRogue, "Gnomeregan evaluated for Level 34 Rogue")
+assert_true(string.find(gnomeRogue.dungeonLoot or "", "Triprunner Dungarees") ~= nil, "Gnomeregan highlights BiS Triprunner Dungarees for Rogue")
+
+mockPlayerState.class = "Warrior"
+mockPlayerState.classToken = "WARRIOR"
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+local gnomeWarrior = addonTable.Engine.CalculateWorldMapZoneWorth("Gnomeregan")
+assert_true(gnomeRogue.worth > gnomeWarrior.worth, string.format("Gnomeregan scores higher for Rogue (%.0f%%) than Warrior (%.0f%%) due to BiS Agi legs", gnomeRogue.worth * 100, gnomeWarrior.worth * 100))
+
+mockPlayerState.level = 36
+mockPlayerState.class = "Rogue"
+mockPlayerState.classToken = "ROGUE"
+addonTable.Player.Update()
+addonTable.Engine.InvalidateCache()
+addonTable.Engine.WorldMapZoneCache = {}
+local drowned36 = addonTable.Engine.CalculateWorldMapZoneWorth("The Drowned City")
+local sm36 = addonTable.Engine.CalculateWorldMapZoneWorth("Scarlet Monastery")
+assert_true(drowned36.worth >= 0.85, "The Drowned City is highly recommended at Lvl 36 (score: " .. tostring(drowned36.worth) .. ")")
+assert_true(sm36.worth >= 0.85, "Scarlet Monastery is highly recommended at Lvl 36 (score: " .. tostring(sm36.worth) .. ")")
+assert_not_nil(drowned36.vsWorldQuesting, "Dungeon evaluation includes vsWorldQuesting comparison")
+
+-- Duplicate zone aliases flagged so Advisor shows primary 'Riverglades' and omits alias 'Riverlands'
+assert_true(addonTable.Data.Zones["Riverglades"].isAlias == nil, "Riverglades is primary zone (not alias)")
+assert_true(addonTable.Data.Zones["Riverlands"].isAlias == true, "Riverlands marked as alias")
 assert_true(addonTable.Data.Zones["Hyjal"].isAlias == true, "Hyjal marked as alias")
 assert_true(addonTable.Data.Zones["The Temple of Atal'Hakkar"].isAlias == true, "The Temple of Atal'Hakkar marked as alias")
 

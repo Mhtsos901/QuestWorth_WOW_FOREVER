@@ -79,10 +79,10 @@ addon.Data.Zones = {
         density = "Sparse", hubMod = -0.14, hub = "None (Karazhan Courtyard)",
         summary = "Very sparse zone with almost no quest hubs; mainly elite ogres outside Karazhan." },
     ["Riverglades"]         = { min = 35, max = 45, faction = "Contested", continent = 2, mapID = 2548, beastHeavy = true, humanoidHeavy = true,
-        isAlias = true, density = "High", hubMod = 0.02, hub = "Riverlands Hubs",
+        density = "High", hubMod = 0.02, hub = "Riverglades Hubs",
         summary = "WoW Forever custom 35-45 zone packed with custom quest chains and blue gear upgrades." },
     ["Riverlands"]          = { min = 35, max = 45, faction = "Contested", continent = 2, mapID = 2548, beastHeavy = true, humanoidHeavy = true,
-        density = "High", hubMod = 0.02, hub = "Riverlands Hubs",
+        isAlias = true, density = "High", hubMod = 0.02, hub = "Riverglades Hubs",
         summary = "WoW Forever custom 35-45 zone packed with custom quest chains and blue gear upgrades." },
 
     -- =========================================================================
@@ -266,4 +266,453 @@ function addon.Data.GetZoneInfo(zoneName)
     end
 
     return nil
+end
+
+-- =========================================================================
+-- CLASS-AWARE DUNGEON LOOT & XP PROFILES (vs Open-World Questing)
+-- =========================================================================
+addon.Data.DungeonProfiles = {
+    ["Ragefire Chasm"] = {
+        sweetMin = 14, sweetMax = 16, allianceQuests = 0, hordeQuests = 5,
+        classes = {
+            WARRIOR = { mod = 0.06, short = "Cursed Felblade & Bracers", loot = "Cursed Felblade, Subterranean Cape, Savannah Bracers" },
+            ROGUE   = { mod = 0.06, short = "Cursed Felblade & Bracers", loot = "Cursed Felblade, Subterranean Cape, Savannah Bracers" },
+            HUNTER  = { mod = 0.06, short = "Subterranean Cape & Bracers", loot = "Subterranean Cape, Savannah Bracers, Cursed Felblade" },
+            SHAMAN  = { mod = 0.06, short = "Cursed Felblade & Cuffs", loot = "Cursed Felblade, Garrison Cuffs, Subterranean Cape" },
+            DRUID   = { mod = 0.06, short = "Savannah Bracers & Staff", loot = "Savannah Bracers, Featherbead Bracers, Subterranean Cape" },
+            MAGE    = { mod = 0.06, short = "Robe of Evocation & Blade", loot = "Robe of Evocation, Chanting Blade, Featherbead Bracers" },
+            PRIEST  = { mod = 0.06, short = "Robe of Evocation & Blade", loot = "Robe of Evocation, Chanting Blade, Featherbead Bracers" },
+            WARLOCK = { mod = 0.06, short = "Robe of Evocation & Blade", loot = "Robe of Evocation, Chanting Blade, Featherbead Bracers" },
+            PALADIN = { mod = 0.05, short = "Garrison Cuffs & Felblade", loot = "Cursed Felblade, Garrison Cuffs, Subterranean Cape" },
+        },
+    },
+    ["Hall of Thanes"] = {
+        sweetMin = 15, sweetMax = 18, allianceQuests = 4, hordeQuests = 3,
+        classes = {
+            WARRIOR = { mod = 0.06, short = "Deepgrave Trousers & Cloak", loot = "Deepgrave Trousers, Catacomb Cloak, Tomb Robber's Gloves" },
+            PALADIN = { mod = 0.06, short = "Deepgrave Trousers & Cloak", loot = "Deepgrave Trousers, Catacomb Cloak, Dwarven Tome" },
+            ROGUE   = { mod = 0.07, short = "Tomb Robber's Gloves & Cloak", loot = "Tomb Robber's Gloves, Catacomb Cloak, Deepgrave Trousers" },
+            HUNTER  = { mod = 0.07, short = "Tomb Robber's Gloves & Cloak", loot = "Tomb Robber's Gloves, Catacomb Cloak, Deepgrave Trousers" },
+            DRUID   = { mod = 0.06, short = "Tomb Robber's Gloves & Tome", loot = "Tomb Robber's Gloves, Dwarven Tome, Catacomb Cloak" },
+            SHAMAN  = { mod = 0.06, short = "Deepgrave Trousers & Tome", loot = "Deepgrave Trousers, Dwarven Tome, Catacomb Cloak" },
+            MAGE    = { mod = 0.06, short = "Dwarven Tome & Cloak", loot = "Dwarven Tome, Catacomb Cloak, Deepgrave Trousers" },
+            PRIEST  = { mod = 0.06, short = "Dwarven Tome & Cloak", loot = "Dwarven Tome, Catacomb Cloak, Deepgrave Trousers" },
+            WARLOCK = { mod = 0.06, short = "Dwarven Tome & Cloak", loot = "Dwarven Tome, Catacomb Cloak, Deepgrave Trousers" },
+        },
+    },
+    ["Ruins of Lordaeron"] = {
+        sweetMin = 17, sweetMax = 21, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            ROGUE   = { mod = 0.07, short = "Plaguefang & The Stitcher", loot = "Plaguefang, The Stitcher, Tarnished Locket, Small Sack of Gems" },
+            WARRIOR = { mod = 0.06, short = "The Stitcher & Locket", loot = "The Stitcher, Plaguefang, Tarnished Locket, Small Sack of Gems" },
+            PALADIN = { mod = 0.06, short = "The Stitcher & Locket", loot = "The Stitcher, Tarnished Locket, Spare Part Bindings" },
+            HUNTER  = { mod = 0.06, short = "Plaguefang & Locket", loot = "Plaguefang, The Stitcher, Tarnished Locket" },
+            DRUID   = { mod = 0.06, short = "Plaguefang & Blight Gloves", loot = "Plaguefang, Blight Gloves, Tarnished Locket" },
+            SHAMAN  = { mod = 0.06, short = "The Stitcher & Blight Gloves", loot = "The Stitcher, Blight Gloves, Tarnished Locket" },
+            MAGE    = { mod = 0.06, short = "Blight Gloves & Bindings", loot = "Blight Gloves, Spare Part Bindings, Tarnished Locket" },
+            PRIEST  = { mod = 0.06, short = "Blight Gloves & Bindings", loot = "Blight Gloves, Spare Part Bindings, Tarnished Locket" },
+            WARLOCK = { mod = 0.06, short = "Blight Gloves & Bindings", loot = "Blight Gloves, Spare Part Bindings, Tarnished Locket" },
+        },
+    },
+    ["Wailing Caverns"] = {
+        sweetMin = 18, sweetMax = 22, allianceQuests = 5, hordeQuests = 7,
+        classes = {
+            ROGUE   = { mod = 0.08, short = "Wingblade & Fang Leggings", loot = "Wingblade (BiS 1H), Leggings of the Fang, Cobrahn's Grasp, Deviate Pack" },
+            HUNTER  = { mod = 0.08, short = "Venomstrike & Fang Leggings", loot = "Venomstrike, Wingblade, Leggings of the Fang, Slick Deviate Leggings" },
+            DRUID   = { mod = 0.08, short = "Crescent Staff & Fang Set", loot = "Crescent Staff, Leggings of the Fang, Footpads of the Fang" },
+            WARRIOR = { mod = 0.06, short = "Wingblade & Cobrahn's Grasp", loot = "Wingblade, Cobrahn's Grasp, Mutant Scale Breastplate, Kresh's Back" },
+            PALADIN = { mod = 0.06, short = "Wingblade & Mutant Scale", loot = "Wingblade, Cobrahn's Grasp, Mutant Scale Breastplate, Kresh's Back" },
+            SHAMAN  = { mod = 0.07, short = "Crescent Staff & Wingblade", loot = "Crescent Staff, Wingblade, Cobrahn's Grasp, Deep Fathom Ring" },
+            MAGE    = { mod = 0.07, short = "Crescent Staff & Deep Fathom", loot = "Crescent Staff (BiS Staff), Robe of the Moccasin, Deep Fathom Ring" },
+            PRIEST  = { mod = 0.07, short = "Crescent Staff & Sizzle Stick", loot = "Crescent Staff (BiS Staff), Sizzle Stick, Deep Fathom Ring" },
+            WARLOCK = { mod = 0.07, short = "Crescent Staff & Sizzle Stick", loot = "Crescent Staff (BiS Staff), Sizzle Stick, Robe of the Moccasin" },
+        },
+    },
+    ["The Deadmines"] = {
+        sweetMin = 19, sweetMax = 22, allianceQuests = 5, hordeQuests = 0,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Cruel Barb & Tunic of Westfall", loot = "Cruel Barb (BiS 1H), Tunic of Westfall, Blackened Defias Armor, Brotherhood Cape" },
+            HUNTER  = { mod = 0.09, short = "Tunic of Westfall & Cruel Barb", loot = "Tunic of Westfall (BiS Chest), Cruel Barb, Piercing Harpoon, Brotherhood Cape" },
+            DRUID   = { mod = 0.08, short = "Tunic/Staff of Westfall", loot = "Tunic of Westfall, Staff of Westfall, Blackened Defias Armor" },
+            WARRIOR = { mod = 0.08, short = "Chausses of Westfall & Smite's", loot = "Chausses of Westfall, Smite's Mighty Hammer, Cruel Barb, Taskmaster Axe" },
+            PALADIN = { mod = 0.08, short = "Chausses of Westfall & Smite's", loot = "Chausses of Westfall, Smite's Mighty Hammer, Polar Gauntlets" },
+            SHAMAN  = { mod = 0.06, short = "Smite's Hammer & Emberstone", loot = "Smite's Mighty Hammer, Emberstone Staff, Cruel Barb" },
+            MAGE    = { mod = 0.08, short = "Staff of Westfall & Stirring Rod", loot = "Staff of Westfall (BiS Staff), Cookie's Stirring Rod, Lavishly Jeweled Ring" },
+            PRIEST  = { mod = 0.08, short = "Staff of Westfall & Stirring Rod", loot = "Staff of Westfall (BiS Staff), Cookie's Stirring Rod, Lavishly Jeweled Ring" },
+            WARLOCK = { mod = 0.08, short = "Staff of Westfall & Stirring Rod", loot = "Staff of Westfall (BiS Staff), Cookie's Stirring Rod, Lavishly Jeweled Ring" },
+        },
+    },
+    ["Shadowfang Keep"] = {
+        sweetMin = 23, sweetMax = 27, allianceQuests = 0, hordeQuests = 3,
+        classes = {
+            PALADIN = { mod = 0.09, allianceQuests = 1, short = "Verigan's Fist / Wolfsbane Quest", loot = "Verigan's Fist / Wolfsbane (BiS Class 2H), Silverlaine's Family Seal" },
+            WARLOCK = { mod = 0.08, allianceQuests = 1, short = "Orb/Staff of Soran'ruk & Robes", loot = "Orb/Staff of Soran'ruk (Class Quest), Arugal's Robes, Belt of Arugal" },
+            MAGE    = { mod = 0.07, short = "Arugal's Robes & Belt", loot = "Arugal's Robes, Belt of Arugal, Meteor Shard, Feline Mantle" },
+            PRIEST  = { mod = 0.07, short = "Arugal's Robes & Belt", loot = "Arugal's Robes, Belt of Arugal, Feline Mantle, Seal of Sylvanas" },
+            ROGUE   = { mod = 0.02, short = "Meteor Shard & Baron's Ring", loot = "Meteor Shard, Butcher's Slicer, Silverlaine's Family Seal" },
+            HUNTER  = { mod = 0.01, short = "Baron's Ring & Shoulderpads", loot = "Silverlaine's Family Seal, Tanned Shoulderpads, Meteor Shard" },
+            WARRIOR = { mod = 0.01, short = "Baron's Ring & Haunting Blade", loot = "Silverlaine's Family Seal, Haunting Blade, Steel-clasped Bracers" },
+            DRUID   = { mod = 0.03, short = "Arugal's Belt & Baron's Ring", loot = "Belt of Arugal, Silverlaine's Family Seal, Ghostly Mantle" },
+            SHAMAN  = { mod = 0.04, short = "Arugal's Belt & Seal of Sylvanas", loot = "Seal of Sylvanas, Belt of Arugal, Silverlaine's Family Seal" },
+        },
+    },
+    ["The Stockade"] = {
+        sweetMin = 25, sweetMax = 29, allianceQuests = 6, hordeQuests = 0,
+        classes = {
+            WARRIOR = { mod = 0.07, short = "6 Fast Quests • Belt of Vindication", loot = "6 Stackable Quests (Huge XP/hr), Belt of Vindication, Iron Knuckles" },
+            PALADIN = { mod = 0.07, short = "6 Fast Quests • Belt of Vindication", loot = "6 Stackable Quests (Huge XP/hr), Belt of Vindication, Headbasher" },
+            ROGUE   = { mod = 0.07, short = "6 Fast Quests • Prison Shank", loot = "6 Stackable Quests (Huge XP/hr), Belt of Vindication, Defias Renegade Ring" },
+            HUNTER  = { mod = 0.07, short = "6 Fast Quests • Ambassador's Boots", loot = "6 Stackable Quests (Huge XP/hr), Ambassador's Boots, Darkshire Mail Leggings" },
+            DRUID   = { mod = 0.07, short = "6 Fast Quests • Kam's Walking Stick", loot = "6 Stackable Quests (Huge XP/hr), Belt of Vindication, Kam's Walking Stick" },
+            MAGE    = { mod = 0.07, short = "6 Fast Quests • Pantaloons", loot = "6 Stackable Quests (Huge XP/hr), Magistrate's Pantaloons, Town Clerk's Mittens" },
+            PRIEST  = { mod = 0.07, short = "6 Fast Quests • Pantaloons", loot = "6 Stackable Quests (Huge XP/hr), Magistrate's Pantaloons, Town Clerk's Mittens" },
+            WARLOCK = { mod = 0.07, short = "6 Fast Quests • Pantaloons", loot = "6 Stackable Quests (Huge XP/hr), Magistrate's Pantaloons, Town Clerk's Mittens" },
+            SHAMAN  = { mod = 0.06, short = "6 Fast Quests • Darkshire Mail", loot = "Darkshire Mail Leggings, Belt of Vindication, Kam's Walking Stick" },
+        },
+    },
+    ["Blackfathom Deeps"] = {
+        sweetMin = 25, sweetMax = 29, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            MAGE    = { mod = 0.08, short = "Gravestone Scepter (BiS Wand)", loot = "Gravestone Scepter (BiS Wand), Rod of the Sleepwalker, Witch's Finger" },
+            PRIEST  = { mod = 0.08, short = "Gravestone Scepter (BiS Wand)", loot = "Gravestone Scepter (BiS Wand), Rod of the Sleepwalker, Witch's Finger" },
+            WARLOCK = { mod = 0.08, short = "Gravestone Scepter (BiS Wand)", loot = "Gravestone Scepter (BiS Wand), Rod of the Sleepwalker, Dark Ritual Leggings" },
+            WARRIOR = { mod = 0.07, short = "Strike of the Hydra & Outlaw Sabre", loot = "Strike of the Hydra (2H Sword), Outlaw Sabre, Arctic Buckler" },
+            PALADIN = { mod = 0.07, short = "Strike of the Hydra & Buckler", loot = "Strike of the Hydra (2H Sword), Arctic Buckler, Beetle Clasps" },
+            SHAMAN  = { mod = 0.07, short = "Strike of the Hydra & Rod", loot = "Strike of the Hydra, Rod of the Sleepwalker, Outlaw Sabre" },
+            ROGUE   = { mod = 0.07, short = "Outlaw Sabre & Dreamer's Chest", loot = "Outlaw Sabre (1H Sword), Dreamer's Chestguard, Torturing Poker" },
+            HUNTER  = { mod = 0.07, short = "Outlaw Sabre & Naga Heartpiercer", loot = "Outlaw Sabre, Naga Heartpiercer, Dreamer's Chestguard" },
+            DRUID   = { mod = 0.07, short = "Dreamer's Chest & Sleepwalker Rod", loot = "Dreamer's Chestguard, Rod of the Sleepwalker, Staghide Armguards" },
+        },
+    },
+    ["Excavation Site: Wetlands"] = {
+        sweetMin = 27, sweetMax = 31, allianceQuests = 4, hordeQuests = 3,
+        classes = {
+            WARRIOR = { mod = 0.06, short = "Heavehammer & Ironwood Destroyer", loot = "Heavehammer, Ironwood Destroyer, Daewyn's Girdle, Dirt-Heavy Bracers" },
+            PALADIN = { mod = 0.06, short = "Heavehammer & Ironwood Destroyer", loot = "Heavehammer, Ironwood Destroyer, Daewyn's Girdle, Healer's Staff" },
+            SHAMAN  = { mod = 0.06, short = "Heavehammer & Healer's Staff", loot = "Heavehammer, Healer's Staff, Ironwood Destroyer, Daewyn's Girdle" },
+            ROGUE   = { mod = 0.06, short = "Hornbeam Heft & Stabilizer", loot = "Hornbeam Heft, Songblade Stabilizer, Knife-Polishing Rag" },
+            HUNTER  = { mod = 0.06, short = "Dustcover & Songblade Stabilizer", loot = "Explorer's League Dustcover, Hornbeam Heft, Songblade Stabilizer" },
+            DRUID   = { mod = 0.06, short = "Healer's Staff & Hornbeam Heft", loot = "Healer's Staff, Hornbeam Heft, Curl of Life, Daewyn's Girdle" },
+            MAGE    = { mod = 0.06, short = "Healer's Staff & Curl of Life", loot = "Healer's Staff, Curl of Life, Explorer's League Dustcover" },
+            PRIEST  = { mod = 0.06, short = "Healer's Staff & Curl of Life", loot = "Healer's Staff, Curl of Life, Explorer's League Dustcover" },
+            WARLOCK = { mod = 0.06, short = "Healer's Staff & Curl of Life", loot = "Healer's Staff, Curl of Life, Explorer's League Dustcover" },
+        },
+    },
+    ["City of Dalaran"] = {
+        sweetMin = 29, sweetMax = 32, allianceQuests = 3, hordeQuests = 3,
+        classes = {
+            MAGE    = { mod = 0.07, short = "Spellguard Pauldrons & Arcane Rod", loot = "Spellguard Pauldrons, Arcane Infused Rod, Renewing Footpads" },
+            PRIEST  = { mod = 0.07, short = "Spellguard Pauldrons & Footpads", loot = "Spellguard Pauldrons, Renewing Footpads, Arcane Infused Rod" },
+            WARLOCK = { mod = 0.07, short = "Spellguard Pauldrons & Arcane Rod", loot = "Spellguard Pauldrons, Arcane Infused Rod, Renewing Footpads" },
+            WARRIOR = { mod = 0.05, short = "Defender of Dalaran & Pendant", loot = "Defender of Dalaran, Fallen Guard's Pendant, Thorn Protecting Girdle" },
+            PALADIN = { mod = 0.06, short = "Defender of Dalaran & Footpads", loot = "Defender of Dalaran, Renewing Footpads, Fallen Guard's Pendant" },
+            ROGUE   = { mod = 0.05, short = "Fallen Guard's Pendant & Cloak", loot = "Fallen Guard's Pendant, Vine Pruner's Cloak, Thorn Protecting Girdle" },
+            HUNTER  = { mod = 0.05, short = "Fallen Guard's Pendant & Cloak", loot = "Fallen Guard's Pendant, Vine Pruner's Cloak, Thorn Protecting Girdle" },
+            DRUID   = { mod = 0.06, short = "Renewing Footpads & Pendant", loot = "Renewing Footpads, Fallen Guard's Pendant, Spellguard Pauldrons" },
+            SHAMAN  = { mod = 0.06, short = "Defender of Dalaran & Footpads", loot = "Defender of Dalaran, Renewing Footpads, Fallen Guard's Pendant" },
+        },
+    },
+    ["Gnomeregan"] = {
+        sweetMin = 31, sweetMax = 35, allianceQuests = 7, hordeQuests = 4,
+        classes = {
+            ROGUE   = { mod = 0.08, short = "Triprunner Dungarees (+18 Agi BiS)", loot = "Triprunner Dungarees (+18 Agi BiS Legs), Electrocutioner Lagnut, Toxic Revenger" },
+            HUNTER  = { mod = 0.08, short = "Triprunner Dungarees (+18 Agi BiS)", loot = "Triprunner Dungarees (+18 Agi BiS Legs), Hi-tech Supergun, Shoni's Disarming Tool" },
+            DRUID   = { mod = 0.08, short = "Triprunner Dungarees & Pummeler", loot = "Triprunner Dungarees (+18 Agi BiS Legs), Manual Crowd Pummeler, Civinad Robes" },
+            MAGE    = { mod = 0.04, short = "Civinad Robes & Gigaflux Cap", loot = "Civinad Robes, Electromagnetic Gigaflux Reactivator, Talvash's Gold Ring" },
+            PRIEST  = { mod = 0.04, short = "Civinad Robes & Gold Ring", loot = "Civinad Robes, Talvash's/Nogg's Gold Ring, Acidic Walkers" },
+            WARLOCK = { mod = 0.04, short = "Civinad Robes & Gigaflux Cap", loot = "Civinad Robes, Electromagnetic Gigaflux Reactivator, Acidic Walkers" },
+            WARRIOR = { mod = 0.02, short = "Thermaplugg's Arm (Long Run)", loot = "Thermaplugg's Left Arm, Phalanx Leggings, Talvash's/Nogg's Gold Ring" },
+            PALADIN = { mod = 0.02, short = "Thermaplugg's Arm (Long Run)", loot = "Thermaplugg's Left Arm, Phalanx Leggings, Talvash's Gold Ring" },
+            SHAMAN  = { mod = 0.03, short = "Thermaplugg's Arm & Civinad Robes", loot = "Thermaplugg's Left Arm, Civinad Robes, Nogg's Gold Ring" },
+        },
+    },
+    ["Razorfen Kraul"] = {
+        sweetMin = 30, sweetMax = 35, allianceQuests = 3, hordeQuests = 5,
+        classes = {
+            WARRIOR = { mod = 0.07, short = "Corpsemaker (BiS 2H) & Tusken Helm", loot = "Corpsemaker (BiS 2H Axe), Tusken Helm, Pugilist Bracers, Marbled Buckler" },
+            PALADIN = { mod = 0.07, short = "Corpsemaker (BiS 2H) & Tusken Helm", loot = "Corpsemaker (BiS 2H Axe), Tusken Helm, Pugilist Bracers, Marbled Buckler" },
+            SHAMAN  = { mod = 0.07, short = "Corpsemaker (BiS 2H) & Buckler", loot = "Corpsemaker (BiS 2H Axe), Marbled Buckler, Pugilist Bracers, Tiger Band" },
+            ROGUE   = { mod = 0.05, short = "Swinetusk Shank & Vendetta", loot = "Swinetusk Shank, Vendetta, Archer's Trousers, Monkey/Tiger Ring" },
+            HUNTER  = { mod = 0.05, short = "Archer's Trousers & Monkey Ring", loot = "Archer's Trousers, Wolfclaw Gloves, Monkey/Tiger Ring, Swinetusk Shank" },
+            DRUID   = { mod = 0.04, short = "Archer's Trousers & Rings", loot = "Archer's Trousers, Pugilist Bracers, Monkey/Tiger/Snake Ring" },
+            MAGE    = { mod = 0.00, short = "Berylline Pads (Few Caster Drops)", loot = "Berylline Pads, Mourning Shawl, Snake Hoop (Low Caster Loot)" },
+            PRIEST  = { mod = 0.00, short = "Berylline Pads (Few Caster Drops)", loot = "Berylline Pads, Mourning Shawl, Snake Hoop (Low Caster Loot)" },
+            WARLOCK = { mod = 0.00, short = "Berylline Pads (Few Caster Drops)", loot = "Berylline Pads, Mourning Shawl, Snake Hoop (Low Caster Loot)" },
+        },
+    },
+    ["Scarlet Monastery"] = {
+        sweetMin = 35, sweetMax = 42, allianceQuests = 3, hordeQuests = 4,
+        classes = {
+            WARRIOR = { mod = 0.09, short = "Bonebiter / Ravager & Herod Gear", loot = "Bonebiter / Sword of Serenity, Ravager, Herod's Shoulder, Raging Berserker's Helm" },
+            PALADIN = { mod = 0.09, short = "Bonebiter / Mograine's Might", loot = "Bonebiter / Sword of Serenity, Mograine's Might, Herod's Shoulder, Scarlet Shield" },
+            SHAMAN  = { mod = 0.09, short = "Ravager / Mograine's & Herod Gear", loot = "Ravager, Mograine's Might, Herod's Shoulder, Raging Berserker's Helm" },
+            MAGE    = { mod = 0.09, short = "Illusionary Rod & Whitemane's Hat", loot = "Illusionary Rod, Hypnotic Blade, Whitemane's Chapeau, Triune Amulet" },
+            PRIEST  = { mod = 0.09, short = "Whitemane's Hat & Amulet", loot = "Whitemane's Chapeau, Triune Amulet, Illusionary Rod, Hand of Righteousness" },
+            WARLOCK = { mod = 0.09, short = "Hypnotic Blade & Whitemane's Hat", loot = "Hypnotic Blade, Orb of Lorica, Whitemane's Chapeau, Illusionary Rod" },
+            ROGUE   = { mod = 0.07, short = "Sword of Serenity/Omen (BiS 1H)", loot = "Sword of Serenity / Sword of Omen (BiS 1H), Flintrock Shoulders, Gauntlets of Divinity" },
+            HUNTER  = { mod = 0.07, short = "Sword of Serenity & Scarlet Mail", loot = "Sword of Serenity / Omen, Herod's Shoulder, Raging Berserker's Helm, Gauntlets of Divinity" },
+            DRUID   = { mod = 0.07, short = "Mograine's Might & Whitemane's Hat", loot = "Mograine's Might, Whitemane's Chapeau, Triune Amulet, Flintrock Shoulders" },
+        },
+    },
+    ["The Drowned City"] = {
+        sweetMin = 36, sweetMax = 39, allianceQuests = 6, hordeQuests = 6,
+        classes = {
+            ROGUE   = { mod = 0.08, short = "14-Slot Bag & Sacrificial Sword", loot = "Ancient Voodoo Pouch (14-Slot Bag), Sacrificial Sword / I'lalai Flayer, Saltseer's Helm" },
+            WARRIOR = { mod = 0.08, short = "14-Slot Bag & Sacrificial Sword", loot = "Ancient Voodoo Pouch (14-Slot Bag), Sacrificial Sword, Rusted Troll War Belt, Chainmail" },
+            PALADIN = { mod = 0.08, short = "14-Slot Bag & Explorer's Chainmail", loot = "Ancient Voodoo Pouch (14-Slot Bag), Intrepid Explorer's Chainmail, Sacrificial Sword" },
+            HUNTER  = { mod = 0.08, short = "14-Slot Bag & Explorer's Chainmail", loot = "Ancient Voodoo Pouch (14-Slot Bag), Intrepid Explorer's Chainmail, Saltseer's Helm" },
+            SHAMAN  = { mod = 0.08, short = "14-Slot Bag & Ceremonial Mallet", loot = "Ancient Voodoo Pouch (14-Slot Bag), Ceremonial Mallet, Intrepid Explorer's Chainmail" },
+            DRUID   = { mod = 0.08, short = "14-Slot Bag & Saltseer's Helm", loot = "Ancient Voodoo Pouch (14-Slot Bag), Saltseer's Helm, Ceremonial Mallet, Mutinous Cuffs" },
+            MAGE    = { mod = 0.08, short = "14-Slot Bag & Rune-Etched Epaulets", loot = "Ancient Voodoo Pouch (14-Slot Bag), Rune-Etched Epaulets, Ceremonial Mallet, Naga Mantle" },
+            PRIEST  = { mod = 0.08, short = "14-Slot Bag & Ceremonial Mallet", loot = "Ancient Voodoo Pouch (14-Slot Bag), Ceremonial Mallet, Rune-Etched Epaulets, Naga Mantle" },
+            WARLOCK = { mod = 0.08, short = "14-Slot Bag & Rune-Etched Epaulets", loot = "Ancient Voodoo Pouch (14-Slot Bag), Rune-Etched Epaulets, Ceremonial Mallet, Naga Mantle" },
+        },
+    },
+    ["Razorfen Downs"] = {
+        sweetMin = 38, sweetMax = 43, allianceQuests = 3, hordeQuests = 3,
+        classes = {
+            ROGUE   = { mod = 0.08, short = "Vanquisher's Sword (+28 AP BiS 1H)", loot = "Vanquisher's Sword (+28 AP BiS 1H), Arachnid Gloves, Stormgale Fists" },
+            WARRIOR = { mod = 0.08, short = "Vanquisher's Sword & Carapace", loot = "Vanquisher's Sword (+28 AP BiS 1H), Carapace of Tuten'kash, Boar Champion's Belt" },
+            PALADIN = { mod = 0.07, short = "Vanquisher's Sword & Carapace", loot = "Vanquisher's Sword, Carapace of Tuten'kash, Purified Ring, Amberglow Talisman" },
+            HUNTER  = { mod = 0.06, short = "Vanquisher's Sword & Quillshooter", loot = "Vanquisher's Sword (+28 AP), Quillshooter, Arachnid Gloves, Boar Champion's Belt" },
+            DRUID   = { mod = 0.06, short = "Arachnid Gloves & Purified Ring", loot = "Arachnid Gloves, Stormgale Fists, Purified Ring, Amberglow Talisman" },
+            SHAMAN  = { mod = 0.06, short = "Boar Champion's Belt & Ring", loot = "Boar Champion's Belt, Arachnid Gloves, Purified Ring, Amberglow Talisman" },
+            MAGE    = { mod = 0.06, short = "Robes of the Lich & Amberglow", loot = "Robes of the Lich, Lich's Spellbook, Amberglow Talisman, Deathchill Armor" },
+            PRIEST  = { mod = 0.06, short = "Robes of the Lich & Purified Ring", loot = "Robes of the Lich, Purified Ring, Amberglow Talisman, Glowing Eye of Mordresh" },
+            WARLOCK = { mod = 0.06, short = "Robes of the Lich & Spellbook", loot = "Robes of the Lich, Lich's Spellbook, Deathchill Armor, Amberglow Talisman" },
+        },
+    },
+    ["Krol'dok Stronghold"] = {
+        sweetMin = 41, sweetMax = 44, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            WARRIOR = { mod = 0.06, short = "Bigger Rock on Bigger Stick", loot = "Bigger Rock on Bigger Stick, Semblance of Twilight, Twilight Initiate's Belt" },
+            PALADIN = { mod = 0.06, short = "Bigger Rock on Bigger Stick", loot = "Bigger Rock on Bigger Stick, Semblance of Twilight, Convert's Bindings" },
+            ROGUE   = { mod = 0.06, short = "Rock on Stick & Twilight Trinket", loot = "Rock on Stick, Semblance of Twilight, Twilight Initiate's Belt" },
+            HUNTER  = { mod = 0.06, short = "Rock on Stick & Twilight Trinket", loot = "Rock on Stick, Semblance of Twilight, Torn Cultist Cloak" },
+            DRUID   = { mod = 0.06, short = "Bigger Rock & Twilight Trinket", loot = "Bigger Rock on Bigger Stick, Stick No Rock, Semblance of Twilight" },
+            SHAMAN  = { mod = 0.06, short = "Bigger Rock & Twilight Trinket", loot = "Bigger Rock on Bigger Stick, Stick No Rock, Semblance of Twilight" },
+            MAGE    = { mod = 0.06, short = "Stick No Rock & Choker", loot = "Stick No Rock, Indoctrinated Choker, Semblance of Twilight, Torn Cultist Cloak" },
+            PRIEST  = { mod = 0.06, short = "Stick No Rock & Choker", loot = "Stick No Rock, Indoctrinated Choker, Semblance of Twilight, Convert's Bindings" },
+            WARLOCK = { mod = 0.06, short = "Stick No Rock & Choker", loot = "Stick No Rock, Indoctrinated Choker, Semblance of Twilight, Torn Cultist Cloak" },
+        },
+    },
+    ["Uldaman"] = {
+        sweetMin = 43, sweetMax = 47, allianceQuests = 7, hordeQuests = 5,
+        classes = {
+            WARRIOR = { mod = 0.06, short = "Stoneslayer & Rockpounder (2H)", loot = "Stoneslayer, Rockpounder, Grimlok's Charge, Cragfists, Medal of Courage" },
+            PALADIN = { mod = 0.06, short = "Stoneslayer & Rockpounder (2H)", loot = "Stoneslayer, Rockpounder, Skullplate Bracers, Explorer's League Lodestar" },
+            SHAMAN  = { mod = 0.06, short = "Rockpounder & Grimlok's Charge", loot = "Rockpounder, Grimlok's Charge, Energized Stone Circle, Medal of Courage" },
+            ROGUE   = { mod = 0.03, short = "Medal of Courage & Pith Helmet", loot = "Medal of Courage, Adventurer's Pith Helmet, Charged Leather Bracers" },
+            HUNTER  = { mod = 0.04, short = "Grimlok's Charge & Pith Helmet", loot = "Grimlok's Charge (+15 Agi Polearm), Adventurer's Pith Helmet, Medal of Courage" },
+            DRUID   = { mod = 0.04, short = "Pith Helmet & Lodestar", loot = "Adventurer's Pith Helmet, Explorer's League Lodestar, Medal of Courage" },
+            MAGE    = { mod = 0.03, short = "Doomsayer's Robe & Stone Circle", loot = "Doomsayer's Robe, Energized Stone Circle, Ironshod Bludgeon" },
+            PRIEST  = { mod = 0.04, short = "Explorer's Lodestar & Robe", loot = "Explorer's League Lodestar, Doomsayer's Robe, Energized Stone Circle" },
+            WARLOCK = { mod = 0.03, short = "Doomsayer's Robe & Stone Circle", loot = "Doomsayer's Robe, Doomcaller's Pants, Energized Stone Circle" },
+        },
+    },
+    ["Zul'Farrak"] = {
+        sweetMin = 45, sweetMax = 50, allianceQuests = 7, hordeQuests = 7,
+        classes = {
+            WARRIOR = { mod = 0.09, short = "Carrot on a Stick & Mason's Ring", loot = "Carrot on a Stick (+3% Mount), Mason's Fraternity Ring, Sul'thraze / Big Bad Pauldrons" },
+            PALADIN = { mod = 0.09, short = "Carrot on a Stick & Mason's Ring", loot = "Carrot on a Stick (+3% Mount), Mason's Fraternity Ring, Sul'thraze, Jumanza Grips" },
+            ROGUE   = { mod = 0.09, short = "Carrot on a Stick & Mason's Ring", loot = "Carrot on a Stick (+3% Mount), Mason's Fraternity Ring, Sang'thraze, Eyegouger" },
+            HUNTER  = { mod = 0.09, short = "Carrot on a Stick & Mason's Ring", loot = "Carrot on a Stick (+3% Mount), Mason's Fraternity Ring, Diabolic Skiver, Gahz'rilla Scale" },
+            DRUID   = { mod = 0.09, short = "Carrot on a Stick & Mason's Ring", loot = "Carrot on a Stick (+3% Mount), Mason's Fraternity Ring, Zum'rah's Vexing Cane" },
+            SHAMAN  = { mod = 0.09, short = "Carrot on a Stick & Mason's Ring", loot = "Carrot on a Stick (+3% Mount), Mason's Fraternity Ring, Zum'rah's Cane, Gahz'rilla Scale" },
+            MAGE    = { mod = 0.09, short = "Carrot on a Stick & Bad Mojo Mask", loot = "Carrot on a Stick (+3% Mount), Bad Mojo Mask, Zum'rah's Vexing Cane, Spellshifter Rod" },
+            PRIEST  = { mod = 0.09, short = "Carrot on a Stick & Bad Mojo Mask", loot = "Carrot on a Stick (+3% Mount), Bad Mojo Mask, Zum'rah's Vexing Cane, Jumanza Grips" },
+            WARLOCK = { mod = 0.09, short = "Carrot on a Stick & Bad Mojo Mask", loot = "Carrot on a Stick (+3% Mount), Bad Mojo Mask, Zum'rah's Vexing Cane, Spellshifter Rod" },
+        },
+    },
+    ["Maraudon"] = {
+        sweetMin = 47, sweetMax = 52, allianceQuests = 6, hordeQuests = 6,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Thrash Blade & Blackstone Ring (BiS)", loot = "Thrash Blade (BiS Extra-Attack 1H), Blackstone Ring (+20 AP/+1% Hit BiS), Mark of the Chosen" },
+            WARRIOR = { mod = 0.09, short = "Thrash Blade & Blackstone Ring (BiS)", loot = "Thrash Blade (BiS 1H), Blackstone Ring (+20 AP/+1% Hit BiS), Gatorbite Axe, Mark of the Chosen" },
+            PALADIN = { mod = 0.09, short = "Thrash Blade & Blackstone Ring (BiS)", loot = "Thrash Blade, Blackstone Ring (+20 AP/+1% Hit), Gizlock's Hypertech Buckler" },
+            HUNTER  = { mod = 0.09, short = "Blackstone Ring & Verdant Aim (BiS)", loot = "Blackstone Ring (+20 AP/+1% Hit BiS), Verdant Keeper's Aim, Satyr's Bow" },
+            DRUID   = { mod = 0.09, short = "Blackstone Ring & Mark of Chosen", loot = "Blackstone Ring (+20 AP/+1% Hit BiS), Mark of the Chosen, Resurgence Rod" },
+            SHAMAN  = { mod = 0.08, short = "Blackstone Ring & Resurgence Rod", loot = "Blackstone Ring (+20 AP/+1% Hit), Resurgence Rod, Gizlock's Buckler, Mark of the Chosen" },
+            MAGE    = { mod = 0.07, short = "Blade of Eternal Darkness & Rod", loot = "Blade of Eternal Darkness, Charstone Dirk, Resurgence Rod, Eye of Theradras" },
+            PRIEST  = { mod = 0.07, short = "Resurgence Rod & Eye of Theradras", loot = "Resurgence Rod, Eye of Theradras, Charstone Dirk, Noxxion's Shackles" },
+            WARLOCK = { mod = 0.07, short = "Blade of Eternal Darkness & Dirk", loot = "Blade of Eternal Darkness, Charstone Dirk, Resurgence Rod, Eye of Theradras" },
+        },
+    },
+    ["Alcaz Prison"] = {
+        sweetMin = 49, sweetMax = 52, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            WARRIOR = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            PALADIN = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            ROGUE   = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            HUNTER  = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            DRUID   = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            SHAMAN  = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            MAGE    = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            PRIEST  = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+            WARLOCK = { mod = 0.06, short = "Alcaz Prison Chains & Rare Gear", loot = "Alcaz Prison High-XP Chains & Rare 48-53 Weapons/Armor" },
+        },
+    },
+    ["Sunken Temple"] = {
+        sweetMin = 51, sweetMax = 55, allianceQuests = 6, hordeQuests = 6,
+        classes = {
+            WARRIOR = { mod = 0.09, short = "Diamond Flask (BiS Class Trinket)", loot = "Diamond Flask / Fury Visor (Lvl 50 Class Quest), Dragon's Call, Hakkar Chain" },
+            PALADIN = { mod = 0.09, short = "Lightforged Blade / Sanctified Orb", loot = "Lightforged Blade / Sanctified Orb (Lvl 50 Class Quest), Hakkar Chain" },
+            HUNTER  = { mod = 0.09, short = "Devilsaur Eye / Tooth (Class BiS)", loot = "Devilsaur Eye / Devilsaur Tooth (Lvl 50 Class Quest), Dragonstalker Spike" },
+            ROGUE   = { mod = 0.08, short = "Ebon Mask / Whisperwalk Boots", loot = "Ebon Mask / Whisperwalk Boots (Lvl 50 Class Quest), Dragon's Call, Hakkar Chain" },
+            PRIEST  = { mod = 0.09, short = "Blessed Prayer Beads (Class BiS)", loot = "Blessed Prayer Beads / Woestave (Lvl 50 Class Quest), Atal'ai Gear" },
+            MAGE    = { mod = 0.08, short = "Arcane Crystal Pendant / Fire Ruby", loot = "Arcane Crystal Pendant / Fire Ruby (Lvl 50 Class Quest), Hakkar Chain" },
+            WARLOCK = { mod = 0.08, short = "Soul Harvester / Abyss Shard", loot = "Soul Harvester / Abyss Shard (Lvl 50 Class Quest), Atal'ai Gear" },
+            DRUID   = { mod = 0.08, short = "Grizzled Pelt / Moonstone (Class)", loot = "Grizzled Pelt / Forest's Embrace (Lvl 50 Class Quest), Atal'ai Gear" },
+            SHAMAN  = { mod = 0.08, short = "Enamored Water Spirit (Class BiS)", loot = "Enamored Water Spirit / AzuriteFist (Lvl 50 Class Quest), Hakkar Chain" },
+        },
+    },
+    ["Blackrock Depths"] = {
+        sweetMin = 53, sweetMax = 59, allianceQuests = 10, hordeQuests = 10,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Hand of Justice (BiS Trinket) & Attune", loot = "Hand of Justice (BiS Trinket), Barman Shanker, Onyxia/MC Attunement (10+ Quests)" },
+            WARRIOR = { mod = 0.09, short = "Hand of Justice & Gladiator Chain", loot = "Hand of Justice (BiS), Savage Gladiator Chain (BiS), Ironfoe, Onyxia/MC Attunement" },
+            PALADIN = { mod = 0.09, short = "Hand of Justice & Second Wind", loot = "Hand of Justice, Second Wind, Ironfoe, Onyxia/MC Attunement (10+ Quests)" },
+            HUNTER  = { mod = 0.09, short = "Savage Gladiator Chain & HoJ", loot = "Savage Gladiator Chain (BiS), Hand of Justice, Blackcrow, Onyxia/MC Attunement" },
+            DRUID   = { mod = 0.09, short = "Hand of Justice & Second Wind", loot = "Hand of Justice, Second Wind, Nagmara's Belt, Onyxia/MC Attunement" },
+            SHAMAN  = { mod = 0.09, short = "Hand of Justice & Gladiator Chain", loot = "Hand of Justice, Savage Gladiator Chain, Second Wind, Onyxia/MC Attunement" },
+            MAGE    = { mod = 0.09, short = "Ban'thok Sash & Omnicast Boots", loot = "Ban'thok Sash (BiS Hit), Omnicast Boots, Boreal Mantle, Onyxia/MC Attunement" },
+            PRIEST  = { mod = 0.09, short = "Second Wind & Omnicast Boots", loot = "Second Wind (BiS Trinket), Omnicast Boots, Kentic Amice, Onyxia/MC Attunement" },
+            WARLOCK = { mod = 0.09, short = "Ban'thok Sash & Omnicast Boots", loot = "Ban'thok Sash (BiS Hit), Omnicast Boots, Spritecaster Cape, Onyxia/MC Attunement" },
+        },
+    },
+    ["Lower Blackrock Spire"] = {
+        sweetMin = 56, sweetMax = 60, allianceQuests = 6, hordeQuests = 6,
+        classes = {
+            ROGUE   = { mod = 0.08, short = "Voone's Grips (+2% Hit) & Blackcrow", loot = "Voone's Vice Grips, Blackcrow, Omokk's Girth Restrainer, UBRS Key" },
+            HUNTER  = { mod = 0.09, short = "Voone's Grips (+2% Hit) & Blackcrow", loot = "Voone's Vice Grips (+2% Hit BiS), Blackcrow (BiS Crossbow), Truestrike Pre-Run" },
+            WARRIOR = { mod = 0.08, short = "Omokk's Girdle (+1% Crit/+1% Hit)", loot = "Omokk's Girth Restrainer, Voone's Vice Grips, Blackcrow, UBRS Key" },
+            DRUID   = { mod = 0.08, short = "Omokk's Girdle & Hands of Power", loot = "Omokk's Girth Restrainer, Hands of Power, UBRS Key" },
+            PALADIN = { mod = 0.08, short = "Omokk's Girdle & Hands of Power", loot = "Omokk's Girth Restrainer, Hands of Power, UBRS Key" },
+            SHAMAN  = { mod = 0.08, short = "Hands of Power & Skyshroud", loot = "Hands of Power, Skyshroud Leggings, Omokk's Girth Restrainer, UBRS Key" },
+            MAGE    = { mod = 0.08, short = "Hands of Power & Skyshroud Legs", loot = "Hands of Power (BiS Gloves), Skyshroud Leggings (BiS Legs), UBRS Key" },
+            PRIEST  = { mod = 0.08, short = "Hands of Power & Truefaith Pattern", loot = "Hands of Power, Pattern: Robe of the Archmage / Truefaith, UBRS Key" },
+            WARLOCK = { mod = 0.08, short = "Hands of Power & Skyshroud Legs", loot = "Hands of Power (BiS Gloves), Skyshroud Leggings (BiS Legs), UBRS Key" },
+        },
+    },
+    ["Dire Maul"] = {
+        sweetMin = 56, sweetMax = 60, allianceQuests = 6, hordeQuests = 6,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Tarnished Elven Ring (+1% Hit BiS)", loot = "Tarnished Elven Ring (+1% Hit BiS), Royal Seal Class Trinket, Counterattack Lodestone" },
+            HUNTER  = { mod = 0.09, short = "Tarnished Elven Ring & Barbarous Blade", loot = "Tarnished Elven Ring (+1% Hit BiS), Barbarous Blade (+1% Crit/+60 AP BiS), Royal Seal" },
+            WARRIOR = { mod = 0.09, short = "Tarnished Elven Ring & Barbarous Blade", loot = "Tarnished Elven Ring (+1% Hit BiS), Barbarous Blade, Counterattack Lodestone" },
+            DRUID   = { mod = 0.09, short = "Tarnished Elven Ring & Padre's", loot = "Tarnished Elven Ring, Padre's Trousers, Royal Seal Class Trinket" },
+            PALADIN = { mod = 0.09, short = "Padre's Trousers & Royal Seal", loot = "Padre's Trousers, Mindtap Talisman, Tarnished Elven Ring, Royal Seal" },
+            SHAMAN  = { mod = 0.09, short = "Padre's Trousers & Mindtap Talisman", loot = "Padre's Trousers, Mindtap Talisman, Tarnished Elven Ring, Royal Seal" },
+            MAGE    = { mod = 0.09, short = "Rod of the Ogre Magi & Mindtap", loot = "Rod of the Ogre Magi (BiS Staff), Mindtap Talisman, Tempest Talisman, Royal Seal" },
+            PRIEST  = { mod = 0.09, short = "Padre's Trousers & Mindtap (BiS)", loot = "Padre's Trousers (BiS Legs), Mindtap Talisman (BiS Trinket), Royal Seal" },
+            WARLOCK = { mod = 0.09, short = "Rod of the Ogre Magi & Felcloth", loot = "Rod of the Ogre Magi (BiS Staff), Mindtap Talisman, Royal Seal, Dreadsteed" },
+        },
+    },
+    ["Blackmaw Hold"] = {
+        sweetMin = 56, sweetMax = 60, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            ROGUE   = { mod = 0.07, short = "Great Bear Claw & Nama's Necklace", loot = "Great Bear Claw, Wild Malleus, Nama's Cherished Necklace" },
+            WARRIOR = { mod = 0.07, short = "Great Bear Claw & Wild Malleus", loot = "Great Bear Claw, Wild Malleus, Nama's Cherished Necklace" },
+            HUNTER  = { mod = 0.07, short = "Great Bear Claw & Nama's Necklace", loot = "Great Bear Claw, Staff of Wild Beasts, Nama's Cherished Necklace" },
+            DRUID   = { mod = 0.07, short = "Staff of Wild Beasts & Bear Claw", loot = "Staff of Wild Beasts, Great Bear Claw, Nama's Cherished Necklace" },
+            PALADIN = { mod = 0.07, short = "Wild Malleus & Nama's Necklace", loot = "Wild Malleus, Great Bear Claw, Nama's Cherished Necklace" },
+            SHAMAN  = { mod = 0.07, short = "Wild Malleus & Staff of Beasts", loot = "Wild Malleus, Staff of Wild Beasts, Nama's Cherished Necklace" },
+            MAGE    = { mod = 0.07, short = "Staff of Wild Beasts & Necklace", loot = "Staff of Wild Beasts, Wild Malleus, Nama's Cherished Necklace" },
+            PRIEST  = { mod = 0.07, short = "Staff of Wild Beasts & Malleus", loot = "Staff of Wild Beasts, Wild Malleus, Nama's Cherished Necklace" },
+            WARLOCK = { mod = 0.07, short = "Staff of Wild Beasts & Necklace", loot = "Staff of Wild Beasts, Wild Malleus, Nama's Cherished Necklace" },
+        },
+    },
+    ["Upper Blackrock Spire"] = {
+        sweetMin = 58, sweetMax = 60, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Dal'Rend's, Truestrike & +2% Crit", loot = "Dal'Rend's Swords, Blackhand's Breadth (+2% Crit BiS), Truestrike Shoulders (+2% Hit)" },
+            WARRIOR = { mod = 0.09, short = "Dal'Rend's, Truestrike & +2% Crit", loot = "Dal'Rend's Swords, Blackhand's Breadth (+2% Crit BiS), Truestrike Shoulders (+2% Hit)" },
+            HUNTER  = { mod = 0.09, short = "Blackhand's Breadth & Truestrike", loot = "Blackhand's Breadth (+2% Crit BiS), Truestrike Shoulders (+2% Hit), Dal'Rend's" },
+            PALADIN = { mod = 0.09, short = "Blackhand's Breadth & Briarwood", loot = "Blackhand's Breadth (+2% Crit), Briarwood Reed, Truestrike Shoulders" },
+            DRUID   = { mod = 0.09, short = "Blackhand's Breadth & Briarwood", loot = "Blackhand's Breadth (+2% Crit), Briarwood Reed, Truestrike Shoulders" },
+            SHAMAN  = { mod = 0.09, short = "Blackhand's Breadth & Briarwood", loot = "Blackhand's Breadth (+2% Crit), Briarwood Reed, Eye of the Beast" },
+            MAGE    = { mod = 0.09, short = "Briarwood Reed & Eye of the Beast", loot = "Briarwood Reed (BiS Trinket), Eye of the Beast (+2% Spell Crit BiS), BWL Attune" },
+            PRIEST  = { mod = 0.09, short = "Briarwood Reed & Tooth of Gnarr", loot = "Briarwood Reed (BiS Trinket), Eye of the Beast, Tooth of Gnarr, BWL Attune" },
+            WARLOCK = { mod = 0.09, short = "Briarwood Reed & Eye of the Beast", loot = "Briarwood Reed (BiS Trinket), Eye of the Beast (+2% Spell Crit BiS), BWL Attune" },
+        },
+    },
+    ["Scholomance"] = {
+        sweetMin = 58, sweetMax = 60, allianceQuests = 5, hordeQuests = 5,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Mirah's Song (BiS 1H) & Cadaverous", loot = "Mirah's Song (BiS Offhand Sword), Cadaverous Armor (BiS Chest), Shadowcraft Cap" },
+            WARRIOR = { mod = 0.09, short = "Mirah's Song & Deathbone/Valor", loot = "Mirah's Song (BiS 1H), Cadaverous Armor, Helm of Valor, Bonelicing Hatchet" },
+            HUNTER  = { mod = 0.08, short = "Cadaverous Armor & Bonelicing", loot = "Cadaverous Armor (BiS Chest), Bonelicing Hatchet, Beaststalker's Cap" },
+            PALADIN = { mod = 0.08, short = "Deathbone Set & Penelope's Rose", loot = "Penelope's Rose, Cadaverous Armor, Lightforge Helm, Deathbone Plate" },
+            DRUID   = { mod = 0.08, short = "Cadaverous Armor & Penelope's Rose", loot = "Cadaverous Armor (BiS Feral), Penelope's Rose, Wildheart Cowl" },
+            SHAMAN  = { mod = 0.09, short = "Helm of Latent Power (Class BiS)", loot = "Helm of Latent Power (Shaman Class Quest), Penelope's Rose, Cadaverous Armor" },
+            MAGE    = { mod = 0.09, short = "Witchblade, Necropile & T0 Head", loot = "Witchblade, Necropile Robe, Star of Mystaria, Magister's Crown" },
+            PRIEST  = { mod = 0.09, short = "Penelope's Rose & Necropile Set", loot = "Penelope's Rose, Alanna's Embrace, Necropile Robe, Devout Crown" },
+            WARLOCK = { mod = 0.09, short = "Witchblade, Necropile & Dreadsteed", loot = "Witchblade, Necropile Robe, Dreadsteed Alchemy Lab, Dreadmist Mask" },
+        },
+    },
+    ["Stratholme"] = {
+        sweetMin = 58, sweetMax = 60, allianceQuests = 6, hordeQuests = 6,
+        classes = {
+            ROGUE   = { mod = 0.09, short = "Mask of the Unforgiven & Baron Cape", loot = "Mask of the Unforgiven (+2% Hit/+1% Crit BiS), Cape of the Black Baron (BiS)" },
+            WARRIOR = { mod = 0.09, short = "Mask of the Unforgiven & Baron Cape", loot = "Mask of the Unforgiven (+2% Hit/+1% Crit BiS), Cape of the Black Baron (BiS)" },
+            HUNTER  = { mod = 0.09, short = "Cape of the Black Baron & Mask", loot = "Cape of the Black Baron (BiS Cloak), Mask of the Unforgiven, Diana's Pearl Necklace" },
+            PALADIN = { mod = 0.09, short = "Fordring's Seal & Animated Chain", loot = "Fordring's Seal (BiS Ring), Animated Chain Necklace (BiS Neck), Mask of Unforgiven" },
+            DRUID   = { mod = 0.09, short = "Fordring's Seal &Mask of Unforgiven", loot = "Fordring's Seal (BiS Heal Ring), Mask of the Unforgiven (BiS Feral), Animated Chain" },
+            SHAMAN  = { mod = 0.09, short = "Fordring's Seal & Animated Chain", loot = "Fordring's Seal (BiS Ring), Animated Chain Necklace (BiS Neck), Baron Cape" },
+            MAGE    = { mod = 0.09, short = "Crimson Felt Hat & Fordring's Seal", loot = "Crimson Felt Hat (BiS Head), Diana's Pearl Necklace, Tome of Conjure Food VII" },
+            PRIEST  = { mod = 0.09, short = "Robes of the Exalted & Fordring's", loot = "Robes of the Exalted (BiS Chest), Fordring's Seal (BiS Ring), Animated Chain" },
+            WARLOCK = { mod = 0.09, short = "Crimson Felt Hat & Pearl Necklace", loot = "Crimson Felt Hat (BiS Head), Diana's Pearl Necklace,Choker of theiren" },
+        },
+    },
+    ["Shaper's Terrace"] = {
+        sweetMin = 58, sweetMax = 60, allianceQuests = 4, hordeQuests = 4,
+        classes = {
+            WARRIOR = { mod = 0.08, short = "Crystalline Pauldrons & Titan Relic", loot = "Crystalline Pauldrons, Potent Treads, Titan Relic Pre-BiS Rewards" },
+            PALADIN = { mod = 0.08, short = "Crystalline Pauldrons & Titan Relic", loot = "Crystalline Pauldrons, Potent Treads, Titan Relic Pre-BiS Rewards" },
+            ROGUE   = { mod = 0.08, short = "Potent Treads & Titan Relic", loot = "Potent Treads, Crystalline Pauldrons, Titan Relic Pre-BiS Rewards" },
+            HUNTER  = { mod = 0.08, short = "Potent Treads & Titan Relic", loot = "Potent Treads, Crystalline Pauldrons, Titan Relic Pre-BiS Rewards" },
+            DRUID   = { mod = 0.08, short = "Potent Treads & Titan Relic", loot = "Potent Treads, Crystalline Pauldrons, Titan Relic Pre-BiS Rewards" },
+            SHAMAN  = { mod = 0.08, short = "Crystalline Pauldrons & Titan Relic", loot = "Crystalline Pauldrons, Potent Treads, Titan Relic Pre-BiS Rewards" },
+            MAGE    = { mod = 0.08, short = "Potent Treads & Titan Relic", loot = "Potent Treads, Crystalline Pauldrons, Titan Relic Pre-BiS Rewards" },
+            PRIEST  = { mod = 0.08, short = "Potent Treads & Titan Relic", loot = "Potent Treads, Crystalline Pauldrons, Titan Relic Pre-BiS Rewards" },
+            WARLOCK = { mod = 0.08, short = "Potent Treads & Titan Relic", loot = "Potent Treads, Crystalline Pauldrons, Titan Relic Pre-BiS Rewards" },
+        },
+    },
+}
+addon.Data.DungeonProfiles["The Temple of Atal'Hakkar"] = addon.Data.DungeonProfiles["Sunken Temple"]
+
+function addon.Data.GetDungeonProfile(zoneName, playerClass, playerFaction)
+    if type(zoneName) ~= "string" or zoneName == "" then return nil end
+    local prof = addon.Data.DungeonProfiles[zoneName]
+    if not prof then
+        local lower = string.lower(zoneName)
+        local noThe = string.gsub(lower, "^the%s+", "")
+        for k, v in pairs(addon.Data.DungeonProfiles) do
+            local kLower = string.lower(k)
+            if kLower == lower or string.gsub(kLower, "^the%s+", "") == noThe then
+                prof = v
+                break
+            end
+        end
+    end
+    if not prof then return nil end
+
+    local pClass = playerClass or "WARRIOR"
+    local pFaction = playerFaction or "Alliance"
+    local cEntry = (prof.classes and prof.classes[pClass]) or (prof.classes and prof.classes.WARRIOR) or {}
+    local questCount
+    if pFaction == "Alliance" then
+        questCount = cEntry.allianceQuests or prof.allianceQuests or 3
+    else
+        questCount = cEntry.hordeQuests or prof.hordeQuests or 3
+    end
+
+    return {
+        sweetMin = prof.sweetMin,
+        sweetMax = prof.sweetMax,
+        questCount = questCount,
+        classMod = cEntry.mod or 0.04,
+        shortLoot = cEntry.short or "Dungeon Gear & Quests",
+        loot = cEntry.loot or "Dungeon Boss Drops & Quest Rewards",
+    }
 end
