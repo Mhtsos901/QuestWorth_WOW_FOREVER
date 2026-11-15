@@ -842,10 +842,14 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     local applyHubMod = false
 
     local dungeonMod, dungeonModReason, dungeonProf, vsWorldQuesting = 0, nil, nil, nil
+    local isCompletedDungeon = false
     if isDungeon then
         dungeonMod, dungeonModReason, dungeonProf, vsWorldQuesting = Engine.GetClassDungeonModifier(zoneName, zoneInfo, playerClass, playerFaction, playerLevel)
         if dungeonProf and dungeonProf.sweetMin and dungeonProf.sweetMax then
             sweetMin, sweetMax = dungeonProf.sweetMin, dungeonProf.sweetMax
+        end
+        if addon.DB and addon.DB.IsDungeonCompleted then
+            isCompletedDungeon = addon.DB.IsDungeonCompleted(zoneName)
         end
     end
 
@@ -1044,8 +1048,14 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     -- Pure Zone & Dungeon Efficiency Score (strictly independent of quests already picked up in log)
     local finalWorth = math.max(0.0, math.min(1.0, baseZoneScore))
     local isLowValue = false
-    if isDungeon and finalWorth < 0.62 and (not effectiveMin or playerLevel >= effectiveMin) then
+    if isDungeon and not isCompletedDungeon and finalWorth < 0.62 and (not effectiveMin or playerLevel >= effectiveMin) then
         isLowValue = true
+    end
+
+    if isCompletedDungeon then
+        status = "Completed Dungeon"
+        vsWorldQuesting = "Completed (One-Time Quests Done — Farm Only for Specific Drops)"
+        recommendation = "Marked as Completed. One-time dungeon quests are done; only revisit for specific boss drops or uncheck to include in advisor recommendations."
     end
 
     -- Concise 1-line explanation for Zone Advisor sidebar rows (never displays "X in Log")
@@ -1053,7 +1063,9 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
     if isDungeon then
         local dQuests = (dungeonProf and dungeonProf.questCount) or 3
         local dShort = (dungeonProf and dungeonProf.shortLoot) or (hubName or status)
-        if effectiveMin and playerLevel < effectiveMin then
+        if isCompletedDungeon then
+            shortReason = string.format("Completed • %s", dShort)
+        elseif effectiveMin and playerLevel < effectiveMin then
             shortReason = string.format("Lvl %d+ (%dQ) • %s", effectiveMin, dQuests, dShort)
         elseif maxLevel and playerLevel > maxLevel then
             shortReason = string.format("%s • %s", status, dShort)
@@ -1080,6 +1092,7 @@ function Engine.CalculateWorldMapZoneWorth(zoneName)
         zoneName = zoneName,
         worth = finalWorth,
         isLowValue = isLowValue,
+        isCompletedDungeon = isCompletedDungeon,
         minLevel = minLevel,
         maxLevel = maxLevel,
         effectiveMin = effectiveMin,

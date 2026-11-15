@@ -330,6 +330,13 @@ local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showCli
                 0.9, 0.9, 0.9, 1, 1, 1
             )
         end
+        if d.isCompletedDungeon then
+            tooltip:AddDoubleLine(
+                "|cff00ccffCompletion:|r",
+                "|cff00ff00Completed by Player (Click checkbox to unmark)|r",
+                0.9, 0.9, 0.9, 1, 1, 1
+            )
+        end
     else
         tooltip:AddLine(" ")
     end
@@ -619,6 +626,67 @@ local function CreateAdvisorRow(index, parent)
     subFS:SetJustifyH("LEFT")
     subFS:SetWordWrap(false)
     row.SubText = subFS
+
+    local doneBtn = CreateFrame("Button", "WorthItAdvisorRowDoneBtn" .. index, row)
+    doneBtn:SetSize(16, 16)
+    doneBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -3)
+    doneBtn:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
+
+    local doneBg = doneBtn:CreateTexture(nil, "BACKGROUND")
+    doneBg:SetAllPoints(doneBtn)
+    doneBg:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
+    doneBtn.Bg = doneBg
+
+    local doneCheck = doneBtn:CreateTexture(nil, "OVERLAY")
+    doneCheck:SetAllPoints(doneBtn)
+    doneCheck:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    doneCheck:Hide()
+    doneBtn.Check = doneCheck
+
+    doneBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT", 4, 0)
+        GameTooltip:ClearLines()
+        local isDone = self.zoneName and addon.DB and addon.DB.IsDungeonCompleted and addon.DB.IsDungeonCompleted(self.zoneName)
+        if isDone then
+            GameTooltip:AddLine("Dungeon Completed", 0, 1, 0)
+            GameTooltip:AddLine("Click to unmark as completed and return to Advisor list.", 1, 1, 1, true)
+        else
+            GameTooltip:AddLine("Mark Dungeon Completed", 1, 0.82, 0)
+            GameTooltip:AddLine("Click if you already cleared this dungeon's quests.", 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+
+    doneBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    doneBtn:SetScript("OnClick", function(self)
+        if not self.zoneName or not addon.DB or not addon.DB.ToggleDungeonCompleted then return end
+        local nowDone = addon.DB.ToggleDungeonCompleted(self.zoneName)
+        if nowDone then
+            self.Check:Show()
+        else
+            self.Check:Hide()
+        end
+        if PlaySound then
+            pcall(PlaySound, SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+        end
+        if UI.UpdateZoneAdvisor then
+            UI.UpdateZoneAdvisor()
+        end
+        if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(self) then
+            if self:IsShown() then
+                local onEnter = self:GetScript("OnEnter")
+                if onEnter then onEnter(self) end
+            else
+                GameTooltip:Hide()
+            end
+        end
+    end)
+
+    doneBtn:Hide()
+    row.DoneBtn = doneBtn
 
     row:SetScript("OnEnter", function(self)
         if not self.data then return end
@@ -918,11 +986,11 @@ function UI.UpdateZoneAdvisor()
                 if res then
                     local include = true
                     if curFilter == "OPTIMAL" then
-                        include = (res.worth >= 0.70)
+                        include = (res.worth >= 0.70) and not (isDung and res.isCompletedDungeon)
                     elseif curFilter == "DUNGEONS" then
                         include = isDung
-                    elseif isDung and res.worth < 0.70 then
-                        -- In "ALL" view, hide dungeons that are not worth running (< 70%) compared to World Questing
+                    elseif isDung and (res.worth < 0.70 or res.isCompletedDungeon) then
+                        -- In "ALL" view, hide dungeons that are completed or not worth running (< 70%) compared to World Questing
                         include = false
                     end
 
@@ -949,6 +1017,11 @@ function UI.UpdateZoneAdvisor()
     local homeCont = addon.Engine and addon.Engine.GetHomeContinent and addon.Engine.GetHomeContinent(playerRace)
 
     table.sort(list, function(a, b)
+        local aDone = (a and a.isDungeon and a.res and a.res.isCompletedDungeon) and true or false
+        local bDone = (b and b.isDungeon and b.res and b.res.isCompletedDungeon) and true or false
+        if aDone ~= bDone then
+            return not aDone
+        end
         local aWorth = (a and a.res and a.res.worth) or 0
         local bWorth = (b and b.res and b.res.worth) or 0
         if math.abs(aWorth - bWorth) > 0.005 then
@@ -979,12 +1052,16 @@ function UI.UpdateZoneAdvisor()
         row.isDungeon = item.isDungeon
         row.rankIndex = i
 
-        local badge = Utils.FormatBadge(item.res.worth, false)
+        local isDoneDung = item.isDungeon and item.res.isCompletedDungeon
+        local badge = isDoneDung and "|cff00ff00[Done]|r" or Utils.FormatBadge(item.res.worth, false)
         row.Badge:SetText(badge)
 
         -- Dynamic text hierarchy matching Quest Log styling (Gold for optimal, White for standard, Silver for low)
-        local nameColor = (item.res.worth >= 0.70 and "|cffffd100") or (item.res.worth >= 0.50 and "|cffffffff") or "|cffaaaaaa"
-        local prefix = (i == 1 and item.res.worth >= 0.70 and "|cff00ff00#1 |r")
+        local nameColor = (isDoneDung and "|cff88cc88")
+            or (item.res.worth >= 0.70 and "|cffffd100")
+            or (item.res.worth >= 0.50 and "|cffffffff")
+            or "|cffaaaaaa"
+        local prefix = (not isDoneDung and i == 1 and item.res.worth >= 0.70 and "|cff00ff00#1 |r")
             or (item.res.isLowValue and "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t ")
             or ""
         row.Name:SetText(prefix .. nameColor .. item.name .. "|r")
@@ -992,7 +1069,9 @@ function UI.UpdateZoneAdvisor()
         -- Line 2 explanation right inside the sidebar row
         if row.SubText then
             local reason = item.res.shortReason or item.res.status or ""
-            if i == 1 and item.res.worth >= 0.70 then
+            if isDoneDung then
+                row.SubText:SetText("|cff66aa66" .. reason .. "|r")
+            elseif i == 1 and item.res.worth >= 0.70 then
                 row.SubText:SetText("|cff88ff88Best Pick: " .. reason .. "|r")
             elseif item.res.worth >= 0.70 then
                 row.SubText:SetText("|cffb0b0b0" .. reason .. "|r")
@@ -1005,10 +1084,34 @@ function UI.UpdateZoneAdvisor()
         local cont = item.continent or (item.res and item.res.continent)
         UpdateRowContinentIcon(row.ContinentIcon, cont, item.isDungeon)
 
-        if item.res.minLevel and item.res.maxLevel then
-            row.RightTag:SetText(string.format("|cff888888(%d-%d)|r", item.res.minLevel, item.res.maxLevel))
-        else
-            row.RightTag:SetText("")
+        if row.RightTag then
+            row.RightTag:ClearAllPoints()
+            if item.isDungeon then
+                row.RightTag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -22, -4)
+            else
+                row.RightTag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -4)
+            end
+            if item.res.minLevel and item.res.maxLevel then
+                row.RightTag:SetText(string.format("|cff888888(%d-%d)|r", item.res.minLevel, item.res.maxLevel))
+            else
+                row.RightTag:SetText("")
+            end
+        end
+
+        if row.DoneBtn then
+            if item.isDungeon then
+                row.DoneBtn.zoneName = item.name
+                if isDoneDung then
+                    row.DoneBtn.Check:Show()
+                else
+                    row.DoneBtn.Check:Hide()
+                end
+                row.DoneBtn:Show()
+            else
+                row.DoneBtn.zoneName = nil
+                row.DoneBtn.Check:Hide()
+                row.DoneBtn:Hide()
+            end
         end
 
         row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -((i - 1) * rowHeight))

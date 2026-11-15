@@ -18,6 +18,7 @@ local DEFAULT_SETTINGS = {
     showZoneAdvisor = true,
     highlightQuestObjects = true,
     zoneAdvisorFilter = "ALL",
+    completedDungeons = {},
     weights = {
         reward = 0.40,
         classFit = 0.25,
@@ -66,6 +67,10 @@ local function SanitizeSettings(db)
         db.zoneAdvisorFilter = "ALL"
     end
 
+    if type(db.completedDungeons) ~= "table" then
+        db.completedDungeons = {}
+    end
+
     -- Verify weights table and values
     if type(db.weights) ~= "table" then
         db.weights = CopyDefaults(DEFAULT_SETTINGS.weights, {})
@@ -106,6 +111,71 @@ function DB.Initialize()
     QuestWorthDB = WorthItDB
 
     addon.db = WorthItDB
+end
+
+local function FindMatchingDungeonKey(tbl, zoneName)
+    if type(tbl) ~= "table" or type(zoneName) ~= "string" or zoneName == "" then
+        return nil
+    end
+    if tbl[zoneName] ~= nil then
+        return zoneName
+    end
+    local lower = zoneName:lower():match("^%s*(.-)%s*$")
+    local lowerNoThe = lower:gsub("^the%s+", "")
+    for k in pairs(tbl) do
+        if type(k) == "string" then
+            local kl = k:lower():match("^%s*(.-)%s*$")
+            if kl == lower or kl:gsub("^the%s+", "") == lowerNoThe then
+                return k
+            end
+        end
+    end
+    return nil
+end
+
+function DB.IsDungeonCompleted(zoneName)
+    local db = addon.db or WorthItDB
+    if type(db) ~= "table" or type(db.completedDungeons) ~= "table" or type(zoneName) ~= "string" or zoneName == "" then
+        return false
+    end
+    local key = FindMatchingDungeonKey(db.completedDungeons, zoneName)
+    return key ~= nil and db.completedDungeons[key] == true
+end
+
+function DB.SetDungeonCompleted(zoneName, completed)
+    local db = addon.db or WorthItDB
+    if type(db) ~= "table" or type(zoneName) ~= "string" or zoneName == "" then
+        return false
+    end
+    if type(db.completedDungeons) ~= "table" then
+        db.completedDungeons = {}
+    end
+    local isDone = completed and true or false
+    if isDone then
+        local existing = FindMatchingDungeonKey(db.completedDungeons, zoneName)
+        db.completedDungeons[existing or zoneName] = true
+    else
+        local lower = zoneName:lower():match("^%s*(.-)%s*$")
+        local lowerNoThe = lower:gsub("^the%s+", "")
+        for k in pairs(db.completedDungeons) do
+            if type(k) == "string" then
+                local kl = k:lower():match("^%s*(.-)%s*$")
+                if kl == lower or kl:gsub("^the%s+", "") == lowerNoThe then
+                    db.completedDungeons[k] = nil
+                end
+            end
+        end
+        db.completedDungeons[zoneName] = nil
+    end
+    if addon.Engine and addon.Engine.InvalidateCache then
+        addon.Engine.InvalidateCache()
+    end
+    return isDone
+end
+
+function DB.ToggleDungeonCompleted(zoneName)
+    local nextState = not DB.IsDungeonCompleted(zoneName)
+    return DB.SetDungeonCompleted(zoneName, nextState)
 end
 
 function DB.Reset()

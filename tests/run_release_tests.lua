@@ -1229,6 +1229,89 @@ assert_true(foundLowDungInDungeonsTab, "Zone Advisor 'DUNGEONS' filter displays 
 addonTable.db.zoneAdvisorFilter = "ALL"
 addonTable.UI.UpdateZoneAdvisor()
 
+-- Verify Dungeon Completed button state, persistence, filtering, sorting, tooltip, and unmark toggle
+do
+local function findAdvisorRow(targetName, expectDungeonFlag)
+    for r = 1, 100 do
+        local row = _G["WorthItAdvisorRow" .. r]
+        if not row or not row:IsShown() then break end
+        if targetName and row.data and row.data.zoneName == targetName then
+            return row
+        end
+        if not targetName and expectDungeonFlag ~= nil and (row.isDungeon == expectDungeonFlag) then
+            return row
+        end
+    end
+    return nil
+end
+
+assert_true(not addonTable.DB.IsDungeonCompleted("The Drowned City"), "Dungeon starts uncompleted")
+local regularRow = findAdvisorRow(nil, false)
+assert_not_nil(regularRow, "Zone Advisor 'ALL' view shows regular zone rows")
+assert_true(not regularRow.DoneBtn:IsShown(), "Regular zone row hides DoneBtn")
+
+local allDungRow = findAdvisorRow(nil, true)
+assert_not_nil(allDungRow, "Zone Advisor 'ALL' view shows at least one recommended dungeon row")
+assert_true(allDungRow.DoneBtn and allDungRow.DoneBtn:IsShown(), "Recommended dungeon row shows DoneBtn")
+assert_true(not allDungRow.DoneBtn.Check:IsShown(), "Uncompleted dungeon DoneBtn check starts hidden")
+
+local clickedDungName = allDungRow.DoneBtn.zoneName
+allDungRow.DoneBtn:GetScript("OnClick")(allDungRow.DoneBtn)
+assert_true(addonTable.DB.IsDungeonCompleted(clickedDungName), "Clicking DoneBtn marks dungeon completed in SavedVariables")
+assert_true(addonTable.DB.IsDungeonCompleted(clickedDungName:lower():gsub("^the%s+", "")), "IsDungeonCompleted normalizes case and leading 'The '")
+
+local evalCompleted = addonTable.Engine.CalculateWorldMapZoneWorth(clickedDungName)
+assert_true(evalCompleted and evalCompleted.isCompletedDungeon == true, "Engine flags completed dungeon evaluation")
+assert_eq(evalCompleted.status, "Completed Dungeon", "Completed dungeon sets Completed status")
+assert_true(not evalCompleted.isLowValue, "Completed dungeon is not flagged as Low Value")
+
+assert_true(findAdvisorRow(clickedDungName, nil) == nil, "Completed dungeon is hidden from 'ALL' view")
+addonTable.db.zoneAdvisorFilter = "OPTIMAL"
+addonTable.UI.UpdateZoneAdvisor()
+assert_true(findAdvisorRow(clickedDungName, nil) == nil, "Completed dungeon is hidden from 'OPTIMAL' view")
+
+addonTable.db.zoneAdvisorFilter = "DUNGEONS"
+addonTable.UI.UpdateZoneAdvisor()
+local completedDungRow = findAdvisorRow(clickedDungName, nil)
+assert_not_nil(completedDungRow, "Completed dungeon remains visible in 'DUNGEONS' view so user can unmark it")
+assert_true(completedDungRow.DoneBtn:IsShown() and completedDungRow.DoneBtn.Check:IsShown(), "Completed dungeon DoneBtn check texture is visible in 'DUNGEONS' view")
+assert_true(completedDungRow.Badge:GetText():find("Done") ~= nil, "Completed dungeon badge shows [Done]")
+
+-- Verify tooltip displays completion info
+completedDungRow:GetScript("OnEnter")(completedDungRow)
+local foundCompletedTooltipLine = false
+for _, ln in ipairs(GameTooltip.lines or {}) do
+    if ln.left and ln.left:find("Completion:") and ln.right and ln.right:find("Completed by Player") then
+        foundCompletedTooltipLine = true
+    end
+end
+assert_true(foundCompletedTooltipLine, "Completed dungeon tooltip displays completion status")
+GameTooltip:Hide()
+
+-- Verify completed dungeon sorts after incomplete dungeons in 'DUNGEONS' view
+local seenCompleted = false
+local sortedDoneAfterIncomplete = true
+for r = 1, 100 do
+    local row = _G["WorthItAdvisorRow" .. r]
+    if not row or not row:IsShown() then break end
+    if row.data and row.data.isCompletedDungeon then
+        seenCompleted = true
+    elseif seenCompleted then
+        sortedDoneAfterIncomplete = false
+    end
+end
+assert_true(sortedDoneAfterIncomplete, "Completed dungeons sort after incomplete dungeons in 'DUNGEONS' view")
+
+-- Unmark via clicking DoneBtn again and verify it returns to 'ALL' view
+completedDungRow.DoneBtn:GetScript("OnClick")(completedDungRow.DoneBtn)
+assert_true(not addonTable.DB.IsDungeonCompleted(clickedDungName), "Second click on DoneBtn unmarks completed dungeon")
+addonTable.db.zoneAdvisorFilter = "ALL"
+addonTable.UI.UpdateZoneAdvisor()
+local restoredRow = findAdvisorRow(clickedDungName, nil)
+assert_not_nil(restoredRow, "Unmarked recommended dungeon reappears in 'ALL' view")
+assert_true(not restoredRow.DoneBtn.Check:IsShown(), "Unmarked dungeon DoneBtn check texture is hidden")
+end
+
 -- Duplicate zone aliases flagged so Advisor shows primary 'Riverglades' and omits alias 'Riverlands'
 assert_true(addonTable.Data.Zones["Riverglades"].isAlias == nil, "Riverglades is primary zone (not alias)")
 assert_true(addonTable.Data.Zones["Riverlands"].isAlias == true, "Riverlands marked as alias")
