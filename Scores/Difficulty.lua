@@ -102,6 +102,8 @@ local function CalculateBaseDifficulty(questLevel, playerLevel, isMelee)
     if isMelee then
         if delta >= -3 and delta <= 0 then
             return "yellow_sweetspot", 1.00
+        elseif delta == -4 then
+            return "green", 0.80
         elseif delta == 1 then
             return "yellow_high", 0.85
         elseif delta == 2 then

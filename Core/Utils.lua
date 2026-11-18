@@ -15,30 +15,45 @@ local Utils = addon.Utils
 addon.Player = addon.Player or {}
 local Player = addon.Player
 
-function Player.Update()
-    local okLvl, lvl = pcall(UnitLevel, "player")
-    if okLvl and lvl and lvl > 0 then
-        Player.level = lvl
+function Player.Update(forcedLevel)
+    local okLvl, lvl
+    if UnitLevel then okLvl, lvl = pcall(UnitLevel, "player") end
+    local liveLvl = (okLvl and type(lvl) == "number" and lvl > 0) and lvl or nil
+    if type(forcedLevel) == "number" and forcedLevel > 0 then
+        Player._pendingMinLevel = forcedLevel
+        Player.level = math.max(liveLvl or 0, forcedLevel)
+    elseif liveLvl then
+        if Player._pendingMinLevel and liveLvl == (Player._pendingMinLevel - 1) then
+            Player.level = Player._pendingMinLevel
+        else
+            Player._pendingMinLevel = nil
+            Player.level = liveLvl
+        end
     else
         Player.level = Player.level or 1
     end
 
-    local okClass, locClass, engClass = pcall(UnitClass, "player")
+    local okClass, locClass, engClass
+    if UnitClass then okClass, locClass, engClass = pcall(UnitClass, "player") end
     if okClass and (engClass or locClass) then
         Player.class = engClass or locClass
     else
         Player.class = Player.class or "WARRIOR"
     end
 
-    local okRace, locRace, engRace = pcall(UnitRace, "player")
+    local okRace, locRace, engRace
+    if UnitRace then okRace, locRace, engRace = pcall(UnitRace, "player") end
     if okRace and (engRace or locRace) then
         Player.race = engRace or locRace
     else
         Player.race = Player.race or "Human"
     end
 
-    local okFaction, faction = pcall(UnitFactionGroup, "player")
-    if okFaction and faction then
+    local okFaction, faction
+    if UnitFactionGroup then okFaction, faction = pcall(UnitFactionGroup, "player") end
+    if okFaction and faction and faction ~= "Neutral" and faction ~= "" then
+        Player.faction = faction
+    elseif okFaction and faction and not Player.faction then
         Player.faction = faction
     else
         Player.faction = Player.faction or "Alliance"
@@ -51,23 +66,71 @@ function Player.Update()
 end
 
 function Player.GetLevel()
+    if type(UnitLevel) == "function" then
+        local lvl = UnitLevel("player")
+        if type(lvl) == "number" and lvl > 0 then
+            if Player._pendingMinLevel and lvl >= Player._pendingMinLevel then
+                Player._pendingMinLevel = nil
+            end
+            if not (Player._pendingMinLevel and lvl < Player._pendingMinLevel) and lvl ~= Player.level then
+                Player.Update()
+            end
+        end
+    end
     if not Player.level or Player.level <= 0 then Player.Update() end
     return Player.level or 1
 end
 
 function Player.GetClass()
+    if type(UnitClass) == "function" then
+        local locC, engC = UnitClass("player")
+        local liveC = engC or locC
+        if liveC and liveC ~= Player.class then
+            Player.Update()
+        end
+    end
     if not Player.class then Player.Update() end
     return Player.class or "WARRIOR"
 end
 
 function Player.GetRace()
+    if type(UnitRace) == "function" then
+        local locR, engR = UnitRace("player")
+        local liveR = engR or locR
+        if liveR and liveR ~= Player.race then
+            Player.Update()
+        end
+    end
     if not Player.race then Player.Update() end
     return Player.race or "Human"
 end
 
 function Player.GetFaction()
+    if type(UnitFactionGroup) == "function" then
+        local fac = UnitFactionGroup("player")
+        if fac and fac ~= "Neutral" and fac ~= "" and fac ~= Player.faction then
+            Player.Update()
+        end
+    end
     if not Player.faction then Player.Update() end
     return Player.faction or "Alliance"
+end
+
+function Player.GetCharacterKey()
+    if type(UnitName) ~= "function" then return "Default" end
+    local name = UnitName("player")
+    if type(name) ~= "string" or name == "" or name == "Unknown" then
+        return "Default"
+    end
+    local realm = (type(GetRealmName) == "function" and GetRealmName()) or nil
+    realm = (type(realm) == "string" and realm ~= "") and realm or "DefaultRealm"
+    if name == Player._cachedUnitName and realm == Player._cachedRealmName and Player._cachedCharKey then
+        return Player._cachedCharKey
+    end
+    Player._cachedUnitName = name
+    Player._cachedRealmName = realm
+    Player._cachedCharKey = name .. "-" .. realm
+    return Player._cachedCharKey
 end
 
 -- Initialize player profile immediately upon loading Core/Utils.lua
@@ -81,55 +144,172 @@ function Utils.SafeCall(func, ...)
     return pcall(func, ...)
 end
 
+-- Resolve the Quest Log index for a questID across modern & legacy APIs (O(1) cached per log snapshot)
+local _questLogIndexMap = {}
+local _questLogIndexScanned = false
+local _questLogIndexLastCount = -1
+
+function Utils.GetQuestLogIndex(questID)
+    if not questID or type(questID) ~= "number" or questID <= 0 or questID ~= questID then return nil end
+    if C_QuestLog and C_QuestLog.GetLogIndexForQuestID then
+        local okIdx, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
+        if okIdx and type(idx) == "number" and idx > 0 then
+            _questLogIndexMap[questID] = idx
+            return idx
+        end
+    end
+    if GetQuestLogIndexByID then
+        local okIdx, idx = pcall(GetQuestLogIndexByID, questID)
+        if okIdx and type(idx) == "number" and idx > 0 then
+            _questLogIndexMap[questID] = idx
+            return idx
+        end
+    end
+    local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                       or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+    if _questLogIndexScanned and numEntries == _questLogIndexLastCount then
+        local cachedIdx = _questLogIndexMap[questID]
+        if cachedIdx then
+            if C_QuestLog and C_QuestLog.GetInfo then
+                local ok, info = pcall(C_QuestLog.GetInfo, cachedIdx)
+                if ok and info and not info.isHeader and info.questID == questID then
+                    return cachedIdx
+                end
+            elseif GetQuestLogTitle then
+                local ok, _, _, _, isH, _, _, _, qid = pcall(GetQuestLogTitle, cachedIdx)
+                if ok and not isH and qid == questID then
+                    return cachedIdx
+                end
+            end
+            _questLogIndexScanned = false
+        else
+            return nil
+        end
+    end
+
+    wipe(_questLogIndexMap)
+    _questLogIndexScanned = true
+    _questLogIndexLastCount = numEntries
+    for i = 1, numEntries do
+        if C_QuestLog and C_QuestLog.GetInfo then
+            local ok, info = pcall(C_QuestLog.GetInfo, i)
+            if ok and info and not info.isHeader and info.questID and info.questID > 0 then
+                _questLogIndexMap[info.questID] = i
+            end
+        elseif GetQuestLogTitle then
+            local ok, _, _, _, isH, _, _, _, qid = pcall(GetQuestLogTitle, i)
+            if ok and not isH and qid and qid > 0 then
+                _questLogIndexMap[qid] = i
+            end
+        end
+    end
+    return _questLogIndexMap[questID]
+end
+
+-- Helper: Check if questID corresponds to the currently open NPC QuestFrame offer/turn-in dialog
+function Utils.IsActiveOfferQuest(questID, titleHint)
+    if not questID or type(questID) ~= "number" or questID <= 0 then return false end
+    if not (QuestFrame and QuestFrame:IsShown()) then return false end
+    if (QuestFrameGreetingPanel and QuestFrameGreetingPanel:IsShown()) or (QuestFrameProgressPanel and QuestFrameProgressPanel:IsShown()) then return false end
+
+    if addon._activeOfferQuestID and addon._activeOfferQuestID == questID then
+        return true
+    end
+    if GetQuestID then
+        local okID, cID = pcall(GetQuestID)
+        if okID and cID and cID == questID then
+            return true
+        end
+    end
+    if QuestFrame.questID and QuestFrame.questID == questID then
+        return true
+    end
+    if QuestFrameDetailPanel and QuestFrameDetailPanel.questID and QuestFrameDetailPanel.questID == questID then
+        return true
+    end
+    if GetTitleText then
+        local okT, offerTitle = pcall(GetTitleText)
+        if okT and type(offerTitle) == "string" and offerTitle ~= "" then
+            local cleanOffer = Utils.CleanQuestTitle(offerTitle)
+            cleanOffer = string.gsub(cleanOffer, "^%s*%[%d+%+?%]%s*", "")
+            local candidate = titleHint
+            if not candidate or candidate == "" then
+                if C_QuestLog and C_QuestLog.GetTitleForQuestID then
+                    local okQT, qt = pcall(C_QuestLog.GetTitleForQuestID, questID)
+                    if okQT and qt and qt ~= "" then candidate = qt end
+                end
+            end
+            if candidate and candidate ~= "" then
+                local cleanCand = Utils.CleanQuestTitle(candidate)
+                cleanCand = string.gsub(cleanCand, "^%s*%[%d+%+?%]%s*", "")
+                if cleanOffer ~= "" and (cleanOffer == cleanCand or string.lower(cleanOffer) == string.lower(cleanCand)) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- Helper: Temporarily selects questID so legacy/hybrid functions
 -- (GetQuestLogItemLink, GetQuestLogRewardXP, GetQuestLogRewardMoney) read the right quest.
--- CRITICAL SAFETY: Never change C_QuestLog.SetSelectedQuest if the QuestMap is open!
--- Changing map selection programmatically causes map pins and details to constantly flicker!
+-- CRITICAL SAFETY: Never change C_QuestLog.SetSelectedQuest if the QuestMap is open,
+-- and NEVER run callback against the wrong currently-selected quest!
 function Utils.WithSelectedQuest(questID, callback)
     if not questID or questID <= 0 then
         return callback()
     end
 
-    if C_QuestLog and C_QuestLog.IsOnQuest then
-        local okOn, isOn = pcall(C_QuestLog.IsOnQuest, questID)
-        if okOn and not isOn then
-            return nil
-        end
-    elseif GetQuestLogIndexByID then
-        local okIdx, idx = pcall(GetQuestLogIndexByID, questID)
-        if okIdx and (not idx or idx <= 0) then
+    local idx = Utils.GetQuestLogIndex(questID)
+    if not idx then
+        if C_QuestLog and C_QuestLog.IsOnQuest then
+            local okOn, isOn = pcall(C_QuestLog.IsOnQuest, questID)
+            if not (okOn and isOn) then
+                return nil
+            end
+        else
             return nil
         end
     end
 
     local currID = C_QuestLog and C_QuestLog.GetSelectedQuest and C_QuestLog.GetSelectedQuest()
-    if currID == questID then
+    local currIdx = GetQuestLogSelection and GetQuestLogSelection()
+    local idMatches = (currID and currID > 0) and (currID == questID)
+    local idxMatches = (idx and currIdx and currIdx > 0) and (currIdx == idx)
+    local idSynced = (not currID or currID <= 0 or currID == questID)
+    local idxSynced = (not idx or not currIdx or currIdx <= 0 or currIdx == idx)
+    if (idMatches or idxMatches) and idSynced and idxSynced then
         return callback()
     end
 
-    -- If the map or quest details is currently open, DO NOT alter the player's active map selection
+    -- If the map or quest details is currently open, DO NOT alter selection or read the wrong quest
     local mapShown = (QuestMapFrame and QuestMapFrame:IsShown()) or (WorldMapFrame and WorldMapFrame:IsShown())
     if mapShown then
-        return callback()
+        return nil
     end
 
-    local prevIndex = nil
+    local prevSelectedQuestID = currID
+    local prevIndex = currIdx
     local changed = false
 
-    if GetQuestLogSelection and SelectQuestLogEntry and C_QuestLog and C_QuestLog.GetLogIndexForQuestID then
-        local ok, currIdx = pcall(GetQuestLogSelection)
-        if ok then prevIndex = currIdx end
-        local okIdx, idx = pcall(C_QuestLog.GetLogIndexForQuestID, questID)
-        if okIdx and idx and idx > 0 and idx ~= prevIndex then
-            pcall(SelectQuestLogEntry, idx)
-            changed = true
-        end
+    if C_QuestLog and C_QuestLog.SetSelectedQuest then
+        local okSel = pcall(C_QuestLog.SetSelectedQuest, questID)
+        if okSel then changed = true end
+    end
+    if SelectQuestLogEntry and idx and idx > 0 and idx ~= prevIndex then
+        local okSel = pcall(SelectQuestLogEntry, idx)
+        if okSel then changed = true end
     end
 
     local okCall, res1, res2, res3 = pcall(callback)
 
-    if changed and prevIndex and SelectQuestLogEntry then
-        pcall(SelectQuestLogEntry, prevIndex)
+    if changed then
+        if prevIndex and prevIndex > 0 and SelectQuestLogEntry then
+            pcall(SelectQuestLogEntry, prevIndex)
+        end
+        if prevSelectedQuestID and prevSelectedQuestID > 0 and C_QuestLog and C_QuestLog.SetSelectedQuest then
+            pcall(C_QuestLog.SetSelectedQuest, prevSelectedQuestID)
+        end
     end
 
     if okCall then
@@ -186,178 +366,281 @@ end
 -- Persistent quest rewards cache (item links & vendor values)
 local _questRewardsCache = {}
 
+local function ResolveRewardItemLink(kind, index, questID)
+    local link = nil
+    local unresolvedItemID = nil
+    local count = nil
+
+    local infoFunc = (kind == "choice") and GetQuestLogChoiceInfo or GetQuestLogRewardInfo
+    if infoFunc then
+        local okI, r1, _, r3 = pcall(infoFunc, index, questID)
+        if okI then
+            local q = (type(r1) == "table" and r1.quantity) or (type(r3) == "number" and r3)
+            if type(q) == "number" and q > 0 then count = q end
+        end
+    end
+
+    if C_QuestLog and C_QuestLog.GetQuestRewardItemLink then
+        local ok, l = pcall(C_QuestLog.GetQuestRewardItemLink, index, questID)
+        if ok and l then link = l end
+        if not link then
+            local ok2, l2 = pcall(C_QuestLog.GetQuestRewardItemLink, questID, index)
+            if ok2 and l2 then link = l2 end
+        end
+    end
+
+    if not link and GetQuestLogItemLink then
+        local ok, l = pcall(GetQuestLogItemLink, kind, index, questID)
+        if ok and l then link = l end
+    end
+
+    local slotUnresolved = false
+
+    if not link then
+        if infoFunc then
+            local ok, r1, _, r3, _, _, r6 = pcall(infoFunc, index, questID)
+            if ok then
+                local q = (type(r1) == "table" and r1.quantity) or (type(r3) == "number" and r3)
+                if type(q) == "number" and q > 0 then count = q end
+                local itemID = (type(r1) == "table" and r1.itemID) or (type(r6) == "number" and r6) or (type(r1) == "number" and r1)
+                if type(itemID) == "number" and itemID > 0 then
+                    link = select(2, addon.SafeGetItemInfo(itemID))
+                    if not link then
+                        unresolvedItemID = itemID
+                        if C_Item and C_Item.RequestLoadItemDataByID then
+                            pcall(C_Item.RequestLoadItemDataByID, itemID)
+                        end
+                        link = "item:" .. itemID
+                    end
+                elseif r1 == nil then
+                    slotUnresolved = true
+                end
+            end
+        end
+    end
+
+    if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
+        local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, index, questID)
+        if ok and type(info) == "table" and type(info.quantity) == "number" and info.quantity > 0 then
+            count = count or info.quantity
+        end
+        local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
+        if ok and type(itemID) == "number" and itemID > 0 then
+            link = select(2, addon.SafeGetItemInfo(itemID))
+            if not link then
+                unresolvedItemID = itemID
+                if C_Item and C_Item.RequestLoadItemDataByID then
+                    pcall(C_Item.RequestLoadItemDataByID, itemID)
+                end
+                link = "item:" .. itemID
+            end
+        elseif ok and info == nil then
+            slotUnresolved = true
+        end
+    end
+
+    return link, (unresolvedItemID ~= nil) or slotUnresolved, count or 1
+end
+
+local function ResolveOfferRewardItem(kind, idx)
+    local link = GetQuestItemLink and GetQuestItemLink(kind, idx)
+    local count = 1
+    local unresolved = false
+    if GetQuestItemInfo then
+        local ok, itemName, _, numItems, _, _, itemID = pcall(GetQuestItemInfo, kind, idx)
+        if ok then
+            if type(numItems) == "number" and numItems > 0 then
+                count = numItems
+            end
+            if not link then
+                if type(itemID) == "number" and itemID > 0 then
+                    local cachedLink = select(2, addon.SafeGetItemInfo(itemID))
+                    if cachedLink then
+                        link = cachedLink
+                    else
+                        if C_Item and C_Item.RequestLoadItemDataByID then
+                            pcall(C_Item.RequestLoadItemDataByID, itemID)
+                        end
+                        link = "item:" .. itemID
+                        unresolved = true
+                    end
+                elseif itemName == nil then
+                    unresolved = true
+                end
+            end
+        end
+    end
+    return link, unresolved, count
+end
+
 function Utils.GetQuestRewardData(questID)
     if not Utils.IsValidQuestID(questID) then
-        return {}, {}, 0, 0
+        return {}, {}, 0, 0, false
     end
 
     if _questRewardsCache[questID] then
         local c = _questRewardsCache[questID]
-        return c.choices, c.rewards, c.maxChoicePrice, c.fixedPricesSum
+        return c.choices, c.rewards, c.maxChoicePrice, c.fixedPricesSum, false
     end
 
     local choices = {}
+    local choiceCounts = {}
     local rewards = {}
     local maxChoicePrice = 0
     local fixedPricesSum = 0
     local anyUncachedItem = false
 
-    -- Modern C_QuestLog resolution (independent of player's UI selection!)
-    local numChoices = (C_QuestLog and C_QuestLog.GetNumQuestLogChoices and C_QuestLog.GetNumQuestLogChoices(questID)) or 0
+    -- 1. Direct questID resolution across Modern C_QuestLog & Hybrid Classic globals (independent of Quest Log focus!)
+    local numChoices = 0
+    if C_QuestLog and C_QuestLog.GetNumQuestLogChoices then
+        local ok, n = pcall(C_QuestLog.GetNumQuestLogChoices, questID)
+        if ok and type(n) == "number" and n > 0 then numChoices = n end
+    end
+    if numChoices == 0 and GetNumQuestLogChoices then
+        local ok, n = pcall(GetNumQuestLogChoices, questID)
+        if ok and type(n) == "number" and n > 0 then numChoices = n end
+    end
     for i = 1, numChoices do
-        local link = nil
-        if C_QuestLog and C_QuestLog.GetQuestRewardItemLink then
-            local ok, l = pcall(C_QuestLog.GetQuestRewardItemLink, i, questID)
-            if ok and l then link = l end
-            if not link then
-                local ok2, l2 = pcall(C_QuestLog.GetQuestRewardItemLink, questID, i)
-                if ok2 and l2 then link = l2 end
-            end
-        end
-        if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
-            local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, i, questID)
-            local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
-            if ok and itemID then
-                link = select(2, addon.SafeGetItemInfo(itemID))
-                if not link then
-                    anyUncachedItem = true
-                end
-            end
-        end
+        local link, uncached, qty = ResolveRewardItemLink("choice", i, questID)
+        if uncached then anyUncachedItem = true end
         if link then
             table.insert(choices, link)
+            table.insert(choiceCounts, qty or 1)
             local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
             if not itemName then
                 anyUncachedItem = true
             end
-            sellPrice = sellPrice or 0
-            if sellPrice > maxChoicePrice then
-                maxChoicePrice = sellPrice
+            local totalSell = (sellPrice or 0) * (qty or 1)
+            if totalSell > maxChoicePrice then
+                maxChoicePrice = totalSell
             end
         end
     end
 
-    local numRewards = (C_QuestLog and C_QuestLog.GetNumQuestLogRewards and C_QuestLog.GetNumQuestLogRewards(questID)) or 0
+    local numRewards = 0
+    if C_QuestLog and C_QuestLog.GetNumQuestLogRewards then
+        local ok, n = pcall(C_QuestLog.GetNumQuestLogRewards, questID)
+        if ok and type(n) == "number" and n > 0 then numRewards = n end
+    end
+    if numRewards == 0 and GetNumQuestLogRewards then
+        local ok, n = pcall(GetNumQuestLogRewards, questID)
+        if ok and type(n) == "number" and n > 0 then numRewards = n end
+    end
     for i = 1, numRewards do
-        local link = nil
-        if C_QuestLog and C_QuestLog.GetQuestRewardItemLink then
-            local ok, l = pcall(C_QuestLog.GetQuestRewardItemLink, i, questID)
-            if ok and l then link = l end
-            if not link then
-                local ok2, l2 = pcall(C_QuestLog.GetQuestRewardItemLink, questID, i)
-                if ok2 and l2 then link = l2 end
-            end
-        end
-        if not link and C_QuestLog and C_QuestLog.GetQuestLogRewardInfo then
-            local ok, info = pcall(C_QuestLog.GetQuestLogRewardInfo, i, questID)
-            local itemID = (type(info) == "table" and info.itemID) or (type(info) == "number" and info)
-            if ok and itemID then
-                link = select(2, addon.SafeGetItemInfo(itemID))
-                if not link then
-                    anyUncachedItem = true
-                end
-            end
-        end
+        local link, uncached, qty = ResolveRewardItemLink("reward", i, questID)
+        if uncached then anyUncachedItem = true end
         if link then
             table.insert(rewards, link)
             local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
             if not itemName then
                 anyUncachedItem = true
             end
-            sellPrice = sellPrice or 0
-            fixedPricesSum = fixedPricesSum + sellPrice
+            fixedPricesSum = fixedPricesSum + ((sellPrice or 0) * (qty or 1))
         end
     end
 
-    -- Fallback: If modern APIs returned nothing, try with selected quest (only if map is not open)
-    if #choices == 0 and #rewards == 0 then
+    -- 2. Live QuestFrame dialog offer rewards (for unaccepted quests currently shown by NPC)
+    if #choices == 0 and #rewards == 0 and Utils.IsActiveOfferQuest(questID) then
+        local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
+        for i = 1, numOfferChoices do
+            local link, uncached, qty = ResolveOfferRewardItem("choice", i)
+            if uncached then anyUncachedItem = true end
+            if link then
+                table.insert(choices, link)
+                table.insert(choiceCounts, qty or 1)
+                local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+                if not itemName then
+                    anyUncachedItem = true
+                end
+                local totalSell = (sellPrice or 0) * (qty or 1)
+                if totalSell > maxChoicePrice then maxChoicePrice = totalSell end
+            end
+        end
+        local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
+        for i = 1, numOfferRewards do
+            local link, uncached, qty = ResolveOfferRewardItem("reward", i)
+            if uncached then anyUncachedItem = true end
+            if link then
+                table.insert(rewards, link)
+                local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
+                if not itemName then
+                    anyUncachedItem = true
+                end
+                fixedPricesSum = fixedPricesSum + ((sellPrice or 0) * (qty or 1))
+            end
+        end
+    end
+
+    -- 3. Last-resort fallback: temporarily select questID when map is closed
+    if #choices == 0 and #rewards == 0 and not anyUncachedItem then
         Utils.WithSelectedQuest(questID, function()
             local nC = (GetNumQuestLogChoices and GetNumQuestLogChoices(questID)) or 0
             for i = 1, nC do
                 local link = GetQuestLogItemLink and GetQuestLogItemLink("choice", i)
+                local qty = 1
+                local uncached = false
+                if GetQuestLogChoiceInfo then
+                    local okQ, r1, _, r3 = pcall(GetQuestLogChoiceInfo, i)
+                    if okQ then
+                        local q = (type(r1) == "table" and r1.quantity) or (type(r3) == "number" and r3)
+                        if type(q) == "number" and q > 0 then qty = q end
+                    end
+                end
+                if not link then
+                    link, uncached, qty = ResolveRewardItemLink("choice", i, questID)
+                end
+                if uncached then anyUncachedItem = true end
                 if link then
                     table.insert(choices, link)
+                    table.insert(choiceCounts, qty or 1)
                     local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
                     if not itemName then
                         anyUncachedItem = true
                     end
-                    sellPrice = sellPrice or 0
-                    if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
+                    local totalSell = (sellPrice or 0) * (qty or 1)
+                    if totalSell > maxChoicePrice then maxChoicePrice = totalSell end
                 end
             end
             local nR = (GetNumQuestLogRewards and GetNumQuestLogRewards(questID)) or 0
             for i = 1, nR do
                 local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", i)
+                local qty = 1
+                local uncached = false
+                if GetQuestLogRewardInfo then
+                    local okQ, r1, _, r3 = pcall(GetQuestLogRewardInfo, i)
+                    if okQ then
+                        local q = (type(r1) == "table" and r1.quantity) or (type(r3) == "number" and r3)
+                        if type(q) == "number" and q > 0 then qty = q end
+                    end
+                end
+                if not link then
+                    link, uncached, qty = ResolveRewardItemLink("reward", i, questID)
+                end
+                if uncached then anyUncachedItem = true end
                 if link then
                     table.insert(rewards, link)
                     local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
                     if not itemName then
                         anyUncachedItem = true
                     end
-                    sellPrice = sellPrice or 0
-                    fixedPricesSum = fixedPricesSum + sellPrice
+                    fixedPricesSum = fixedPricesSum + ((sellPrice or 0) * (qty or 1))
                 end
             end
         end)
-    end
-
-    -- Fallback for unaccepted quest in QuestFrame dialog
-    if #choices == 0 and #rewards == 0 and QuestFrame and QuestFrame:IsShown() then
-        local matchesOffer = false
-        if GetQuestID then
-            local okID, cID = pcall(GetQuestID)
-            if okID and cID and cID == questID then
-                matchesOffer = true
-            end
-        end
-        if not matchesOffer and GetTitleText then
-            local qTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(questID)
-            local offerTitle = GetTitleText()
-            if qTitle and offerTitle and qTitle == offerTitle then
-                matchesOffer = true
-            end
-        end
-        if matchesOffer then
-            local numOfferChoices = (GetNumQuestChoices and GetNumQuestChoices()) or 0
-            for i = 1, numOfferChoices do
-                local link = GetQuestItemLink and GetQuestItemLink("choice", i)
-                if link then
-                    table.insert(choices, link)
-                    local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
-                    if not itemName then
-                        anyUncachedItem = true
-                    end
-                    sellPrice = sellPrice or 0
-                    if sellPrice > maxChoicePrice then maxChoicePrice = sellPrice end
-                end
-            end
-            local numOfferRewards = (GetNumQuestRewards and GetNumQuestRewards()) or 0
-            for i = 1, numOfferRewards do
-                local link = GetQuestItemLink and GetQuestItemLink("reward", i)
-                if link then
-                    table.insert(rewards, link)
-                    local itemName, _, _, _, _, _, _, _, _, _, sellPrice = addon.SafeGetItemInfo(link)
-                    if not itemName then
-                        anyUncachedItem = true
-                    end
-                    sellPrice = sellPrice or 0
-                    fixedPricesSum = fixedPricesSum + sellPrice
-                end
-            end
-        end
     end
 
     -- Only cache when all item rewards have resolved item info from the server
     if (#choices > 0 or #rewards > 0) and not anyUncachedItem then
         _questRewardsCache[questID] = {
             choices = choices,
+            choiceCounts = choiceCounts,
             rewards = rewards,
             maxChoicePrice = maxChoicePrice,
             fixedPricesSum = fixedPricesSum,
         }
     end
 
-    return choices, rewards, maxChoicePrice, fixedPricesSum
+    return choices, rewards, maxChoicePrice, fixedPricesSum, anyUncachedItem
 end
 
 function Utils.ClearQuestRewardsCache(questID)
@@ -372,6 +655,7 @@ addon.ClearQuestRewardsCache = Utils.ClearQuestRewardsCache
 -- Smooth, continuous Red -> Orange -> Yellow -> Lime -> Bright Green gradient
 function Utils.GetScoreColor(score)
     score = tonumber(score) or 0.50
+    if score ~= score or score == math.huge or score == -math.huge then score = 0.50 end
     score = math.max(0.0, math.min(1.0, score))
 
     local r, g, b
@@ -393,6 +677,7 @@ end
 local _hexCache = {}
 function Utils.GetScoreColorHex(score)
     score = tonumber(score) or 0.50
+    if score ~= score or score == math.huge or score == -math.huge then score = 0.50 end
     score = math.max(0.0, math.min(1.0, score))
     local bucket = math.floor(score * 200 + 0.5)
     local cached = _hexCache[bucket]
@@ -413,15 +698,46 @@ function Utils.FormatScore(score)
     return string.format("|cff%s%d%%|r", hex, pct)
 end
 
-function Utils.FormatBadge(score, isComplete, isHard, isBankable, isLowValue)
+Utils.META_ICON = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12:0:0|t"
+
+local META_TAG_COLORS = {
+    KEY   = "|cff00ffff",
+    MOUNT = "|cffff80ff",
+    BAG   = "|cff66ff99",
+    EPIC  = "|cffa335ee",
+    CLASS = "|cffffd100",
+    BIS   = "|cff0099ff",
+}
+
+function Utils.GetMetaTagBadge(tag)
+    local key = string.upper(tostring(tag or "META"))
+    local color = META_TAG_COLORS[key] or "|cffffd100"
+    return string.format("%s[%s]|r", color, key)
+end
+
+function Utils.GetZoneMetaSummary(zoneName, countsOnly)
+    if not (zoneName and addon.Data and addon.Data.GetZoneMetaQuests) then return nil end
+    local pFaction = (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or (UnitFactionGroup and UnitFactionGroup("player"))
+    local pClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
+    if not pClass and UnitClass then
+        local _, engClass = UnitClass("player")
+        pClass = engClass
+    end
+    return addon.Data.GetZoneMetaQuests(zoneName, pFaction, pClass, countsOnly)
+end
+
+function Utils.FormatBadge(score, isComplete, isHard, isBankable, isLowValue, isMeta)
+    local showMeta = isMeta and (not addon.db or addon.db.showMetaIndicator ~= false)
+    local metaPrefix = showMeta and (Utils.META_ICON .. " ") or ""
+
     if isComplete then
-        return "|cff1aff4d[OK]|r"
+        return metaPrefix .. "|cff1aff4d[OK]|r"
     end
     score = tonumber(score) or 0.50
     if score ~= score then score = 0.50 end
     score = math.max(0.0, math.min(1.0, score))
     local pct = math.max(0, math.min(100, math.floor(score * 100 + 0.5)))
-    
+
     local hex
     if isBankable then
         -- Distinctive Warm Amber / Orange for Viability-Damped / Bankable quests (Save for later)
@@ -431,16 +747,22 @@ function Utils.FormatBadge(score, isComplete, isHard, isBankable, isLowValue)
     end
 
     local badge = string.format("|cff%s[%d%%]|r", hex, pct)
+    local statusPrefix = ""
     if isHard then
-        return "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t " .. badge
+        statusPrefix = "|TInterface\\TargetingFrame\\UI-TargetingFrame-Skull:12:12:0:0|t "
     elseif isLowValue then
-        return "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t " .. badge
+        statusPrefix = "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t "
     end
-    return badge
+    return metaPrefix .. statusPrefix .. badge
 end
+
+local _cleanTitleCache = {}
+local _cleanTitleCacheSize = 0
 
 function Utils.CleanQuestTitle(title)
     if type(title) ~= "string" or title == "" then return "" end
+    local cached = _cleanTitleCache[title]
+    if cached then return cached end
     if not string.find(title, "[|%[\r\n]") then
         return title
     end
@@ -462,6 +784,12 @@ function Utils.CleanQuestTitle(title)
         cleaned = string.gsub(cleaned, "%s*%[OK%]$", "")
         changed = (cleaned ~= prev)
     end
+    if _cleanTitleCacheSize >= 300 then
+        wipe(_cleanTitleCache)
+        _cleanTitleCacheSize = 0
+    end
+    _cleanTitleCache[title] = cleaned
+    _cleanTitleCacheSize = _cleanTitleCacheSize + 1
     return cleaned
 end
 
@@ -510,18 +838,38 @@ end
 -- Safe Quest Title/Level getter across Modern C_QuestLog, Gossip NPCs, and Legacy APIs (memoized)
 local _basicInfoCache = {}
 local _basicInfoCacheSize = 0
+local _knownQuestLevels = {}
+local _knownQuestLevelsByTitle = {}
+
+function Utils.RecordKnownQuestLevel(questID, title, level)
+    if type(level) == "number" and level > 0 then
+        if Utils.IsValidQuestID(questID) then
+            _knownQuestLevels[questID] = level
+        end
+        if type(title) == "string" and title ~= "" then
+            local clean = Utils.CleanQuestTitle(title)
+            clean = string.gsub(clean, "^%s*%[%d+%+?%]%s*", "")
+            local lower = string.lower(string.gsub(clean, "^%s*(.-)%s*$", "%1"))
+            if lower ~= "" then
+                _knownQuestLevelsByTitle[lower] = level
+            end
+        end
+    end
+end
 
 function Utils.GetQuestBasicInfo(questID)
     if not Utils.IsValidQuestID(questID) then return nil end
 
     if _basicInfoCache[questID] then
         local entry = _basicInfoCache[questID]
-        if entry.title and not string.find(entry.title, "^Quest #") then
+        if entry.title and not string.find(entry.title, "^Quest #") and not entry.isLevelFallback then
             return entry
         end
     end
 
     local title, level, isElite, isDungeon, isGroup, isHeader
+    local hasLiveTag = false
+    local inLog = false
 
     if C_QuestLog and C_QuestLog.GetTitleForQuestID then
         local ok, t = pcall(C_QuestLog.GetTitleForQuestID, questID)
@@ -540,22 +888,38 @@ function Utils.GetQuestBasicInfo(questID)
     if C_QuestLog and C_QuestLog.GetQuestTagInfo then
         local ok, tagInfo = pcall(C_QuestLog.GetQuestTagInfo, questID)
         if ok and tagInfo then
-            if tagInfo.isElite == true then
+            hasLiveTag = true
+            local tagID = tagInfo.tagID or tagInfo.worldStateID
+            local tagName = type(tagInfo.tagName) == "string" and tagInfo.tagName or ""
+            if tagInfo.isElite == true or (tagName ~= "" and (string.find(tagName, "Elite", 1, true) or (ELITE and string.find(tagName, ELITE, 1, true)))) then
                 isElite = true
-            elseif tagInfo.tagName and type(tagInfo.tagName) == "string"
-                   and (string.find(tagInfo.tagName, "Elite", 1, true) or (ELITE and string.find(tagInfo.tagName, ELITE, 1, true))) then
-                isElite = true
+            end
+            if (Enum and Enum.QuestTag and (tagID == Enum.QuestTag.Dungeon or tagID == Enum.QuestTag.Raid or tagID == Enum.QuestTag.Heroic))
+               or tagID == 81 or tagID == 62 or tagID == 85
+               or (tagName ~= "" and (string.find(tagName, "Dungeon", 1, true) or string.find(tagName, "Raid", 1, true))) then
+                isDungeon = true
+            elseif (Enum and Enum.QuestTag and tagID == Enum.QuestTag.Group) or tagID == 1
+               or (tagName ~= "" and string.find(tagName, "Group", 1, true)) then
+                isGroup = true
             end
         end
     end
 
-    -- Scan active Quest Log if title or level is still missing
-    if not title or not level then
-        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries()) or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-        for i = 1, numEntries do
+    -- Scan active Quest Log when title/level or tag flags are still missing
+    if not title or not level or (not isElite and not isDungeon and not isGroup) then
+        local qLogIdx = Utils.GetQuestLogIndex(questID)
+        local startIdx, endIdx = 1, 0
+        if qLogIdx then
+            startIdx, endIdx = qLogIdx, qLogIdx
+        elseif not (C_QuestLog and C_QuestLog.GetInfo) and GetQuestLogTitle and title then
+            local numEntries = (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+            startIdx, endIdx = 1, numEntries
+        end
+        for i = startIdx, endIdx do
             if C_QuestLog and C_QuestLog.GetInfo then
                 local ok, info = pcall(C_QuestLog.GetInfo, i)
                 if ok and info and info.questID == questID then
+                    inLog = true
                     title = title or info.title
                     level = level or (info.level and info.level > 0 and info.level)
                     isElite = isElite or info.isElite
@@ -568,10 +932,11 @@ function Utils.GetQuestBasicInfo(questID)
             elseif GetQuestLogTitle then
                 local ok, t, lvl, tag, isH, _, _, _, qid = pcall(GetQuestLogTitle, i)
                 if ok and (qid == questID or (not qid and t == title)) then
+                    inLog = true
                     title = title or t
                     level = level or (lvl and lvl > 0 and lvl)
                     local qTag = type(tag) == "string" and tag or ""
-                    isElite = isElite or (qTag == "Elite" or qTag == ELITE)
+                    isElite = isElite or (qTag == "Elite" or (ELITE and qTag == ELITE))
                     isDungeon = isDungeon or (qTag ~= "" and (string.find(qTag, "Dungeon", 1, true) ~= nil or string.find(qTag, "Raid", 1, true) ~= nil))
                     isGroup = isGroup or (qTag ~= "" and string.find(qTag, "Group", 1, true) ~= nil)
                     isHeader = isH
@@ -581,17 +946,24 @@ function Utils.GetQuestBasicInfo(questID)
         end
     end
 
-    -- Scan NPC Gossip Available Quests for unaccepted quests
-    if (not title or not level) and C_GossipInfo and C_GossipInfo.GetAvailableQuests then
-        local ok, available = pcall(C_GossipInfo.GetAvailableQuests)
-        if ok and type(available) == "table" then
-            for _, q in ipairs(available) do
-                if q.questID == questID then
-                    title = title or q.title
-                    if not level and q.questLevel and q.questLevel > 0 then
-                        level = q.questLevel
+    -- Scan NPC Gossip Available & Active Quests for unaccepted / in-progress quests
+    if (not title or not level) and C_GossipInfo then
+        for _, getter in ipairs({ C_GossipInfo.GetAvailableQuests, C_GossipInfo.GetActiveQuests }) do
+            if getter then
+                local ok, list = pcall(getter)
+                if ok and type(list) == "table" then
+                    for _, q in ipairs(list) do
+                        local qLvl = q.questLevel or q.level
+                        if q.questID and qLvl and qLvl > 0 then
+                            Utils.RecordKnownQuestLevel(q.questID, q.title, qLvl)
+                        end
+                        if q.questID == questID then
+                            title = title or q.title
+                            if not level and qLvl and qLvl > 0 then
+                                level = qLvl
+                            end
+                        end
                     end
-                    break
                 end
             end
         end
@@ -602,8 +974,11 @@ function Utils.GetQuestBasicInfo(questID)
         local numAvail = GetNumAvailableQuests() or 0
         for i = 1, numAvail do
             local availTitle = GetAvailableTitle(i)
-            if title and availTitle == title then
-                local availLvl = GetAvailableLevel(i)
+            local availLvl = GetAvailableLevel(i)
+            if availTitle and availLvl and availLvl > 0 then
+                Utils.RecordKnownQuestLevel(nil, availTitle, availLvl)
+            end
+            if title and availTitle and Utils.CleanQuestTitle(availTitle) == Utils.CleanQuestTitle(title) then
                 if availLvl and availLvl > 0 then
                     level = availLvl
                 end
@@ -612,26 +987,69 @@ function Utils.GetQuestBasicInfo(questID)
         end
     end
 
-    -- Scan active QuestFrame offer dialog for unaccepted quest title
-    if (not title) and QuestFrame and QuestFrame:IsShown() and GetTitleText then
-        local okID, cID = pcall(GetQuestID)
-        if (okID and cID and cID == questID) or (not cID or cID == 0) then
-            local okT, t = pcall(GetTitleText)
-            if okT and t and t ~= "" then
-                title = t
+    -- Scan active QuestFrame offer dialog for unaccepted quest title and embedded level prefix
+    if QuestFrame and QuestFrame:IsShown() and GetTitleText and Utils.IsActiveOfferQuest(questID, title) then
+        local okT, rawOffer = pcall(GetTitleText)
+        if okT and type(rawOffer) == "string" and rawOffer ~= "" then
+            local cleanOffer = Utils.CleanQuestTitle(rawOffer)
+            if not level then
+                local lvlTag = string.match(cleanOffer, "^%s*%[(%d+)%+?%]")
+                if lvlTag and tonumber(lvlTag) and tonumber(lvlTag) > 0 then
+                    level = tonumber(lvlTag)
+                end
+            end
+            if not title then
+                title = string.gsub(cleanOffer, "^%s*%[%d+%+?%]%s*", "")
             end
         end
     end
 
+    -- Clean any badge markup from resolved title
+    if type(title) == "string" and title ~= "" then
+        title = Utils.CleanQuestTitle(title)
+        title = string.gsub(title, "^%s*%[%d+%+?%]%s*", "")
+    end
+
+    if level and level > 0 then
+        Utils.RecordKnownQuestLevel(questID, title, level)
+    else
+        level = _knownQuestLevels[questID]
+        if not level and type(title) == "string" and title ~= "" then
+            local lowerTitle = string.lower(string.gsub(title, "^%s*(.-)%s*$", "%1"))
+            level = _knownQuestLevelsByTitle[lowerTitle]
+        end
+    end
+
+    -- Fallback: Wowhead Forever catalog level & elite/dungeon tags when client hasn't provided them
+    if addon.Data and addon.Data.GetForeverCatalogEntry then
+        local cat = addon.Data.GetForeverCatalogEntry(questID)
+        if cat then
+            if (not level or level <= 0) and type(cat[2]) == "number" and cat[2] > 0 then
+                level = cat[2]
+            end
+            if not inLog and not hasLiveTag and not isElite and not isDungeon and not isGroup then
+                local tag = cat[5]
+                if tag == "Elite" then
+                    isElite = true
+                elseif tag == "Dungeon" or tag == "Raid" then
+                    isDungeon = true
+                end
+            end
+        end
+    end
+
+    local isLevelFallback = false
     local finalLevel = level
     if not finalLevel or finalLevel <= 0 then
         finalLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+        isLevelFallback = true
     end
 
     local res = {
         questID = questID,
         title = title or ("Quest #" .. questID),
         level = finalLevel,
+        isLevelFallback = isLevelFallback,
         isElite = isElite or false,
         isDungeon = isDungeon or false,
         isGroup = isGroup or false,
@@ -658,11 +1076,14 @@ function Utils.GetQuestLevel(questID)
 end
 
 function Utils.ClearQuestBasicInfoCache(questID)
+    _questLogIndexScanned = false
     if questID then
         _basicInfoCache[questID] = nil
+        _questLogIndexMap[questID] = nil
     else
         wipe(_basicInfoCache)
         _basicInfoCacheSize = 0
+        wipe(_questLogIndexMap)
     end
 end
 addon.ClearQuestBasicInfoCache = Utils.ClearQuestBasicInfoCache
@@ -735,6 +1156,19 @@ local function HasExplorationOrHazardTarget(lower)
     return false
 end
 
+local MULTI_UNIT_IGNORE = {
+    gold = true, silver = true, copper = true, g = true, s = true, c = true,
+    lvl = true, level = true, levels = true,
+    yard = true, yards = true, yd = true, yds = true,
+    minute = true, minutes = true, min = true, mins = true,
+    second = true, seconds = true, sec = true, secs = true,
+    hour = true, hours = true, hr = true, hrs = true,
+    day = true, days = true, week = true, weeks = true,
+    year = true, years = true, step = true, steps = true,
+    slot = true, slots = true, pct = true, percent = true,
+    floor = true, part = true, rank = true, tier = true,
+}
+
 local function HasCombatOrMultiObjective(text)
     local lower = string.lower(text or "")
     if string.find(lower, "slain") or string.find(lower, "kill") or
@@ -755,6 +1189,12 @@ local function HasCombatOrMultiObjective(text)
             return true
         end
     end
+    for numStr, unitWord in string.gmatch(lower, "%f[%d](%d+)%s+([%a']+)") do
+        local n = tonumber(numStr)
+        if n and n >= 2 and n <= 200 and not MULTI_UNIT_IGNORE[unitWord] then
+            return true
+        end
+    end
     return false
 end
 
@@ -771,44 +1211,30 @@ local function CollectQuestObjectiveTexts(questID, titleHint)
     end
 
     -- Priority 1: Check QuestFrame FIRST when viewing an offer/detail dialog (prevents QuestLog bleed!)
-    if QuestFrame and QuestFrame:IsShown() then
-        if GetQuestID then
-            local okID, cID = pcall(GetQuestID)
-            if okID and cID and cID == questID then matchesOffer = true end
-        end
-        if not matchesOffer and QuestFrame.questID and QuestFrame.questID == questID then
-            matchesOffer = true
-        end
-        if not matchesOffer and titleHint and GetTitleText then
-            local frameTitle = GetTitleText()
-            if frameTitle and Utils.CleanQuestTitle(frameTitle) == Utils.CleanQuestTitle(titleHint) then
-                matchesOffer = true
+    if Utils.IsActiveOfferQuest(questID, titleHint) then
+        matchesOffer = true
+        if GetObjectiveText then
+            local okObj, txt = pcall(GetObjectiveText)
+            if okObj and txt and txt ~= "" then
+                table.insert(objectiveTexts, txt)
             end
         end
-        if matchesOffer then
-            if GetObjectiveText then
-                local okObj, txt = pcall(GetObjectiveText)
-                if okObj and txt and txt ~= "" then
-                    table.insert(objectiveTexts, txt)
-                end
+        if #objectiveTexts == 0 and QuestInfoObjectivesText and QuestInfoObjectivesText.GetText then
+            local txt = QuestInfoObjectivesText:GetText()
+            if txt and txt ~= "" then
+                table.insert(objectiveTexts, txt)
             end
-            if #objectiveTexts == 0 and QuestInfoObjectivesText and QuestInfoObjectivesText.GetText then
-                local txt = QuestInfoObjectivesText:GetText()
-                if txt and txt ~= "" then
-                    table.insert(objectiveTexts, txt)
-                end
+        end
+        if GetQuestText then
+            local okDesc, desc = pcall(GetQuestText)
+            if okDesc and desc and desc ~= "" then
+                offerDescription = desc
             end
-            if GetQuestText then
-                local okDesc, desc = pcall(GetQuestText)
-                if okDesc and desc and desc ~= "" then
-                    offerDescription = desc
-                end
-            end
-            if (not offerDescription or offerDescription == "") and QuestInfoDescriptionText and QuestInfoDescriptionText.GetText then
-                local desc = QuestInfoDescriptionText:GetText()
-                if desc and desc ~= "" then
-                    offerDescription = desc
-                end
+        end
+        if (not offerDescription or offerDescription == "") and QuestInfoDescriptionText and QuestInfoDescriptionText.GetText then
+            local desc = QuestInfoDescriptionText:GetText()
+            if desc and desc ~= "" then
+                offerDescription = desc
             end
         end
     end
@@ -825,17 +1251,43 @@ local function CollectQuestObjectiveTexts(questID, titleHint)
         end
     end
 
-    -- Priority 3: Check active QuestLog leaderboards ONLY when quest is actually in the Quest Log
-    if #objectiveTexts == 0 and isOnQuest and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
-        Utils.WithSelectedQuest(questID, function()
-            local numLB = GetNumQuestLeaderBoards() or 0
-            for i = 1, numLB do
-                local desc = GetQuestLogLeaderBoard(i)
-                if desc and desc ~= "" then
-                    table.insert(objectiveTexts, desc)
+    -- Priority 3: Check active QuestLog leaderboards directly by logIndex (no selection switch needed)
+    if #objectiveTexts == 0 and isOnQuest then
+        local logIndex = Utils.GetQuestLogIndex(questID)
+        if logIndex and logIndex > 0 then
+            if GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+                local okNum, numLB = pcall(GetNumQuestLeaderBoards, logIndex)
+                if okNum and numLB and numLB > 0 then
+                    for i = 1, numLB do
+                        local okLB, desc = pcall(GetQuestLogLeaderBoard, i, logIndex)
+                        if okLB and desc and desc ~= "" then
+                            table.insert(objectiveTexts, desc)
+                        end
+                    end
                 end
             end
-        end)
+            if #objectiveTexts == 0 and type(GetQuestLogQuestText) == "function" then
+                local okQT, desc, obj = pcall(GetQuestLogQuestText, logIndex)
+                if okQT then
+                    if type(obj) == "string" and obj ~= "" then
+                        table.insert(objectiveTexts, obj)
+                    elseif type(desc) == "string" and desc ~= "" and (not offerDescription or offerDescription == "") then
+                        offerDescription = desc
+                    end
+                end
+            end
+        end
+        if #objectiveTexts == 0 and GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
+            Utils.WithSelectedQuest(questID, function()
+                local numLB = GetNumQuestLeaderBoards() or 0
+                for i = 1, numLB do
+                    local desc = GetQuestLogLeaderBoard(i)
+                    if desc and desc ~= "" then
+                        table.insert(objectiveTexts, desc)
+                    end
+                end
+            end)
+        end
     end
 
     return objectiveTexts, offerDescription, matchesOffer
@@ -916,6 +1368,10 @@ function Utils.IsTalkToQuest(questID)
                 if liveXP == 0 and C_QuestLog and C_QuestLog.GetQuestRewardXP then
                     local okXP, val = pcall(C_QuestLog.GetQuestRewardXP, questID)
                     if okXP and val and val > 0 then liveXP = val end
+                end
+                if liveXP == 0 and GetQuestLogRewardXP then
+                    local okXP, val = pcall(GetQuestLogRewardXP, questID)
+                    if okXP and type(val) == "number" and val > 0 then liveXP = val end
                 end
                 local mobXP = math.max(50, (pLevel * 5) + 45)
                 if delta >= -3 and liveXP > 0 and liveXP <= (mobXP * 3.6) then

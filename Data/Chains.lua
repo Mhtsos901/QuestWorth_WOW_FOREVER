@@ -113,6 +113,11 @@ Data.KnownChains = {
         quests = { 903, 905, 907, 913 },
         isImportant = false,
     },
+    -- [1074] Krazek's Cookery -> Favor for Krazek -> Return to Corporal Kaleb (STV / Arathi)
+    [1074] = {
+        quests = { 210, 627, 622 },
+        isImportant = false,
+    },
     -- [1075] Nesingwary Safari: Tiger Mastery -> Big Game Hunter
     [1075] = {
         quests = { 185, 186, 187, 188, 208 },
@@ -133,6 +138,9 @@ Data.KnownChains = {
 -- Build the fast lookup reverse index (deterministic priority: longer chain wins, curated < 3000 wins ties)
 function Data.BuildChainIndex()
     wipe(Data.ChainIndex)
+    if Data.InvalidateMetaMemo then
+        Data.InvalidateMetaMemo()
+    end
     local sortedIDs = {}
     for chainID in pairs(Data.KnownChains) do
         if type(chainID) == "number" then
@@ -537,8 +545,9 @@ Data.QuestPayoffs = {
         isKeyUnlock = true,
     },
     [627] = {
-        note = "Favor for Krazek in Booty Bay: requires 4 Lesser Bloodstone Ore.",
-        summary = "Booty Bay Ore Turn-In",
+        chain = "Krazek's Cookery (Step 2/3)",
+        note = "Favor for Krazek in Booty Bay: requires 4 Lesser Bloodstone Ore. Unlocks Return to Corporal Kaleb.",
+        summary = "Leads to: Return to Corporal Kaleb",
     },
 
     -- Major Lore Chains
@@ -1032,6 +1041,786 @@ local DUNGEON_KEYWORDS = {
     { pattern = "onyxia", name = "Onyxia's Lair Raid" },
 }
 
+-- META QUESTS DATA & RESOLVER (Classic + WoW Forever)
+Data.META_TAG_PRIORITY = { KEY = 1, MOUNT = 2, BAG = 3, EPIC = 4, CLASS = 5, BIS = 6 }
+
+-- Auto-generated Classic + WoW Forever Meta Quests Catalog (Wowhead verified)
+-- Format: [questID] = { tag, reason, zone, level, side, perm, reqClass, title }
+Data.MetaQuests = {
+    [31] = { "CLASS", "Class Spell / Ability Unlock", nil, 16, "H", true, "DRUID", "Aquatic Form" },
+    [58] = { "BAG", "Bag Reward: Gunnysack of the Night Watch", "Duskwood", 30, "A", true, nil, "The Night Watch" },
+    [96] = { "CLASS", "Class Spell / Ability Unlock", nil, 23, "H", true, "SHAMAN", "Call of Water" },
+    [166] = { "BIS", "Rare Weapon / Shield: Staff of Westfall", "The Deadmines", 22, "A", false, nil, "The Defias Brotherhood" },
+    [378] = { "BIS", "Rare Weapon / Shield: Headbasher", "The Stockade", 27, "A", false, nil, "The Fury Runs Deep" },
+    [396] = { "BIS", "Rare Accessory: Seal of Wrynn", "Stormwind City", 31, "A", false, nil, "An Audience with the King" },
+    [470] = { "BAG", "Bag Reward: Ooze-covered Bag", "Wetlands", 19, "A", true, nil, "Digging Through the Ooze" },
+    [626] = { "BAG", "Bag Reward: Explorer's Knapsack", "Stranglethorn Vale", 51, "B", true, nil, "Cortello's Riddle" },
+    [778] = { "BIS", "Trinket: Nifty Stopwatch (+40% Sprint Speed)", "Badlands", 45, "B", true, nil, "This Is Going to Be Hard" },
+    [909] = { "BIS", "Rare Weapon / Shield: Outlaw Sabre", "Ashenvale", 30, "B", false, nil, "Baron Aquanis" },
+    [914] = { "BIS", "Rare Weapon / Shield: Crescent Staff", "Wailing Caverns", 22, "H", false, nil, "Leaders of the Fang" },
+    [1014] = { "BIS", "Rare Accessory: Seal of Sylvanas", "Shadowfang Keep", 27, "H", false, nil, "Arugal Must Die" },
+    [1048] = { "BIS", "Rare Accessory: Dragon's Blood Necklace", "Scarlet Monastery", 42, "H", false, nil, "Into The Scarlet Monastery" },
+    [1049] = { "BIS", "Rare Weapon / Shield: Vile Protector", "Scarlet Monastery", 38, "H", false, nil, "Compendium of the Fallen" },
+    [1050] = { "BIS", "Rare Accessory: Explorers' League Commendation", "Scarlet Monastery", 38, "A", false, nil, "Mythology of the Titans" },
+    [1053] = { "BIS", "Rare Weapon / Shield: Sword of Serenity", "Scarlet Monastery", 40, "A", true, nil, "In the Name of the Light" },
+    [1101] = { "BIS", "Rare Weapon / Shield: Quilboar Blaster", "Razorfen Kraul", 34, "A", false, nil, "The Crone of the Kraul" },
+    [1102] = { "BIS", "Rare Weapon / Shield: Quilboar Blaster", "Razorfen Kraul", 34, "H", false, nil, "A Vengeful Fate" },
+    [1200] = { "BIS", "Rare Weapon / Shield: Gravestone Scepter", "Blackfathom Deeps", 27, "A", false, nil, "Blackfathom Villainy" },
+    [1318] = { "BIS", "Rare Gear Reward: Gordok's Handguards", "Dire Maul", 60, "B", false, nil, "Unfinished Gordok Business" },
+    [1383] = { "BIS", "Rare Accessory: Cloak of Blight", "Duskwood", 42, "H", false, nil, "Nothing But The Truth" },
+    [1446] = { "BIS", "Rare Gear Reward: Rainstrider Leggings", "Sunken Temple", 53, "B", false, nil, "Jammal'an the Prophet" },
+    [1471] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "WARLOCK", "The Binding" },
+    [1474] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "WARLOCK", "The Binding" },
+    [1486] = { "BAG", "Bag Reward: Deviate Hide Pack", "Wailing Caverns", 17, "B", true, nil, "Deviate Hides" },
+    [1498] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "WARRIOR", "Path of Defense" },
+    [1504] = { "CLASS", "Class Spell / Ability Unlock", nil, 11, "H", true, "WARLOCK", "The Binding" },
+    [1513] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "WARLOCK", "The Binding" },
+    [1527] = { "CLASS", "Class Spell / Ability Unlock", nil, 13, "H", true, "SHAMAN", "Call of Fire" },
+    [1652] = { "CLASS", "Class Spell / Ability Unlock", nil, 25, "A", true, "PALADIN", "The Tome of Valor" },
+    [1661] = { "CLASS", "Class Spell / Ability Unlock", nil, 40, "A", true, "PALADIN", "The Tome of Nobility" },
+    [1665] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "WARRIOR", "Bartleby's Mug" },
+    [1678] = { "CLASS", "Class Spell / Ability Unlock", nil, 11, "A", true, "WARRIOR", "Vejrek" },
+    [1683] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "WARRIOR", "Vorlus Vilehoof" },
+    [1689] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "WARLOCK", "The Binding" },
+    [1719] = { "CLASS", "Class Spell / Ability Unlock", nil, 30, "B", true, "WARRIOR", "The Affray" },
+    [1739] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "WARLOCK", "The Binding" },
+    [1740] = { "BIS", "Rare Weapon / Shield: Orb of Soran'ruk", nil, 25, "B", false, "WARLOCK", "The Orb of Soran'ruk" },
+    [1785] = { "CLASS", "Class Spell / Ability Unlock", nil, 13, "A", true, "PALADIN", "The Tome of Divinity" },
+    [1788] = { "CLASS", "Class Spell / Ability Unlock", nil, 13, "A", true, "PALADIN", "The Tome of Divinity" },
+    [1792] = { "BIS", "Rare Weapon / Shield: Whirlwind Axe", "Hillsbrad Foothills", 40, "B", true, "WARRIOR", "Whirlwind Weapon" },
+    [1795] = { "BAG", "Bag Reward: Box of Souls", nil, 30, "B", true, "WARLOCK", "The Binding" },
+    [1819] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "WARRIOR", "Ulag the Cleaver" },
+    [1952] = { "BIS", "Rare Weapon / Shield: Icefury Wand", nil, 40, "B", false, "MAGE", "Mage's Wand" },
+    [1958] = { "BIS", "Rare Weapon / Shield: Celestial Orb", nil, 40, "B", false, "MAGE", "Celestial Power" },
+    [2204] = { "BIS", "Dungeon Chain: Talvash's Enhancing Necklace", "Uldaman", 44, "A", false, nil, "Solution to Doom" },
+    [2341] = { "BIS", "Rare Accessory: Jarkal's Enhancing Necklace", "Uldaman", 44, "H", false, nil, "Necklace Recovery, Take 3" },
+    [2359] = { "CLASS", "Class Spell / Ability Unlock", nil, 24, "A", true, "ROGUE", "Klaven's Tower" },
+    [2361] = { "BIS", "Rare Accessory: Talvash's Enhancing Necklace", "Uldaman", 44, "A", false, nil, "Restoring the Necklace" },
+    [2439] = { "BAG", "Bag Reward: Thawpelt Sack", "Ironforge", 47, "A", true, nil, "The Platinum Discs" },
+    [2480] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "ROGUE", "Hinott's Assistance" },
+    [2768] = { "BIS", "Rare Accessory: Masons Fraternity Ring", "Zul'Farrak", 47, "B", false, nil, "Divino-matic Rod" },
+    [2770] = { "BIS", "Rare Trinket: Carrot on a Stick (+3% Mount Speed)", "Zul'Farrak", 50, "B", true, nil, "Gahz'rilla" },
+    [2841] = { "BIS", "Rare Gear Reward: Civinad Robes", "Gnomeregan", 35, "H", false, nil, "Rig Wars" },
+    [2929] = { "BIS", "Rare Gear Reward: Civinad Robes", "Gnomeregan", 35, "A", false, nil, "The Grand Betrayal" },
+    [2948] = { "BIS", "Rare Accessory: Talvash's Gold Ring", "Ironforge", 28, "A", false, nil, "Gnome Improvement" },
+    [2950] = { "BIS", "Rare Accessory: Nogg's Gold Ring", "Orgrimmar", 35, "H", false, nil, "Nogg's Ring Redo" },
+    [3201] = { "KEY", "Key / Attunement: Key to Searing Gorge", "Ironforge", 48, "A", true, nil, "At Last!" },
+    [3341] = { "BIS", "Rare Accessory: Amberglow Talisman", "Razorfen Downs", 42, "H", false, nil, "Bring the End" },
+    [3525] = { "BIS", "Rare Accessory: Dragonclaw Ring", "Razorfen Downs", 37, "B", false, nil, "Extinguishing the Idol" },
+    [3528] = { "BIS", "Rare Weapon / Shield: Lifeforce Dirk", "Sunken Temple", 53, "B", false, nil, "The God Hakkar" },
+    [3636] = { "BIS", "Rare Accessory: Amberglow Talisman", "Razorfen Downs", 42, "A", false, nil, "Bring the Light" },
+    [3802] = { "KEY", "Key / Attunement: Shadowforge Key", "Blackrock Depths", 52, "B", true, nil, "Dark Iron Legacy" },
+    [3962] = { "BIS", "Rare Weapon / Shield: Linken's Sword of Mastery", "Un'Goro Crater", 56, "B", false, nil, "It's Dangerous to Go Alone" },
+    [4004] = { "BIS", "Rare Accessory: Thrall's Resolve", "Blackrock Depths", 60, "H", false, nil, "The Princess Saved?" },
+    [4132] = { "BIS", "Rare Accessory: Conqueror's Medallion", "Blackrock Depths", 58, "H", false, nil, "Operation: Death to Angerforge" },
+    [4201] = { "BIS", "Rare Gear Reward: Manacle Cuffs", "Blackrock Depths", 54, "B", false, nil, "The Love Potion" },
+    [4242] = { "BIS", "Rare Gear Reward: Conservator Helm", "Blackrock Depths", 54, "A", false, nil, "Abandoned Hope" },
+    [4264] = { "KEY", "Attunement: Onyxia's Lair (Jail Break!)", "Blackrock Depths", 58, "A", true, nil, "A Crumpled Up Note" },
+    [4322] = { "KEY", "Attunement: Onyxia's Lair (The Great Masquerade)", "Stormwind City", 60, "A", true, nil, "Jail Break!" },
+    [4363] = { "BIS", "Rare Accessory: Magni's Will", "Blackrock Depths", 59, "A", false, nil, "The Princess's Surprise" },
+    [4490] = { "CLASS", "Class Spell / Ability Unlock", nil, 40, "B", true, "WARLOCK", "Summon Felsteed" },
+    [4621] = { "BIS", "Rare Gear Reward: Bloodsail Admiral's Hat", "Stranglethorn Vale", 60, "B", false, nil, "Avast Ye, Admiral!" },
+    [4742] = { "KEY", "Key / Unlock: Forging Seal of Ascension (UBRS Key)", "Lower Blackrock Spire", 60, "B", true, nil, "Seal of Ascension" },
+    [4743] = { "KEY", "Key / Attunement: Seal of Ascension (UBRS Key)", "Upper Blackrock Spire", 60, "B", true, nil, "Seal of Ascension" },
+    [4771] = { "BIS", "Rare Weapon / Shield: Windreaper", "Scholomance", 60, "B", false, nil, "Dawn's Gambit" },
+    [4786] = { "BIS", "Rare Gear Reward: Enchanted Gold Bloodrobe", nil, 38, "B", false, "WARLOCK", "The Completed Robe" },
+    [4866] = { "BIS", "Rare Accessory: Ragged John's Neverending Cup", "Lower Blackrock Spire", 60, "B", false, nil, "Mother's Milk" },
+    [4903] = { "BIS", "Rare Gear Reward: Wyrmthalak's Shackles", "Lower Blackrock Spire", 60, "H", false, nil, "Warlord's Command" },
+    [4964] = { "BIS", "Rare Weapon / Shield: Orb of Dar'Orahil", nil, 40, "B", false, "WARLOCK", "The Completed Orb of Dar'Orahil" },
+    [4974] = { "BIS", "BiS UBRS Trinket: Blackhand's Breadth / Mark of Tyranny", "Upper Blackrock Spire", 60, "H", true, nil, "For The Horde!" },
+    [4975] = { "BIS", "Rare Weapon / Shield: Orb of Noh'Orahil", nil, 40, "B", false, "WARLOCK", "The Completed Orb of Noh'Orahil" },
+    [5061] = { "CLASS", "Class Spell / Ability Unlock", nil, 16, "A", true, "DRUID", "Aquatic Form" },
+    [5063] = { "EPIC", "Epic Reward: Cap of the Scarlet Savant", "Winterspring", 60, "B", true, nil, "Cap of the Scarlet Savant" },
+    [5081] = { "BIS", "Rare Gear Reward: Wyrmthalak's Shackles", "Lower Blackrock Spire", 60, "A", false, nil, "Maxwell's Mission" },
+    [5102] = { "BIS", "BiS UBRS Trinket: Blackhand's Breadth / Eye of the Beast", "Upper Blackrock Spire", 60, "A", true, nil, "General Drakkisath's Demise" },
+    [5124] = { "BIS", "Rare Gear Reward: Plans: Fiery Plate Gauntlets", "Winterspring", 60, "B", false, nil, "Fiery Plate Gauntlets" },
+    [5125] = { "BIS", "Rare Accessory: Will of the Martyr", "Stratholme", 60, "B", false, nil, "Aurius' Reckoning" },
+    [5127] = { "BIS", "Rare Gear Reward: Plans: Demon Forged Breastplate", "Lower Blackrock Spire", 60, "B", false, nil, "The Demon Forge" },
+    [5166] = { "EPIC", "Epic Reward: Breastplate of the Chromatic Flight", "Western Plaguelands", 60, "B", true, nil, "Breastplate of the Chromatic Flight" },
+    [5167] = { "EPIC", "Epic Reward: Legguards of the Chromatic Defier", "Western Plaguelands", 60, "B", true, nil, "Legplates of the Chromatic Defier" },
+    [5213] = { "BIS", "Rare Accessory: Seal of the Dawn", "Stratholme", 60, "B", false, nil, "The Active Agent" },
+    [5265] = { "BIS", "Rare Weapon / Shield: Argent Avenger", "Eastern Plaguelands", 60, "B", false, nil, "The Argent Hold" },
+    [5306] = { "BIS", "Rare Gear Reward: Plans: Dawn's Edge", "Lower Blackrock Spire", 60, "B", false, nil, "Snakestone of the Shadow Huntress" },
+    [5342] = { "BIS", "Rare Accessory: Barov Peasant Caller", "Western Plaguelands", 60, "H", false, nil, "The Last Barov" },
+    [5344] = { "BIS", "Rare Accessory: Barov Peasant Caller", "Western Plaguelands", 60, "A", false, nil, "The Last Barov" },
+    [5384] = { "BIS", "Rare Weapon / Shield: Penelope's Rose", "Scholomance", 60, "B", false, nil, "Kirtonos the Herald" },
+    [5466] = { "BIS", "Rare Weapon / Shield: Darrowshire Strongguard", "Scholomance", 60, "B", false, nil, "The Lich, Ras Frostwhisper" },
+    [5505] = { "KEY", "Key / Attunement: Skeleton Key", "Western Plaguelands", 60, "A", true, nil, "The Key to Scholomance" },
+    [5511] = { "KEY", "Key / Attunement: Skeleton Key", "Western Plaguelands", 60, "H", true, nil, "The Key to Scholomance" },
+    [5526] = { "BIS", "Rare Weapon / Shield: Milli's Shield", "Moonglade", 60, "B", false, nil, "Shards of the Felvine" },
+    [5627] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Stars of Elune" },
+    [5628] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Returning Home" },
+    [5629] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Returning Home" },
+    [5630] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Returning Home" },
+    [5631] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Returning Home" },
+    [5632] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Returning Home" },
+    [5633] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Returning Home" },
+    [5634] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5635] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5636] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5637] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5638] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5639] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5640] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Desperate Prayer" },
+    [5641] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "A Lack of Fear" },
+    [5642] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "PRIEST", "Shadowguard" },
+    [5643] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "PRIEST", "Shadowguard" },
+    [5644] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "PRIEST", "Devouring Plague" },
+    [5645] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "A Lack of Fear" },
+    [5646] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "PRIEST", "Devouring Plague" },
+    [5647] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "A Lack of Fear" },
+    [5652] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Hex of Weakness" },
+    [5654] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Hex of Weakness" },
+    [5655] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Hex of Weakness" },
+    [5656] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Hex of Weakness" },
+    [5657] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Hex of Weakness" },
+    [5658] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Touch of Weakness" },
+    [5660] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Touch of Weakness" },
+    [5661] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Touch of Weakness" },
+    [5662] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Touch of Weakness" },
+    [5663] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "PRIEST", "Touch of Weakness" },
+    [5672] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Elune's Grace" },
+    [5673] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Elune's Grace" },
+    [5674] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Elune's Grace" },
+    [5675] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Elune's Grace" },
+    [5676] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Arcane Feedback" },
+    [5677] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Arcane Feedback" },
+    [5678] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Arcane Feedback" },
+    [5679] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "PRIEST", "Devouring Plague" },
+    [5680] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "PRIEST", "Shadowguard" },
+    [5730] = { "BIS", "Rare Weapon / Shield: Kris of Orgrimmar", "Orgrimmar", 16, "H", false, nil, "Hidden Enemies" },
+    [5942] = { "BIS", "Rare Accessory: Ring of Protection", "Eastern Plaguelands", 60, "B", false, nil, "Hidden Treasures" },
+    [5944] = { "BIS", "Rare Accessory: Mark of Fordring", "Western Plaguelands", 60, "B", true, nil, "In Dreams" },
+    [6001] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "DRUID", "Body and Heart" },
+    [6002] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "DRUID", "Body and Heart" },
+    [6081] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "HUNTER", "Training the Beast" },
+    [6082] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "HUNTER", "Taming the Beast" },
+    [6085] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "HUNTER", "Taming the Beast" },
+    [6086] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "HUNTER", "Training the Beast" },
+    [6088] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "HUNTER", "Taming the Beast" },
+    [6089] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "HUNTER", "Training the Beast" },
+    [6102] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "HUNTER", "Taming the Beast" },
+    [6103] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "HUNTER", "Training the Beast" },
+    [6125] = { "CLASS", "Class Spell / Ability Unlock", nil, 14, "A", true, "DRUID", "Power over Poison" },
+    [6130] = { "CLASS", "Class Spell / Ability Unlock", nil, 14, "H", true, "DRUID", "Power over Poison" },
+    [6148] = { "BIS", "Rare Weapon / Shield: Gorewood Bow", "Eastern Plaguelands", 60, "H", false, nil, "The Scarlet Oracle, Demetria" },
+    [6163] = { "BIS", "Rare Accessory: Royal Seal of Alexis", "Stratholme", 60, "H", true, nil, "Ramstein" },
+    [6187] = { "BIS", "Rare Weapon / Shield: Gorewood Bow", "Eastern Plaguelands", 60, "A", false, nil, "Order Must Be Restored" },
+    [6502] = { "KEY", "Key / Attunement: Drakefire Amulet (Onyxia's Lair)", "Upper Blackrock Spire", 60, "A", true, nil, "Drakefire Amulet" },
+    [6561] = { "BIS", "Rare Weapon / Shield: Gravestone Scepter", "Blackfathom Deeps", 27, "H", false, nil, "Blackfathom Villainy" },
+    [6602] = { "KEY", "Key / Attunement: Drakefire Amulet (Onyxia's Lair)", "Upper Blackrock Spire", 60, "H", true, nil, "Blood of the Black Dragon Champion" },
+    [6861] = { "BIS", "Rare Gear Reward: Zinfizzlex's Portable Shredder Unit", "Alterac Valley", 60, "B", false, nil, "Zinfizzlex's Portable Shredder Unit" },
+    [6922] = { "BIS", "Rare Weapon / Shield: Outlaw Sabre", "Ashenvale", 30, "H", false, nil, "Baron Aquanis" },
+    [6981] = { "BIS", "Secret Dungeon Quest: Leads to Talbar Mantle", "Wailing Caverns", 26, "B", false, nil, "The Glowing Shard" },
+    [7044] = { "KEY", "Key / Attunement: Scepter of Celebras (Maraudon Portal)", "Maraudon", 49, "B", true, nil, "Legends of Maraudon" },
+    [7046] = { "BIS", "Rare Gear Reward: Scepter of Celebras", "Maraudon", 49, "B", false, nil, "The Scepter of Celebras" },
+    [7064] = { "BIS", "Rare Weapon / Shield: Thrash Blade", "Maraudon", 51, "H", true, nil, "Corruption of Earth and Seed" },
+    [7065] = { "BIS", "Rare Weapon / Shield: Thrash Blade", "Maraudon", 51, "A", true, nil, "Corruption of Earth and Seed" },
+    [7165] = { "BIS", "Rare Accessory: Frostwolf Insignia Rank 4", "Alterac Valley", 51, "H", false, nil, "Earned Reverence" },
+    [7166] = { "BIS", "Rare Accessory: Frostwolf Insignia Rank 5", "Alterac Valley", 51, "H", false, nil, "Legendary Heroes" },
+    [7167] = { "EPIC", "Epic Reward: Frostwolf Insignia Rank 6", "Alterac Valley", 51, "H", true, nil, "The Eye of Command" },
+    [7170] = { "BIS", "Rare Accessory: Stormpike Insignia Rank 4", "Alterac Valley", 51, "A", false, nil, "Earned Reverence" },
+    [7171] = { "BIS", "Rare Accessory: Stormpike Insignia Rank 5", "Alterac Valley", 51, "A", false, nil, "Legendary Heroes" },
+    [7172] = { "EPIC", "Epic Reward: Stormpike Insignia Rank 6", "Alterac Valley", 51, "A", true, nil, "The Eye of Command" },
+    [7181] = { "BIS", "Rare Weapon / Shield: Bloodseeker", "Alterac Valley", 60, "B", true, nil, "The Legend of Korrak" },
+    [7202] = { "BIS", "Rare Weapon / Shield: Bloodseeker", "Alterac Valley", 60, "B", true, nil, "Korrak the Bloodrager" },
+    [7441] = { "BIS", "Dire Maul: East • Spry Boots / Sprinter's Sword (+Crescent Key drop)", "Dire Maul", 58, "B", false, nil, "Pusillin and the Elder Azj'Tordin" },
+    [7462] = { "BIS", "Rare Weapon / Shield: Bonecrusher", "Dire Maul", 60, "B", false, nil, "The Treasure of the Shen'dralar" },
+    [7463] = { "CLASS", "Class Spell: Conjure Water (Rank 7)", "Dire Maul", 60, "B", true, "MAGE", "Arcane Refreshment" },
+    [7486] = { "BIS", "Rare Accessory: Ocean's Breeze", "Azshara", 55, "B", false, nil, "A Hero's Reward" },
+    [7487] = { "KEY", "Attunement: Molten Core Raid (Lothos Riftwaker)", "Blackrock Depths", 60, "B", true, nil, "Attunement to the Core" },
+    [7488] = { "BIS", "Rare Weapon / Shield: Lorespinner", "Dire Maul", 57, "A", false, nil, "Lethtendris's Web" },
+    [7489] = { "BIS", "Rare Weapon / Shield: Lorespinner", "Dire Maul", 57, "H", false, nil, "Lethtendris's Web" },
+    [7491] = { "EPIC", "Epic Reward: Onyxia Blood Talisman", "Orgrimmar", 60, "H", true, nil, "For All To See" },
+    [7496] = { "EPIC", "Epic Reward: Onyxia Blood Talisman", "Stormwind City", 60, "A", true, nil, "Celebrating Good Times" },
+    [7498] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "ROGUE", "Garona: A Study on Stealth and Treachery" },
+    [7499] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "WARRIOR", "Codex of Defense" },
+    [7500] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "MAGE", "The Arcanist's Cookbook" },
+    [7501] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "A", true, "PALADIN", "The Light and How To Swing It" },
+    [7502] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "WARLOCK", "Harnessing Shadows" },
+    [7503] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "HUNTER", "The Greatest Race of Hunters" },
+    [7504] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "PRIEST", "Holy Bologna: What the Light Won't Tell You" },
+    [7505] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "H", true, "SHAMAN", "Frost Shock and You" },
+    [7506] = { "BIS", "Rare Accessory: Royal Seal of Eldre'Thalas", "Dire Maul", 60, "B", true, "DRUID", "The Emerald Dream..." },
+    [7508] = { "EPIC", "Epic Reward: A Dull and Flat Elven Blade", "Dire Maul", 60, "B", true, nil, "The Forging of Quel'Serrar" },
+    [7509] = { "EPIC", "Epic Reward: Quel'Serrar", "Onyxia's Lair", 60, "B", true, nil, "The Forging of Quel'Serrar" },
+    [7541] = { "BIS", "Rare Accessory: Lonetree's Circle", "Orgrimmar", 30, "H", false, nil, "Service to the Horde" },
+    [7583] = { "CLASS", "Class Milestone (Tome of Sacrifice)", nil, 60, "B", true, "WARLOCK", "Suppression" },
+    [7603] = { "CLASS", "Class Milestone (Shard of the Green Flame)", nil, 55, "B", true, "WARLOCK", "Kroshius' Infernal Core" },
+    [7604] = { "EPIC", "Epic Reward: Plans: Sulfuron Hammer", "Blackrock Depths", 60, "B", true, nil, "A Binding Contract" },
+    [7622] = { "EPIC", "Epic Reward: Splinter of Nordrassil", nil, 60, "B", true, "PRIEST", "The Balance of Light and Shadow" },
+    [7631] = { "CLASS", "Class Spell / Ability Unlock", nil, 60, "B", true, "WARLOCK", "Dreadsteed of Xoroth" },
+    [7634] = { "EPIC", "Epic Reward: Ancient Sinew Wrapped Lamina", nil, 60, "B", true, "HUNTER", "Ancient Sinew Wrapped Lamina" },
+    [7635] = { "EPIC", "Epic Reward: Enchanted Black Dragon Sinew", nil, 60, "B", true, "HUNTER", "A Proper String" },
+    [7636] = { "EPIC", "Epic Reward: Ancient Rune Etched Stave", nil, 60, "B", true, "HUNTER", "Stave of the Ancients" },
+    [7647] = { "CLASS", "Class Spell / Ability Unlock", nil, 60, "A", true, "PALADIN", "Judgment and Redemption" },
+    [7649] = { "BIS", "Rare Gear Reward: Plans: Enchanted Thorium Breastplate", "Dire Maul", 60, "B", false, nil, "Enchanted Thorium Platemail: Volume I" },
+    [7650] = { "BIS", "Rare Gear Reward: Plans: Enchanted Thorium Leggings", "Dire Maul", 60, "B", false, nil, "Enchanted Thorium Platemail: Volume II" },
+    [7651] = { "BIS", "Rare Gear Reward: Plans: Enchanted Thorium Helm", "Dire Maul", 60, "B", false, nil, "Enchanted Thorium Platemail: Volume III" },
+    [7668] = { "BIS", "Rare Gear Reward: Helm of Latent Power", nil, 60, "H", false, "SHAMAN", "The Darkreaver Menace" },
+    [7703] = { "BIS", "Rare Gear Reward: Gordok's Handguards", "Dire Maul", 60, "B", false, nil, "Unfinished Gordok Business" },
+    [7761] = { "KEY", "Attunement: Blackwing Lair Raid (Orb of Command)", "Upper Blackrock Spire", 60, "B", true, nil, "Blackhand's Command" },
+    [7782] = { "EPIC", "Epic Reward: Master Dragonslayer's Medallion", "Stormwind City", 60, "A", true, nil, "The Lord of Blackrock" },
+    [7784] = { "EPIC", "Epic Reward: Master Dragonslayer's Medallion", "Orgrimmar", 60, "H", true, nil, "The Lord of Blackrock" },
+    [7785] = { "EPIC", "Epic Reward: Vessel of Rebirth", "Silithus", 60, "B", true, nil, "Examine the Vessel" },
+    [7787] = { "EPIC", "Epic Reward: Thunderfury, Blessed Blade of the Windseeker", "Silithus", 60, "B", true, nil, "Rise, Thunderfury!" },
+    [7848] = { "KEY", "Attunement: Molten Core Raid (Lothos Riftwaker)", "Blackrock Depths", 60, "B", true, nil, "Attunement to the Core" },
+    [7861] = { "BIS", "Rare Accessory: Woven Ivy Necklace", "The Hinterlands", 51, "H", false, nil, "Wanted: Vile Priestess Hexx and Her Minions" },
+    [7862] = { "BIS", "BiS Melee Trinket: Rune of the Guard Captain (+20 AP, +1% Hit)", "The Hinterlands", 51, "H", true, nil, "Job Opening: Guard Captain of Revantusk Village" },
+    [7877] = { "BIS", "Rare Weapon / Shield: Bonecrusher", "Dire Maul", 60, "B", false, nil, "The Treasure of the Shen'dralar" },
+    [8042] = { "BIS", "Rare Accessory: Strength of Mugamba", "Zul'Gurub", 60, "B", false, nil, "Strength of Mount Mugamba" },
+    [8043] = { "BIS", "Rare Accessory: Strength of Mugamba", "Zul'Gurub", 60, "B", false, nil, "Strength of Mount Mugamba" },
+    [8044] = { "EPIC", "Epic Reward: Rage of Mugamba", "Zul'Gurub", 60, "B", true, nil, "The Rage of Mugamba" },
+    [8046] = { "BIS", "Rare Accessory: Heathen's Brand", "Zul'Gurub", 60, "A", false, nil, "The Heathen's Brand" },
+    [8047] = { "BIS", "Rare Accessory: Heathen's Brand", "Zul'Gurub", 60, "A", false, nil, "The Heathen's Brand" },
+    [8048] = { "EPIC", "Epic Reward: Hero's Brand", "Zul'Gurub", 60, "A", true, nil, "The Hero's Brand" },
+    [8050] = { "BIS", "Rare Accessory: The Eye of Zuldazar", "Zul'Gurub", 60, "B", false, nil, "The Eye of Zuldazar" },
+    [8051] = { "BIS", "Rare Accessory: The Eye of Zuldazar", "Zul'Gurub", 60, "B", false, nil, "The Eye of Zuldazar" },
+    [8052] = { "EPIC", "Epic Reward: The All-Seeing Eye of Zuldazar", "Zul'Gurub", 60, "B", true, nil, "The All-Seeing Eye of Zuldazar" },
+    [8102] = { "BIS", "Rare Accessory: Pebble of Kajaro", "Zul'Gurub", 60, "B", false, nil, "The Pebble of Kajaro" },
+    [8103] = { "BIS", "Rare Accessory: Pebble of Kajaro", "Zul'Gurub", 60, "B", false, nil, "The Pebble of Kajaro" },
+    [8104] = { "EPIC", "Epic Reward: Jewel of Kajaro", "Zul'Gurub", 60, "B", true, nil, "The Jewel of Kajaro" },
+    [8107] = { "BIS", "Rare Accessory: Kezan's Taint", "Zul'Gurub", 60, "B", false, nil, "Kezan's Taint" },
+    [8108] = { "BIS", "Rare Accessory: Kezan's Taint", "Zul'Gurub", 60, "B", false, nil, "Kezan's Taint" },
+    [8109] = { "EPIC", "Epic Reward: Kezan's Unstoppable Taint", "Zul'Gurub", 60, "B", true, nil, "Kezan's Unstoppable Taint" },
+    [8111] = { "BIS", "Rare Accessory: Enchanted South Seas Kelp", "Zul'Gurub", 60, "B", false, nil, "Enchanted South Seas Kelp" },
+    [8112] = { "BIS", "Rare Accessory: Enchanted South Seas Kelp", "Zul'Gurub", 60, "B", false, nil, "Enchanted South Seas Kelp" },
+    [8113] = { "EPIC", "Epic Reward: Pristine Enchanted South Seas Kelp", "Zul'Gurub", 60, "B", true, nil, "Pristine Enchanted South Seas Kelp" },
+    [8117] = { "BIS", "Rare Accessory: Vision of Voodress", "Zul'Gurub", 60, "H", false, nil, "Vision of Voodress" },
+    [8118] = { "BIS", "Rare Accessory: Vision of Voodress", "Zul'Gurub", 60, "H", false, nil, "Vision of Voodress" },
+    [8119] = { "EPIC", "Epic Reward: Unmarred Vision of Voodress", "Zul'Gurub", 60, "H", true, nil, "The Unmarred Vision of Voodress" },
+    [8142] = { "BIS", "Rare Accessory: Zandalarian Shadow Talisman", "Zul'Gurub", 60, "B", false, nil, "Zandalarian Shadow Talisman" },
+    [8143] = { "BIS", "Rare Accessory: Zandalarian Shadow Talisman", "Zul'Gurub", 60, "B", false, nil, "Zandalarian Shadow Talisman" },
+    [8144] = { "EPIC", "Epic Reward: Zandalarian Shadow Mastery Talisman", "Zul'Gurub", 60, "B", true, nil, "Zandalarian Shadow Mastery Talisman" },
+    [8146] = { "BIS", "Rare Accessory: Maelstrom's Tendril", "Zul'Gurub", 60, "B", false, nil, "The Maelstrom's Tendril" },
+    [8147] = { "BIS", "Rare Accessory: Maelstrom's Tendril", "Zul'Gurub", 60, "B", false, nil, "The Maelstrom's Tendril" },
+    [8148] = { "EPIC", "Epic Reward: Maelstrom's Wrath", "Zul'Gurub", 60, "B", true, nil, "Maelstrom's Wrath" },
+    [8181] = { "BIS", "Rare Accessory: Faded Hakkari Cloak", "Zul'Gurub", 58, "B", false, nil, "Confront Yeh'kinya" },
+    [8183] = { "EPIC", "Epic Reward: Zandalarian Hero Charm", "Zul'Gurub", 58, "B", true, nil, "The Heart of Hakkar" },
+    [8232] = { "BIS", "Rare Accessory: Devilsaur Eye", nil, 52, "B", false, "HUNTER", "The Green Drake" },
+    [8236] = { "CLASS", "Class Milestone: Rogue Sunken Temple Reward", "Sunken Temple", 52, "B", true, "ROGUE", "The Azure Key" },
+    [8253] = { "BIS", "Rare Accessory: Arcane Crystal Pendant", nil, 52, "B", false, "MAGE", "Destroy Morphaz" },
+    [8257] = { "BIS", "Rare Accessory: Blessed Prayer Beads", nil, 52, "B", false, "PRIEST", "Blood of Morphaz" },
+    [8258] = { "EPIC", "Epic Reward: Skyfury Helm", nil, 60, "H", true, "SHAMAN", "The Darkreaver Menace" },
+    [8259] = { "EPIC", "Epic Reward: Skyfury Helm", nil, 60, "H", true, "SHAMAN", "A More Fitting Reward" },
+    [8271] = { "BIS", "Rare Weapon / Shield: Bloodseeker", "Alterac Valley", 60, "A", true, nil, "Hero of the Stormpike" },
+    [8272] = { "BIS", "Rare Weapon / Shield: Bloodseeker", "Alterac Valley", 60, "H", true, nil, "Hero of the Frostwolf" },
+    [8413] = { "BIS", "Rare Accessory: Enamored Water Spirit", nil, 52, "H", false, "SHAMAN", "Da Voodoo" },
+    [8418] = { "BIS", "Rare Accessory: Sanctified Orb", nil, 52, "A", false, "PALADIN", "Forging the Mightstone" },
+    [8422] = { "BIS", "Rare Accessory: Abyss Shard", nil, 52, "B", false, "WARLOCK", "Trolls of a Feather" },
+    [8425] = { "BIS", "Rare Accessory: Diamond Flask", nil, 52, "B", false, "WARRIOR", "Voodoo Feathers" },
+    [8446] = { "EPIC", "Epic Reward: Nightmare Engulfed Object", "Moonglade", 60, "B", true, nil, "Shrouded in Nightmare" },
+    [8447] = { "EPIC", "Epic Reward: Malfurion's Signet Ring", "Moonglade", 60, "B", true, nil, "Waking Legends" },
+    [8481] = { "EPIC", "Epic Reward: Defender of the Timbermaw", "Blackmaw Hold", 60, "B", true, nil, "The Root of All Evil" },
+    [8557] = { "EPIC", "Epic Reward: Drape of Unyielding Strength", "Ahn'Qiraj", 60, "B", true, nil, "Drape of Unyielding Strength" },
+    [8558] = { "EPIC", "Epic Reward: Sickle of Unyielding Strength", "Ahn'Qiraj", 60, "B", true, nil, "Sickle of Unyielding Strength" },
+    [8586] = { "EPIC", "Epic Reward: Recipe: Dirge's Kickin' Chimaerok Chops", "Tanaris", 1, "B", true, nil, "Dirge's Kickin' Chimaerok Chops" },
+    [8620] = { "EPIC", "Epic Reward: Gnomish Turban of Psychic Might", "Tanaris", 60, "B", true, nil, "The Only Prescription" },
+    [8689] = { "EPIC", "Epic Reward: Shroud of Infinite Wisdom", "Ahn'Qiraj", 60, "B", true, nil, "Shroud of Infinite Wisdom" },
+    [8690] = { "EPIC", "Epic Reward: Cloak of the Gathering Storm", "Ahn'Qiraj", 60, "H", true, nil, "Cloak of the Gathering Storm" },
+    [8691] = { "EPIC", "Epic Reward: Drape of Vaulted Secrets", "Ahn'Qiraj", 60, "B", true, nil, "Drape of Vaulted Secrets" },
+    [8692] = { "EPIC", "Epic Reward: Cloak of Unending Life", "Ahn'Qiraj", 60, "B", true, nil, "Cloak of Unending Life" },
+    [8693] = { "EPIC", "Epic Reward: Cloak of Veiled Shadows", "Ahn'Qiraj", 60, "B", true, nil, "Cloak of Veiled Shadows" },
+    [8694] = { "EPIC", "Epic Reward: Shroud of Unspoken Names", "Ahn'Qiraj", 60, "B", true, nil, "Shroud of Unspoken Names" },
+    [8695] = { "EPIC", "Epic Reward: Cape of Eternal Justice", "Ahn'Qiraj", 60, "A", true, nil, "Cape of Eternal Justice" },
+    [8696] = { "EPIC", "Epic Reward: Cloak of the Unseen Path", "Ahn'Qiraj", 60, "B", true, nil, "Cloak of the Unseen Path" },
+    [8697] = { "EPIC", "Epic Reward: Ring of Infinite Wisdom", "Ahn'Qiraj", 60, "B", true, nil, "Ring of Infinite Wisdom" },
+    [8698] = { "EPIC", "Epic Reward: Ring of the Gathering Storm", "Ahn'Qiraj", 60, "H", true, nil, "Ring of the Gathering Storm" },
+    [8699] = { "EPIC", "Epic Reward: Band of Vaulted Secrets", "Ahn'Qiraj", 60, "B", true, nil, "Band of Vaulted Secrets" },
+    [8700] = { "EPIC", "Epic Reward: Band of Unending Life", "Ahn'Qiraj", 60, "B", true, nil, "Band of Unending Life" },
+    [8701] = { "EPIC", "Epic Reward: Band of Veiled Shadows", "Ahn'Qiraj", 60, "B", true, nil, "Band of Veiled Shadows" },
+    [8702] = { "EPIC", "Epic Reward: Ring of Unspoken Names", "Ahn'Qiraj", 60, "B", true, nil, "Ring of Unspoken Names" },
+    [8703] = { "EPIC", "Epic Reward: Ring of Eternal Justice", "Ahn'Qiraj", 60, "A", true, nil, "Ring of Eternal Justice" },
+    [8705] = { "EPIC", "Epic Reward: Gavel of Infinite Wisdom", "Ahn'Qiraj", 60, "B", true, nil, "Gavel of Infinite Wisdom" },
+    [8706] = { "EPIC", "Epic Reward: Hammer of the Gathering Storm", "Ahn'Qiraj", 60, "H", true, nil, "Hammer of the Gathering Storm" },
+    [8707] = { "EPIC", "Epic Reward: Blade of Vaulted Secrets", "Ahn'Qiraj", 60, "B", true, nil, "Blade of Vaulted Secrets" },
+    [8708] = { "EPIC", "Epic Reward: Mace of Unending Life", "Ahn'Qiraj", 60, "B", true, nil, "Mace of Unending Life" },
+    [8709] = { "EPIC", "Epic Reward: Dagger of Veiled Shadows", "Ahn'Qiraj", 60, "B", true, nil, "Dagger of Veiled Shadows" },
+    [8710] = { "EPIC", "Epic Reward: Kris of Unspoken Names", "Ahn'Qiraj", 60, "B", true, nil, "Kris of Unspoken Names" },
+    [8711] = { "EPIC", "Epic Reward: Blade of Eternal Justice", "Ahn'Qiraj", 60, "A", true, nil, "Blade of Eternal Justice" },
+    [8712] = { "EPIC", "Epic Reward: Scythe of the Unseen Path", "Ahn'Qiraj", 60, "B", true, nil, "Scythe of the Unseen Path" },
+    [8729] = { "EPIC", "Epic Reward: Band of Icy Depths", "Azshara", 60, "B", true, nil, "The Wrath of Neptulon" },
+    [8730] = { "EPIC", "Epic Reward: Onyx Embedded Leggings", "Blackwing Lair", 60, "B", true, nil, "Nefarius's Corruption" },
+    [8736] = { "EPIC", "Epic Reward: Drake Tooth Necklace", "Moonglade", 60, "B", true, nil, "The Nightmare Manifests" },
+    [8741] = { "EPIC", "Epic Reward: Green Scepter Shard", "Moonglade", 60, "B", true, nil, "The Champion Returns" },
+    [8743] = { "MOUNT", "Mount: Black Qiraji Resonating Crystal", "Silithus", 60, "B", true, nil, "Bang a Gong!" },
+    [8745] = { "EPIC", "Epic Reward: Fang of Korialstrasz", "Ahn'Qiraj", 60, "B", true, nil, "Treasure of the Timeless One" },
+    [8747] = { "EPIC", "Epic Reward: Signet Ring of the Bronze Dragonflight", "Ahn'Qiraj", 60, "B", true, nil, "The Path of the Protector" },
+    [8752] = { "EPIC", "Epic Reward: Signet Ring of the Bronze Dragonflight", "Ahn'Qiraj", 60, "B", true, nil, "The Path of the Conqueror" },
+    [8757] = { "EPIC", "Epic Reward: Signet Ring of the Bronze Dragonflight", "Ahn'Qiraj", 60, "B", true, nil, "The Path of the Invoker" },
+    [8791] = { "EPIC", "Epic Reward: Charm of the Shifting Sands", "Ruins of Ahn'Qiraj", 60, "B", true, nil, "The Fall of Ossirian" },
+    [8802] = { "EPIC", "Epic Reward: Amulet of the Fallen God", "Ahn'Qiraj", 60, "B", true, nil, "The Savior of Kalimdor" },
+    [8905] = { "BIS", "Rare Gear Reward: Feralheart Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8906] = { "BIS", "Rare Gear Reward: Beastmaster's Bindings", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8907] = { "BIS", "Rare Gear Reward: Sorcerer's Bindings", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8908] = { "BIS", "Rare Gear Reward: Soulforge Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8909] = { "BIS", "Rare Gear Reward: Virtuous Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8910] = { "BIS", "Rare Gear Reward: Darkmantle Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8911] = { "BIS", "Rare Gear Reward: Deathmist Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8912] = { "BIS", "Rare Gear Reward: Bracers of Heroism", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [8913] = { "BIS", "Rare Gear Reward: Feralheart Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8914] = { "BIS", "Rare Gear Reward: Beastmaster's Bindings", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8915] = { "BIS", "Rare Gear Reward: Sorcerer's Bindings", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8916] = { "BIS", "Rare Gear Reward: Virtuous Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8917] = { "BIS", "Rare Gear Reward: Darkmantle Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8918] = { "BIS", "Rare Gear Reward: Bindings of The Five Thunders", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8919] = { "BIS", "Rare Gear Reward: Deathmist Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8920] = { "BIS", "Rare Gear Reward: Bracers of Heroism", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [8949] = { "BIS", "Rare Accessory: Beads of Ogre Might", "Dire Maul", 60, "B", false, nil, "Falrin's Vendetta" },
+    [8999] = { "EPIC", "Epic Reward: Feralheart Cowl", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9000] = { "EPIC", "Epic Reward: Beastmaster's Cap", "Ironforge", 60, "B", true, nil, "Saving the Best for Last" },
+    [9001] = { "EPIC", "Epic Reward: Sorcerer's Crown", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9002] = { "EPIC", "Epic Reward: Soulforge Helm", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9003] = { "EPIC", "Epic Reward: Virtuous Crown", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9004] = { "EPIC", "Epic Reward: Darkmantle Cap", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9005] = { "EPIC", "Epic Reward: Deathmist Mask", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9006] = { "EPIC", "Epic Reward: Helm of Heroism", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [9007] = { "EPIC", "Epic Reward: Feralheart Cowl", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9008] = { "EPIC", "Epic Reward: Beastmaster's Cap", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9009] = { "EPIC", "Epic Reward: Virtuous Crown", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9010] = { "EPIC", "Epic Reward: Darkmantle Cap", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9011] = { "EPIC", "Epic Reward: Coif of The Five Thunders", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9012] = { "EPIC", "Epic Reward: Deathmist Mask", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9013] = { "EPIC", "Epic Reward: Helm of Heroism", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [9014] = { "EPIC", "Epic Reward: Sorcerer's Crown", "Orgrimmar", 60, "B", true, nil, "Saving the Best for Last" },
+    [9023] = { "BIS", "Rare Weapon / Shield: Ravenholdt Slicer", "Silithus", 60, "B", false, nil, "The Perfect Poison" },
+    [9053] = { "BIS", "Rare Weapon / Shield: Moonshadow Stave", nil, 52, "B", false, "DRUID", "A Better Ingredient" },
+    [9068] = { "EPIC", "Epic Reward: Earthshatter Tunic", "Naxxramas", 60, "H", true, nil, "Earthshatter Tunic" },
+    [9069] = { "EPIC", "Epic Reward: Earthshatter Legguards", "Naxxramas", 60, "H", true, nil, "Earthshatter Legguards" },
+    [9070] = { "EPIC", "Epic Reward: Earthshatter Headpiece", "Naxxramas", 60, "H", true, nil, "Earthshatter Headpiece" },
+    [9071] = { "EPIC", "Epic Reward: Earthshatter Spaulders", "Naxxramas", 60, "H", true, nil, "Earthshatter Spaulders" },
+    [9072] = { "EPIC", "Epic Reward: Earthshatter Boots", "Naxxramas", 60, "H", true, nil, "Earthshatter Boots" },
+    [9073] = { "EPIC", "Epic Reward: Earthshatter Handguards", "Naxxramas", 60, "H", true, nil, "Earthshatter Handguards" },
+    [9074] = { "EPIC", "Epic Reward: Earthshatter Girdle", "Naxxramas", 60, "H", true, nil, "Earthshatter Girdle" },
+    [9075] = { "EPIC", "Epic Reward: Earthshatter Wristguards", "Naxxramas", 60, "H", true, nil, "Earthshatter Wristguards" },
+    [9111] = { "EPIC", "Epic Reward: Robe of Faith", "Naxxramas", 60, "B", true, nil, "Robe of Faith" },
+    [9112] = { "EPIC", "Epic Reward: Leggings of Faith", "Naxxramas", 60, "B", true, nil, "Leggings of Faith" },
+    [9113] = { "EPIC", "Epic Reward: Circlet of Faith", "Naxxramas", 60, "B", true, nil, "Circlet of Faith" },
+    [9114] = { "EPIC", "Epic Reward: Shoulderpads of Faith", "Naxxramas", 60, "B", true, nil, "Shoulderpads of Faith" },
+    [9115] = { "EPIC", "Epic Reward: Sandals of Faith", "Naxxramas", 60, "B", true, nil, "Sandals of Faith" },
+    [9116] = { "EPIC", "Epic Reward: Gloves of Faith", "Naxxramas", 60, "B", true, nil, "Gloves of Faith" },
+    [9117] = { "EPIC", "Epic Reward: Belt of Faith", "Naxxramas", 60, "B", true, nil, "Belt of Faith" },
+    [9118] = { "EPIC", "Epic Reward: Bindings of Faith", "Naxxramas", 60, "B", true, nil, "Bindings of Faith" },
+    [9120] = { "EPIC", "Epic Reward: Mark of the Champion", "Naxxramas", 60, "B", true, nil, "The Fall of Kel'Thuzad" },
+    [9121] = { "KEY", "Attunement: Naxxramas Raid (Argent Dawn Honored)", "Eastern Plaguelands", 60, "B", true, nil, "The Dread Citadel - Naxxramas" },
+    [9122] = { "KEY", "Attunement: Naxxramas Raid (Argent Dawn Revered)", "Eastern Plaguelands", 60, "B", true, nil, "The Dread Citadel - Naxxramas" },
+    [9123] = { "KEY", "Attunement: Naxxramas Raid (Argent Dawn Exalted)", "Eastern Plaguelands", 60, "B", true, nil, "The Dread Citadel - Naxxramas" },
+    [9230] = { "EPIC", "Epic Reward: Ramaladni's Icy Grasp", "Naxxramas", 60, "B", true, nil, "Ramaladni's Icy Grasp" },
+    [9232] = { "EPIC", "Epic Reward: Glacial Leggings", "Naxxramas", 60, "B", true, nil, "The Only Song I Know..." },
+    [9234] = { "EPIC", "Epic Reward: Icebane Gauntlets", "Naxxramas", 60, "B", true, nil, "Icebane Gauntlets" },
+    [9235] = { "EPIC", "Epic Reward: Icebane Bracers", "Naxxramas", 60, "B", true, nil, "Icebane Bracers" },
+    [9236] = { "EPIC", "Epic Reward: Icebane Breastplate", "Naxxramas", 60, "B", true, nil, "Icebane Breastplate" },
+    [9237] = { "EPIC", "Epic Reward: Glacial Cloak", "Naxxramas", 60, "B", true, nil, "Glacial Cloak" },
+    [9238] = { "EPIC", "Epic Reward: Glacial Wrists", "Naxxramas", 60, "A", true, nil, "Glacial Wrists" },
+    [9239] = { "EPIC", "Epic Reward: Glacial Gloves", "Naxxramas", 60, "A", true, nil, "Glacial Gloves" },
+    [9240] = { "EPIC", "Epic Reward: Glacial Vest", "Naxxramas", 60, "A", true, nil, "Glacial Vest" },
+    [9241] = { "EPIC", "Epic Reward: Polar Bracers", "Naxxramas", 60, "B", true, nil, "Polar Bracers" },
+    [9242] = { "EPIC", "Epic Reward: Polar Gloves", "Naxxramas", 60, "B", true, nil, "Polar Gloves" },
+    [9243] = { "EPIC", "Epic Reward: Polar Tunic", "Naxxramas", 60, "B", true, nil, "Polar Tunic" },
+    [9244] = { "EPIC", "Epic Reward: Icy Scale Bracers", "Naxxramas", 60, "B", true, nil, "Icy Scale Bracers" },
+    [9245] = { "EPIC", "Epic Reward: Icy Scale Gauntlets", "Naxxramas", 60, "B", true, nil, "Icy Scale Gauntlets" },
+    [9246] = { "EPIC", "Epic Reward: Icy Scale Breastplate", "Naxxramas", 60, "B", true, nil, "Icy Scale Breastplate" },
+    [9248] = { "BIS", "Rare Accessory: Band of Cenarius", "Silithus", 58, "B", false, nil, "A Humble Offering" },
+    [9250] = { "EPIC", "Epic Reward: Frame of Atiesh", "Naxxramas", 60, "H", true, nil, "Frame of Atiesh" },
+    [9257] = { "EPIC", "Epic Reward: Atiesh, Greatstaff of the Guardian", "Naxxramas", 60, "B", true, nil, "Atiesh, Greatstaff of the Guardian" },
+    [9269] = { "EPIC", "Epic Reward: Atiesh, Greatstaff of the Guardian", "Naxxramas", 60, "B", true, nil, "Atiesh, Greatstaff of the Guardian" },
+    [9270] = { "EPIC", "Epic Reward: Atiesh, Greatstaff of the Guardian", "Naxxramas", 60, "B", true, nil, "Atiesh, Greatstaff of the Guardian" },
+    [9271] = { "EPIC", "Epic Reward: Atiesh, Greatstaff of the Guardian", "Naxxramas", 60, "B", true, nil, "Atiesh, Greatstaff of the Guardian" },
+    [9364] = { "CLASS", "Class Spell / Ability Unlock", nil, 60, "B", true, "MAGE", "Fragmented Magic" },
+    [78093] = { "BIS", "Rare Accessory: Cloak of the Divine Storm", nil, 25, "A", false, "PALADIN", "Return to Delgren" },
+    [78150] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "B", true, "MAGE", "Friend of the Library" },
+    [78307] = { "BIS", "Rare Accessory: Pyrewood Signet Ring", "Shadowfang Keep", 23, "B", false, "ROGUE", "The Horn of Xelthos" },
+    [78699] = { "BIS", "Rare Weapon / Shield: Ruby-Adorned Blade", "Scarlet Monastery", 23, "B", false, "ROGUE", "The Eye of Bhossca" },
+    [78916] = { "BIS", "Rare Accessory: Acolyte's Void Pearl", "Blackfathom Deeps", 25, "A", false, nil, "The Heart of the Void" },
+    [78917] = { "BIS", "Rare Accessory: Acolyte's Void Pearl", "Blackfathom Deeps", 25, "H", false, nil, "The Heart of the Void" },
+    [79192] = { "BAG", "Bag Reward: Sturdy Lunchbox", "The Barrens", 24, "B", true, nil, "Stepping Stones" },
+    [79366] = { "BIS", "Rare Gear Reward: Stormchaser's Bindings", "Thousand Needles", 40, "H", true, "SHAMAN", "Calm Before the Storm" },
+    [79442] = { "BIS", "Rare Weapon / Shield: Elementalist's Guard", "Thousand Needles", 40, "H", false, "SHAMAN", "The Tempest's Weapons" },
+    [79536] = { "CLASS", "Class Milestone (Field Researcher's Loop)", nil, 35, "B", true, "MAGE", "Greater Friend of the Library" },
+    [79970] = { "CLASS", "Class Milestone (Pauldrons of Vindication)", nil, 40, "A", true, "PALADIN", "Aeonas the Vindicated" },
+    [79976] = { "BIS", "Utility Item: Cozy Sleeping Bag (+3% Bonus Rested XP)", "Hillsbrad Foothills", 40, "B", true, nil, "This Must Be The Place" },
+    [80324] = { "EPIC", "Epic Reward: Pendant of Homecoming", "Gnomeregan", 40, "A", true, nil, "The Mad King" },
+    [80325] = { "EPIC", "Epic Reward: Pendant of Homecoming", "Gnomeregan", 40, "H", true, nil, "The Mad King" },
+    [80455] = { "BIS", "Rare Accessory: Filcher's Cowl", nil, 50, "B", false, "ROGUE", "Biding Our Time" },
+    [81766] = { "CLASS", "Class Spell / Ability Unlock", nil, 46, "A", true, "PALADIN", "The Bloody Missive" },
+    [81885] = { "CLASS", "Class Spell / Ability Unlock", nil, 50, "A", true, "PALADIN", "The Ritual" },
+    [81919] = { "BIS", "Rare Accessory: Infernal Lasso", "Blasted Lands", 50, "B", false, "HUNTER", "Brought to Heel" },
+    [81924] = { "BIS", "Rare Accessory: Seed of Renewal", nil, 50, "B", false, "DRUID", "Wisdom of the Guardians" },
+    [82062] = { "BIS", "Rare Gear Reward: Traveler's Symbols", "Blackrock Depths", 56, "B", false, nil, "Ever After" },
+    [82084] = { "BIS", "Rare Weapon / Shield: Personal Spellbook", "Zul'Farrak", 45, "B", false, "MAGE", "A Lesson in Literacy" },
+    [82135] = { "BIS", "Rare Weapon / Shield: Whisper", nil, 50, "A", false, "PALADIN", "The Price of Hope" },
+    [82208] = { "CLASS", "Class Milestone (Truthseeker's Bow)", nil, 45, "B", true, "MAGE", "Greater Friend of the Library" },
+    [84124] = { "BIS", "Rare Weapon / Shield: Old Guard Retaliator", nil, 60, "B", false, "WARRIOR", "Legacy of Valor" },
+    [84146] = { "BAG", "Bag Reward: Red Bag", "Winterspring", 60, "B", true, "WARRIOR", "Red Bag Blues" },
+    [84147] = { "BIS", "Rare Gear Reward: Feralheart Wristguards", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84148] = { "BIS", "Rare Gear Reward: Beastmaster's Bindings", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84149] = { "BIS", "Rare Gear Reward: Sorcerer's Bindings", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84150] = { "BIS", "Rare Gear Reward: Soulforge Wristguards", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84151] = { "BIS", "Rare Gear Reward: Virtuous Wraps", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84152] = { "BIS", "Rare Gear Reward: Darkmantle Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84153] = { "BIS", "Rare Gear Reward: Deathmist Bracers", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84154] = { "BIS", "Rare Gear Reward: Wristguards of Heroism", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [84155] = { "BIS", "Rare Gear Reward: Feralheart Wraps", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84156] = { "BIS", "Rare Gear Reward: Beastmaster's Bindings", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84157] = { "BIS", "Rare Gear Reward: Sorcerer's Bindings", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84158] = { "BIS", "Rare Gear Reward: Virtuous Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84159] = { "BIS", "Rare Gear Reward: Darkmantle Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84160] = { "BIS", "Rare Gear Reward: Bindings of The Five Thunders", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84161] = { "BIS", "Rare Gear Reward: Deathmist Bracers", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84162] = { "BIS", "Rare Gear Reward: Bracers of Heroism", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [84195] = { "EPIC", "Epic Reward: Feline Helm and Chestpiece Set", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [84196] = { "EPIC", "Epic Reward: Beastmaster's Cap", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [84200] = { "EPIC", "Epic Reward: Darkmantle Cap", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [84202] = { "EPIC", "Epic Reward: Immoveable Helm and Chestpiece Set", "Ironforge", 60, "A", true, nil, "Saving the Best for Last" },
+    [84203] = { "EPIC", "Epic Reward: Feline Helm and Chestpiece Set", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [84208] = { "EPIC", "Epic Reward: Relief's Helm and Chestpiece Set", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [84210] = { "EPIC", "Epic Reward: Immoveable Helm and Chestpiece Set", "Orgrimmar", 60, "H", true, nil, "Saving the Best for Last" },
+    [84213] = { "EPIC", "Epic Reward: Sun Shades", "South Seas", 65, "B", true, "WARRIOR", "Rift Away" },
+    [84332] = { "CLASS", "Class Milestone (Hammer of the Fallen Thane)", nil, 55, "A", true, "PALADIN", "A Thane's Gratitude" },
+    [84394] = { "CLASS", "Class Milestone (Antique Bulwark)", nil, 60, "B", true, "MAGE", "Greater Friend of the Library" },
+    [86814] = { "BIS", "Rare Gear Reward: Sacred Bangle", "Azshara", 55, "B", false, nil, "Blackmaw Counter-Offensive" },
+    [89015] = { "BIS", "Rare Weapon / Shield: A Bigger Shield", "Azshara", 56, "A", false, nil, "Deadliest Catch" },
+    [91611] = { "BIS", "Rare Weapon / Shield: A Bigger Shield", "Azshara", 56, "H", false, nil, "Deadliest Catch" },
+    [92065] = { "BIS", "Rare Accessory: Ouroboros Ring", "Blackmaw Hold", 60, "B", false, nil, "Blackmaw Reclamation" },
+    [92189] = { "BIS", "Rare Gear Reward: Plans: Bold Dirk", "Mount Hyjal", 57, "A", false, nil, "Back to the Grind" },
+    [92422] = { "BIS", "Rare Weapon / Shield: Forsaken Greataxe", "Ruins of Lordaeron", 22, "H", false, nil, "The Wrath of Rath'mael" },
+    [92446] = { "BIS", "Rare Weapon / Shield: Elderwild Construction Hammer", "Mount Hyjal", 60, "H", false, nil, "Head Scratcher" },
+    [92454] = { "BIS", "Rare Gear Reward: Diablo Stone", "Zephras Isle", 1, "B", false, nil, "Welcome!" },
+    [92458] = { "BIS", "Rare Weapon / Shield: Defender of Dalaran", "City of Dalaran", 33, "A", false, nil, "Heart of Disruption" },
+    [92753] = { "BIS", "Forever Deadmines Finale (Explosive Consultation)", "The Deadmines", 18, "A", false, nil, "Destruction in Deadmines" },
+    [92959] = { "BIS", "Rare Weapon / Shield: Sunderbark Vigil", "Mount Hyjal", 56, "B", false, nil, "The Dying Ancients" },
+    [93128] = { "BIS", "Rare Weapon / Shield: Abandoned Ferocity", "Desolace", 42, "B", false, nil, "Khan Jehn" },
+    [93196] = { "BIS", "Rare Weapon / Shield: Greatstaff of the Necrokhans", "Desolace", 42, "H", false, nil, "Khan Jehn" },
+    [93269] = { "BAG", "Bag Reward: Hyjal Postal Satchel", "Mount Hyjal", 58, "B", true, nil, "Top of the Post" },
+    [93404] = { "BIS", "Rare Gear Reward: Overgrown Cuffs", "Maraudon", 49, "B", false, nil, "Rot and Regret" },
+    [93444] = { "BIS", "Rare Accessory: Chimaera Wing Cape", "Mount Hyjal", 60, "B", false, nil, "Bait the Beast" },
+    [93574] = { "BIS", "Rare Accessory: Corpsefeeder's Shedding", "Dire Maul", 45, "B", false, nil, "Corpsefeeder's Carapace" },
+    [93848] = { "BIS", "Rare Accessory: Ring of Nature's Cycles", "Mount Hyjal", 60, "B", false, nil, "Work Well Done" },
+    [94003] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "B", true, "WARRIOR", "The Skybreaker Bulwark" },
+    [94013] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "B", true, "HUNTER", "Taming the Beast" },
+    [94050] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "B", true, "HUNTER", "Training the Beast" },
+    [94441] = { "CLASS", "Class Spell / Ability Unlock", nil, 12, "H", true, "PALADIN", "A Lesson in Divinity" },
+    [94468] = { "CLASS", "Class Spell / Ability Unlock", nil, 14, "A", true, "SHAMAN", "Call of Fire" },
+    [94505] = { "CLASS", "Class Spell / Ability Unlock", nil, 23, "A", true, "SHAMAN", "Call of Water" },
+    [94638] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "B", true, "DRUID", "Strength and Mercy" },
+    [94773] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94774] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94775] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94776] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94777] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94778] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94779] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Divine Grace" },
+    [94793] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "HUNTER", "Training the Beast" },
+    [94817] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94818] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Contingency Plan" },
+    [94819] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Contingency Plan" },
+    [94820] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "PRIEST", "Contingency Plan" },
+    [94821] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94822] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94823] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94824] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94825] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94826] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "PRIEST", "Confounding Flash" },
+    [94864] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "A", true, "HUNTER", "Taming the Beast" },
+    [94927] = { "BIS", "Rare Weapon / Shield: Dunston's Ogre Duster", "Riverglades", 44, "A", false, nil, "Dunston Checks Out" },
+    [94968] = { "BIS", "Rare Weapon / Shield: Rock on Stick", "Krol'dok Stronghold", 45, "H", false, nil, "Eye of Mugg" },
+    [94971] = { "CLASS", "Class Spell / Ability Unlock", nil, 40, "H", true, "PALADIN", "A Paladin's Steed" },
+    [94974] = { "KEY", "Key / Attunement: Krol'dok Compound Key", "Krol'dok Stronghold", 41, "H", true, nil, "Key Ingredients" },
+    [94981] = { "KEY", "Key / Attunement: Krol'dok Compound Key", "Krol'dok Stronghold", 41, "A", true, nil, "Key Ingredients" },
+    [94982] = { "BIS", "Rare Weapon / Shield: Rock on Stick", "Krol'dok Stronghold", 45, "A", false, nil, "Eye of Mugg" },
+    [94998] = { "BIS", "Rare Accessory: Curio-Adorned Necklace", "Krol'dok Stronghold", 42, "A", false, nil, "Curios of Curiosity" },
+    [95063] = { "BIS", "Rare Accessory: Bloodmaster's Ring", "Riverglades", 45, "H", false, nil, "Bloodmaster's Ring" },
+    [95140] = { "BIS", "Rare Weapon / Shield: Wolfsbane", "Silverpine Forest", 26, "H", true, "PALADIN", "Old Fire-Eye" },
+    [95264] = { "BIS", "Rare Accessory: Courier's Clasp", "Stormwind City", 53, "A", false, nil, "Shaw Needs To Know" },
+    [95483] = { "BIS", "Rare Accessory: Courier's Clasp", "Alcaz Prison", 53, "H", false, nil, "Thrall Needs to Know" },
+    [95511] = { "MOUNT", "Mount: Reins of the Striped Nightsaber", "Darnassus", 40, "A", true, nil, "Your First Feline Friend" },
+    [95790] = { "BIS", "Rare Gear Reward: Lost Researcher's Hood", "Shaper's Terrace", 60, "A", false, nil, "Digestible Research" },
+    [95798] = { "BIS", "Rare Gear Reward: Rune-Etched Epaulets", "Alterac Mountains", 40, "A", false, nil, "The Web of Magic" },
+    [95799] = { "BIS", "Rare Weapon / Shield: Ancient Voodoo Pouch", "Ironforge", 40, "A", false, nil, "Findings for the Explorer's League" },
+    [95818] = { "BIS", "Rare Gear Reward: Dwarven Tradeskill Signpost", "Ironforge", 60, "B", false, nil, "A Quick Craft" },
+    [95821] = { "BIS", "Rare Gear Reward: Orcish Tradeskill Signpost", "Orgrimmar", 60, "B", false, nil, "A Quick Craft" },
+    [95924] = { "BIS", "Rare Gear Reward: Diemetradon Scale Spaulders", "Shaper's Terrace", 60, "A", false, nil, "Panic at the Digsite" },
+    [95925] = { "BIS", "Rare Weapon / Shield: Crystal-Infused Cleaver", "Shaper's Terrace", 60, "A", false, nil, "Mapping the Way Forward" },
+    [95926] = { "BIS", "Rare Weapon / Shield: Crystal-Infused Cleaver", "Shaper's Terrace", 60, "H", false, nil, "The Dark Crystal" },
+    [95928] = { "BIS", "Rare Gear Reward: Crystalline Pauldrons", "Shaper's Terrace", 60, "H", false, nil, "Crystalline Elements" },
+    [96016] = { "BIS", "Rare Weapon / Shield: Elementalist's Guard", nil, 40, "A", false, "SHAMAN", "The Tempest's Weapons" },
+    [96078] = { "BIS", "Rare Weapon / Shield: Ceremonial Mallet", "Stranglethorn Vale", 40, "H", false, nil, "A Tale Spun Around the Fire" },
+    [96260] = { "BAG", "Bag Reward: Spidersilk Sack", "Mulgore", 29, "H", true, nil, "Stronger than Steel" },
+    [96339] = { "BIS", "Rare Gear Reward: Holstered Replica Ironforge Air Rifle", "The Barrens", 60, "B", false, nil, "Legacy Reward: Replica Ironforge Air Rifle" },
+    [96383] = { "BIS", "Rare Gear Reward: Spectral Bear Cub", "The Barrens", 60, "B", false, nil, "Legacy Reward: Spectral Bear Cub" },
+    [96393] = { "BIS", "Rare Weapon / Shield: Calibrated Blunderbuss", "Hall of Thanes", 16, "A", false, nil, "Old Ironforge Incursion" },
+    [96609] = { "BIS", "Rare Gear Reward: Everlasting Silvermoon Shimmerwine", "City of Dalaran", 52, "A", false, nil, "A Taste of Home" },
+    [96800] = { "BIS", "Rare Accessory: Knucklebound Thimble", "Scarlet Monastery", 38, "A", false, nil, "Past Due" },
+    [96982] = { "MOUNT", "Mount: White Kodo", "Mulgore", 40, "H", true, nil, "Your First Riding Kodo" },
+    [96984] = { "BIS", "Rare Weapon / Shield: Striking Staff", "City of Dalaran", 33, "H", false, nil, "Heart of Disruption" },
+    [96989] = { "MOUNT", "Mount: Whistle of the Emerald Raptor", "Durotar", 40, "H", true, nil, "Your First Riding Raptor" },
+    [96994] = { "MOUNT", "Mount: Horn of the Brown Wolf", "Orgrimmar", 40, "H", true, nil, "Your First Riding Wolf" },
+    [96996] = { "MOUNT", "Mount: Empyrean Galestrider", "Zephras Isle", 40, "B", true, nil, "Your First Riding Galestrider" },
+    [96997] = { "MOUNT", "Mount: Blue Skeletal Horse", "Tirisfal Glades", 40, "H", true, nil, "A Steed in Death as They Were in Life" },
+    [97017] = { "MOUNT", "Mount: Brown Ram", "Dun Morogh", 40, "A", true, nil, "Your First Riding Ram" },
+    [97045] = { "MOUNT", "Mount: Brown Horse Bridle", "Elwynn Forest", 40, "A", true, nil, "Your First Horse" },
+    [97046] = { "MOUNT", "Mount: Red Mechanostrider", "Dun Morogh", 40, "A", true, nil, "Your First Mechanostrider" },
+    [97049] = { "BIS", "Rare Gear Reward: Slime-Resistant Shroud", "Shaper's Terrace", 60, "H", false, nil, "Essence of Seeping Slimes" },
+    [97169] = { "EPIC", "Epic Reward: Skyfury Helm", nil, 60, "A", true, "SHAMAN", "The Darkreaver Menace" },
+    [97171] = { "MOUNT", "Mount: Brown Horse Bridle", "Wetlands", 40, "A", true, nil, "Your First Horse" },
+    [97185] = { "CLASS", "Class Spell / Ability Unlock", nil, 60, "H", true, "PALADIN", "Justice and Retribution" },
+    [97257] = { "CLASS", "Class Spell / Ability Unlock", nil, 10, "H", true, "SHAMAN", "Call of Fire" },
+    [97271] = { "BIS", "Rare Accessory: Shen'dralar Relic", "Dire Maul", 60, "B", false, nil, "Maul or Nothing!" },
+    [97286] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "B", true, "MAGE", "Research Access" },
+    [97411] = { "BIS", "Rare Gear Reward: Soulforge Wristguards", "Orgrimmar", 60, "H", false, nil, "An Earnest Proposition" },
+    [97446] = { "MOUNT", "Mount: White Kodo", "Stonetalon Mountains", 40, "H", true, nil, "Your First Riding Kodo" },
+    [97447] = { "BIS", "Rare Gear Reward: Bindings of The Five Thunders", "Ironforge", 60, "A", false, nil, "An Earnest Proposition" },
+    [98028] = { "BIS", "Rare Weapon / Shield: Mathystra Channeling Orb", "Darkshore", 21, "A", false, nil, "Baron Marinous" },
+    [98166] = { "MOUNT", "Mount: Brown Horse Bridle", "Wetlands", 40, "A", true, nil, "Your First Horse" },
+    [98297] = { "BIS", "Rare Weapon / Shield: Fallen Dragon's Scepter", "Wetlands", 34, "A", false, nil, "Stopping the Cycle" },
+    [98310] = { "BIS", "Rare Accessory: Golem War Cloak", "Wetlands", 32, "A", false, nil, "Gleaning Our Future" },
+    [98362] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "H", true, "DRUID", "To Thunder Bluff" },
+    [98397] = { "CLASS", "Class Spell / Ability Unlock", nil, 20, "A", true, "DRUID", "To Darnassus" },
+    [98823] = { "BIS", "Rare Accessory: Furs of the Earthen Ring", "Excavation Site: Wetlands", 31, "H", false, nil, "Earthen Echo" },
+    [98824] = { "BIS", "Rare Accessory: Explorer's League Dustcover", "Excavation Site: Wetlands", 31, "A", false, nil, "Prehistoric Prism" },
+    [99187] = { "BIS", "Rare Weapon / Shield: Sword of Mourning", nil, 58, "H", false, "PALADIN", "The Reliquary of Tyr" },
+    [99210] = { "MOUNT", "Mount: Swift White Ram", "Dun Morogh", 60, "A", true, nil, "An Epic Ride" },
+    [99211] = { "MOUNT", "Mount: Ochre Skeletal Warhorse", "Tirisfal Glades", 60, "H", true, nil, "An Epic Ride" },
+    [99212] = { "MOUNT", "Mount: Swift Green Mechanostrider", "Dun Morogh", 60, "A", true, nil, "An Epic Ride" },
+    [99213] = { "MOUNT", "Mount: Swift Palomino", "Elwynn Forest", 60, "A", true, nil, "An Epic Ride" },
+    [99214] = { "MOUNT", "Mount: Reins of the Swift Stormsaber", "Darnassus", 60, "A", true, nil, "An Epic Ride" },
+    [99215] = { "MOUNT", "Mount: Horn of the Swift Timber Wolf", "Orgrimmar", 60, "H", true, nil, "An Epic Ride" },
+    [99216] = { "MOUNT", "Mount: Swift Empyrean Galestrider", "Zephras Isle", 60, "B", true, nil, "An Epic Ride" },
+    [99217] = { "MOUNT", "Mount: Great Gray Kodo", "Mulgore", 60, "H", true, nil, "An Epic Ride" },
+    [99218] = { "MOUNT", "Mount: Swift Blue Raptor", "Durotar", 60, "H", true, nil, "An Epic Ride" },
+    [99326] = { "MOUNT", "Mount: Brown Horse Bridle", "Hillsbrad Foothills", 40, "A", true, nil, "Your First Horse" },
+    [99670] = { "BIS", "Rare Accessory: Jereman's Bauble", "Mount Hyjal", 60, "B", false, nil, "Return to Jereman" },
+}
+
+local META_ZONE_ALIASES = {
+    ["the temple of atal'hakkar"] = "Sunken Temple",
+    ["temple of atal'hakkar"] = "Sunken Temple",
+    ["riverlands"] = "Riverglades",
+    ["hyjal"] = "Mount Hyjal",
+    ["stormwind stockade"] = "The Stockade",
+    ["blackrock spire"] = "Lower Blackrock Spire",
+}
+
+local _metaMemo = {}
+local _metaByZone = nil
+
+function Data.InvalidateMetaMemo(questID)
+    if questID then
+        _metaMemo[questID] = nil
+    else
+        wipe(_metaMemo)
+        _metaByZone = nil
+    end
+end
+
+local function NormalizeFactionSide(side)
+    if type(side) ~= "string" then return nil end
+    local up = string.upper(side)
+    if up == "A" or up == "ALLIANCE" then return "A" end
+    if up == "H" or up == "HORDE" then return "H" end
+    return "B"
+end
+
+local function BuildMetaEntry(questID, tag, reason, zone, level, side, perm, reqClass, title, isChainStep, leadsTo)
+    return {
+        questID = questID,
+        tag = tag or "BIS",
+        reason = reason or "",
+        zone = zone,
+        level = level,
+        side = side or "B",
+        perm = perm and true or false,
+        reqClass = reqClass,
+        title = title,
+        isChainStep = isChainStep and true or false,
+        leadsTo = leadsTo,
+    }
+end
+
+local function GetCuratedMetaSource(id)
+    local raw = Data.MetaQuests and Data.MetaQuests[id]
+    if raw then
+        return raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7], raw[8]
+    end
+    local p = Data.QuestPayoffs and Data.QuestPayoffs[id]
+    if p and p.isKeyUnlock then
+        local u = p.unlock or ""
+        if string.find(u, "^Key:") or string.find(u, "^Attunement:") then
+            return "KEY", (p.summary or p.unlock or ""), nil, nil, "B", true, nil, nil
+        elseif string.find(u, "^Ability:") or string.find(u, "^Summon:") or string.find(u, "^Totem:") then
+            return "CLASS", (p.summary or p.unlock or ""), nil, nil, "B", true, nil, nil
+        elseif id == 1715 or string.find(u, "^Pet:") then
+            return "BIS", (p.summary or p.reward or u), nil, nil, "B", true, nil, nil
+        elseif string.find(u, "^Dungeon") then
+            return "BIS", (p.summary or p.reward or u), nil, nil, "B", false, nil, nil
+        end
+    end
+    return nil
+end
+
+function Data.GetMetaQuestInfo(questID)
+    local numID = tonumber(questID)
+    local targetID = (numID and numID == numID and numID > 0 and numID < math.huge) and numID or nil
+    if not targetID then return nil end
+
+    if _metaMemo[targetID] ~= nil then
+        return _metaMemo[targetID] or nil
+    end
+
+    local result = nil
+    local directRaw = Data.MetaQuests and Data.MetaQuests[targetID]
+    if directRaw then
+        result = BuildMetaEntry(targetID, directRaw[1], directRaw[2], directRaw[3], directRaw[4], directRaw[5], directRaw[6], directRaw[7], directRaw[8], false, nil)
+    else
+        -- Inherit Meta significance from downstream quest in the same chain
+        local cInfo = Data.ChainIndex and Data.ChainIndex[targetID]
+        local chainObj = cInfo and cInfo.chainID and Data.KnownChains and Data.KnownChains[cInfo.chainID]
+        local quests = chainObj and chainObj.quests
+        if quests and cInfo.step and cInfo.step < #quests then
+            local bestTag, bestReason, bestZone, bestLvl, bestSide, bestPerm, bestCls, bestTitle, bestTarget = nil
+            for i = #quests, cInfo.step + 1, -1 do
+                local futID = quests[i]
+                if futID and futID ~= targetID then
+                    local t, r, z, l, s, pm, cls, ttl = GetCuratedMetaSource(futID)
+                    if t then
+                        bestTag, bestReason, bestZone, bestLvl, bestSide, bestPerm, bestCls, bestTitle, bestTarget = t, r, z, l, s, pm, cls, ttl, futID
+                        break
+                    end
+                end
+            end
+            if bestTag then
+                local chainReason = (bestReason and bestReason ~= "") and ("Chain -> " .. bestReason) or "Leads to Meta Finale"
+                result = BuildMetaEntry(targetID, bestTag, chainReason, bestZone, bestLvl, bestSide, bestPerm, bestCls, bestTitle, true, bestTarget)
+            end
+        end
+
+        if not result then
+            local t, r, z, l, s, pm, cls, ttl = GetCuratedMetaSource(targetID)
+            if t then
+                result = BuildMetaEntry(targetID, t, r, z, l, s, pm, cls, ttl, false, nil)
+            end
+        end
+    end
+
+    _metaMemo[targetID] = result or false
+    return result
+end
+
+local function CanonicalizeMetaZone(zoneName)
+    if type(zoneName) ~= "string" or zoneName == "" then return nil end
+    local lower = string.lower(string.gsub(zoneName, "^%s*(.-)%s*$", "%1"))
+    return META_ZONE_ALIASES[lower] or zoneName
+end
+
+local function BuildZoneMetaIndex()
+    local byZone = {}
+    local metaQuests = Data.MetaQuests or {}
+    for qID, raw in pairs(metaQuests) do
+        local z = raw[3]
+        if type(z) == "string" and z ~= "" then
+            local key = string.lower(z)
+            local bucket = byZone[key]
+            if not bucket then
+                bucket = {}
+                byZone[key] = bucket
+            end
+            bucket[#bucket + 1] = qID
+        end
+    end
+    local prio = Data.META_TAG_PRIORITY
+    for _, list in pairs(byZone) do
+        table.sort(list, function(aID, bID)
+            local a = metaQuests[aID]
+            local b = metaQuests[bID]
+            local pa = prio[a[1]] or 9
+            local pb = prio[b[1]] or 9
+            if pa ~= pb then return pa < pb end
+            local ap = a[6] and true or false
+            local bp = b[6] and true or false
+            if ap ~= bp then return ap end
+            local la, lb = a[4] or 99, b[4] or 99
+            if la ~= lb then return la < lb end
+            return aID < bID
+        end)
+    end
+    _metaByZone = byZone
+    return byZone
+end
+
+local function IsMetaQuestFlaggedDone(questID)
+    if C_QuestLog and C_QuestLog.IsQuestFlaggedCompleted then
+        local ok, done = pcall(C_QuestLog.IsQuestFlaggedCompleted, questID)
+        if ok and done then return true end
+    elseif IsQuestFlaggedCompleted then
+        local ok, done = pcall(IsQuestFlaggedCompleted, questID)
+        if ok and done then return true end
+    end
+    return false
+end
+
+local _emptyZoneMeta = { items = {}, remainingItems = {}, total = 0, done = 0, remaining = 0, inLogCount = 0 }
+
+function Data.GetZoneMetaQuests(zoneName, playerFaction, playerClass, countsOnly)
+    local canonical = CanonicalizeMetaZone(zoneName)
+    if not canonical then return nil end
+
+    local index = _metaByZone or BuildZoneMetaIndex()
+    local idList = index[string.lower(canonical)]
+    if not idList or #idList == 0 then
+        return countsOnly and nil or _emptyZoneMeta
+    end
+
+    local pSide = NormalizeFactionSide(playerFaction)
+    local pCls = (type(playerClass) == "string" and playerClass ~= "") and string.upper(playerClass) or nil
+
+    local metaQuests = Data.MetaQuests or {}
+    local eligible = not countsOnly and {} or nil
+    local remainingItems = not countsOnly and {} or nil
+    local totalCount, doneCount, inLogCount = 0, 0, 0
+    local getLogIdx = (not countsOnly) and addon.Utils and addon.Utils.GetQuestLogIndex
+
+    for _, qID in ipairs(idList) do
+        local raw = metaQuests[qID]
+        if raw then
+            local side = raw[5] or "B"
+            local reqClass = raw[7]
+            local sideOk = (not pSide or pSide == "B" or side == "B" or side == pSide)
+            local classOk = (not reqClass or not pCls or reqClass == pCls)
+            if sideOk and classOk then
+                totalCount = totalCount + 1
+                local done = IsMetaQuestFlaggedDone(qID)
+                if done then
+                    doneCount = doneCount + 1
+                elseif not countsOnly then
+                    local inLog = (getLogIdx and getLogIdx(qID) ~= nil) or false
+                    if inLog then inLogCount = inLogCount + 1 end
+                    local item = BuildMetaEntry(qID, raw[1], raw[2], raw[3], raw[4], side, raw[6], reqClass, raw[8], false, nil)
+                    item.isDone = false
+                    item.inLog = inLog
+                    eligible[#eligible + 1] = item
+                    remainingItems[#remainingItems + 1] = item
+                end
+                if done and not countsOnly then
+                    local item = BuildMetaEntry(qID, raw[1], raw[2], raw[3], raw[4], side, raw[6], reqClass, raw[8], false, nil)
+                    item.isDone = true
+                    item.inLog = false
+                    eligible[#eligible + 1] = item
+                end
+            end
+        end
+    end
+
+    return {
+        zone = canonical,
+        items = eligible,
+        remainingItems = remainingItems,
+        total = totalCount,
+        done = doneCount,
+        remaining = totalCount - doneCount,
+        inLogCount = inLogCount,
+    }
+end
+
 -- Memoization cache for computed payoffs
 local _payoffMemo = {}
 
@@ -1040,6 +1829,9 @@ function Data.InvalidatePayoffMemo(questID)
         _payoffMemo[questID] = nil
     else
         wipe(_payoffMemo)
+    end
+    if Data.InvalidateMetaMemo then
+        Data.InvalidateMetaMemo(questID)
     end
 end
 
@@ -1094,6 +1886,10 @@ function Data.GetQuestPayoff(questID, questTitle)
                 isKeyUnlock = entry.isKeyUnlock or false,
             }
         end
+    end
+
+    if not payoff and targetID and Data.GetForeverCatalogPayoff then
+        payoff = Data.GetForeverCatalogPayoff(targetID)
     end
 
     -- 3. Dynamic Auto-Detector: Scans rewards, bags, keys, and keywords for unlisted/custom quests

@@ -385,7 +385,11 @@ local function EvaluateItemFit(itemLink, playerClass, playerLevel, specIndex, st
         return 0.50, true
     end
 
-    if classID == 1 or classID == 11 or equipLoc == "INVTYPE_BAG" or equipLoc == "INVTYPE_QUIVER" then
+    if classID == 11 or equipLoc == "INVTYPE_QUIVER" then
+        if playerClass ~= "HUNTER" then return 0.05 end
+        return CheckBagUpgrade(itemLink)
+    end
+    if classID == 1 or equipLoc == "INVTYPE_BAG" then
         return CheckBagUpgrade(itemLink)
     end
 
@@ -395,6 +399,14 @@ local function EvaluateItemFit(itemLink, playerClass, playerLevel, specIndex, st
     elseif equipLoc == "INVTYPE_HOLDABLE" then
         local allowed = (Data.HoldableProficiency or HOLDABLE_USERS)[playerClass]
         if not allowed then return 0.05 end
+    elseif equipLoc == "INVTYPE_RELIC" or (classID == 4 and subClassID and subClassID >= 7 and subClassID <= 10) then
+        local RELIC_CLASS = { [7] = "PALADIN", [8] = "DRUID", [9] = "SHAMAN", [10] = "DEATHKNIGHT" }
+        local reqClass = subClassID and RELIC_CLASS[subClassID]
+        if reqClass then
+            if playerClass ~= reqClass then return 0.05 end
+        elseif playerClass ~= "PALADIN" and playerClass ~= "DRUID" and playerClass ~= "SHAMAN" and playerClass ~= "DEATHKNIGHT" then
+            return 0.05
+        end
     end
 
     local isWeapon = (classID == 2)
@@ -507,9 +519,11 @@ function Scores.CalculateClassFit(questID)
     local playerLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
 
     local itemLinks = {}
+    local anyRewardUncached = false
 
     if Utils and Utils.GetQuestRewardData then
-        local choices, rewards = Utils.GetQuestRewardData(questID)
+        local choices, rewards, _, _, uncached = Utils.GetQuestRewardData(questID)
+        if uncached then anyRewardUncached = true end
         if choices then
             for _, link in ipairs(choices) do
                 table.insert(itemLinks, link)
@@ -525,6 +539,7 @@ function Scores.CalculateClassFit(questID)
     if #itemLinks == 0 then
         return 0.50, {
             hasItems = false,
+            isPending = anyRewardUncached,
             bestScore = 0.50,
             final = 0.50,
             note = "No item rewards offered (Neutral)",
@@ -533,7 +548,7 @@ function Scores.CalculateClassFit(questID)
 
     local bestMatch = 0.0
     local bestLink = nil
-    local anyPending = false
+    local anyPending = anyRewardUncached
 
     for _, link in ipairs(itemLinks) do
         local score, isPending = EvaluateItemFit(link, playerClass, playerLevel, specIndex, statWeights)

@@ -24,7 +24,7 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_WEIGHTS"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_QUESTLOG"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_TRACKER"])
-    DEFAULT_CHAT_FRAME:AddMessage(L["HELP_OBJECTS"])
+    DEFAULT_CHAT_FRAME:AddMessage(L["HELP_META"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_TEST"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_RESET"])
 end
@@ -63,7 +63,6 @@ local function RefreshAllUI()
             addon.UI.UpdateZoneAdvisor()
         end
         if addon.UI.UpdateQuestOfferDialog then addon.UI.UpdateQuestOfferDialog() end
-        if addon.UI.ApplyQuestObjectHighlight then addon.UI.ApplyQuestObjectHighlight() end
     end
 end
 
@@ -186,16 +185,14 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbQuestObjects = CreateCheckbox(panel, "Highlight Quest Objects in World (Sparkles & 3D Glow)", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -6,
-        function() return addon.db and addon.db.highlightQuestObjects ~= false end,
+    local cbMetaIndicator = CreateCheckbox(panel, (Utils.META_ICON or "") .. " Show Meta Quest Star Indicators", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -6,
+        function() return addon.db and addon.db.showMetaIndicator ~= false end,
         function(v)
-            addon.db.highlightQuestObjects = v
-            if addon.UI and addon.UI.ApplyQuestObjectHighlight then
-                addon.UI.ApplyQuestObjectHighlight()
-            end
+            addon.db.showMetaIndicator = v
+            RefreshAllUI()
         end)
 
-    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbQuestObjects, "BOTTOMLEFT", 0, -6,
+    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbMetaIndicator, "BOTTOMLEFT", 0, -6,
         function() return addon.db and addon.db.debug end,
         function(v) addon.db.debug = v end)
 
@@ -233,7 +230,7 @@ local function CreateOptionsPanel()
         cbTracker:SetChecked(addon.db.showInTracker)
         cbWorldMap:SetChecked(addon.db.showInWorldMap ~= false)
         cbZoneAdvisor:SetChecked(addon.db.showZoneAdvisor ~= false)
-        cbQuestObjects:SetChecked(addon.db.highlightQuestObjects ~= false)
+        cbMetaIndicator:SetChecked(addon.db.showMetaIndicator ~= false)
         cbDebug:SetChecked(addon.db.debug)
         sR:SyncValue()
         sF:SyncValue()
@@ -366,12 +363,34 @@ local function HandleSlashCmd(msg)
             addon.UI.ToggleZoneAdvisor(addon.db.showZoneAdvisor)
         end
         addon.Print("Zone Advisor Sidebar: %s", addon.db.showZoneAdvisor and "|cff00ff00ON|r" or "|cffff0000OFF|r")
-    elseif cmd == "objects" or cmd == "object" or cmd == "sparkle" or cmd == "sparkles" or cmd == "glow" then
-        addon.db.highlightQuestObjects = not (addon.db.highlightQuestObjects ~= false)
-        if addon.UI and addon.UI.ApplyQuestObjectHighlight then
-            addon.UI.ApplyQuestObjectHighlight()
+    elseif cmd == "meta" then
+        local sub = args[2] and string.lower(args[2]) or nil
+        if sub == "toggle" or sub == "on" or sub == "off" then
+            if sub == "toggle" then
+                addon.db.showMetaIndicator = (addon.db.showMetaIndicator == false)
+            else
+                addon.db.showMetaIndicator = (sub == "on")
+            end
+            RefreshAllUI()
+            addon.Print("Meta Quest Star Indicators: %s", addon.db.showMetaIndicator and "|cff00ff00ON|r" or "|cffff0000OFF|r")
+        else
+            local targetZone = (#args >= 2) and table.concat(args, " ", 2) or ((GetRealZoneText and GetRealZoneText()) or (GetZoneText and GetZoneText()) or "")
+            local sum = Utils.GetZoneMetaSummary and Utils.GetZoneMetaSummary(targetZone)
+            if not sum or sum.total == 0 then
+                addon.Print("%s %s: %s", (Utils.META_ICON or ""), tostring(targetZone ~= "" and targetZone or "Current Zone"), L["META_NONE_REMAINING"] or "No Meta Quests cataloged here")
+            else
+                addon.Print("%s %s — %d Left (%d/%d Done):", (Utils.META_ICON or ""), sum.zone or targetZone, sum.remaining, sum.done, sum.total)
+                for i, m in ipairs(sum.remainingItems) do
+                    if i > 12 then
+                        addon.Print("  ...and %d more.", #sum.remainingItems - 12)
+                        break
+                    end
+                    local tBadge = (Utils.GetMetaTagBadge and Utils.GetMetaTagBadge(m.tag)) or ("[" .. m.tag .. "]")
+                    local logTag = m.inLog and " |cff1aff4d(In Log)|r" or ""
+                    addon.Print("  %s [%d] %s%s — |cffaaaaaa%s|r", tBadge, m.questID, m.title or ("Quest #" .. m.questID), logTag, m.reason or "")
+                end
+            end
         end
-        addon.Print(string.format(L["OBJECT_HIGHLIGHT_TOGGLED"], addon.db.highlightQuestObjects and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
     elseif cmd == "test" or cmd == "diag" then
         addon.Engine.RunDiagnostics()
     elseif cmd == "reset" then

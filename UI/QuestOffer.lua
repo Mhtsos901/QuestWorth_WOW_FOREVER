@@ -55,8 +55,12 @@ local function CleanOfferTitle(raw)
 end
 
 -- Update Quest Detail / Offer dialog (QuestFrameDetailPanel / QuestInfoTitleHeader)
-local function UpdateQuestOfferDialog()
+local function UpdateQuestOfferDialog(template, parentFrame)
+    if QUEST_TEMPLATE_LOG and template == QUEST_TEMPLATE_LOG then return end
+    if parentFrame and QuestLogDetailScrollFrame and parentFrame == QuestLogDetailScrollFrame then return end
+    if parentFrame and QuestMapFrame and QuestMapFrame.DetailsFrame and parentFrame == QuestMapFrame.DetailsFrame.ScrollFrame then return end
     if not (addon.db and addon.db.enabled) then
+        addon._activeOfferQuestID = nil
         if titleHoverFrame then titleHoverFrame:Hide() end
         for _, header in ipairs({ QuestInfoTitleHeader, QuestDetailTitleText, QuestProgressTitleText }) do
             if header and header.GetText and header.SetText then
@@ -71,8 +75,12 @@ local function UpdateQuestOfferDialog()
         end
         return
     end
-    if not QuestFrame or not QuestFrame:IsShown() then return end
+    if not QuestFrame or not QuestFrame:IsShown() then
+        addon._activeOfferQuestID = nil
+        return
+    end
     if QuestFrameGreetingPanel and QuestFrameGreetingPanel:IsShown() then
+        addon._activeOfferQuestID = nil
         if titleHoverFrame then titleHoverFrame:Hide() end
         return
     end
@@ -93,32 +101,96 @@ local function UpdateQuestOfferDialog()
         qID = QuestInfoFrame.questLog.questID
     end
 
-    if not qID and QuestInfoTitleHeader and QuestInfoTitleHeader.GetText then
-        local rawTitle = QuestInfoTitleHeader:GetText() or ""
-        local clean = Utils.CleanQuestTitle(rawTitle)
-        local titleNoLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
-        titleNoLevel = string.gsub(titleNoLevel, "^%s*", "")
-        titleNoLevel = string.gsub(titleNoLevel, "%s*$", "")
+    local function ResolveTitleTextForLookup()
+        for _, fs in ipairs({ QuestInfoTitleHeader, QuestRewardTitleText, QuestDetailTitleText }) do
+            if fs and fs.GetText then
+                local raw = fs:GetText()
+                if raw and raw ~= "" then return raw end
+            end
+        end
+        if GetTitleText then
+            local ok, t = pcall(GetTitleText)
+            if ok and type(t) == "string" and t ~= "" then return t end
+        end
+        return ""
+    end
 
-        local availableQuests = C_GossipInfo and C_GossipInfo.GetAvailableQuests and C_GossipInfo.GetAvailableQuests()
-        if availableQuests then
-            for _, q in ipairs(availableQuests) do
-                if q.title == titleNoLevel or q.title == clean or string.find(clean, q.title, 1, true) then
-                    qID = q.questID
-                    break
+    if not qID then
+        local rawTitle = ResolveTitleTextForLookup()
+        local clean = CleanOfferTitle(rawTitle)
+        local titleNoLevel = string.gsub(clean, "^%s*%[%d+%+?%]%s*", "")
+        titleNoLevel = string.gsub(titleNoLevel, "^%s*(.-)%s*$", "%1")
+        local lowerTarget = string.lower(titleNoLevel)
+
+        local function matchListByTitle(list)
+            if not list or lowerTarget == "" then return nil end
+            for _, q in ipairs(list) do
+                if q.title then
+                    local cleanQ = string.gsub(Utils.CleanQuestTitle(q.title), "^%s*%[%d+%+?%]%s*", "")
+                    cleanQ = string.gsub(cleanQ, "^%s*(.-)%s*$", "%1")
+                    if string.lower(cleanQ) == lowerTarget then
+                        return q.questID
+                    end
+                end
+            end
+            for _, q in ipairs(list) do
+                if q.title and string.find(string.lower(clean), string.lower(q.title), 1, true) then
+                    return q.questID
+                end
+            end
+            return nil
+        end
+
+        if C_GossipInfo and lowerTarget ~= "" then
+            qID = matchListByTitle(C_GossipInfo.GetAvailableQuests and C_GossipInfo.GetAvailableQuests())
+            if not qID then
+                qID = matchListByTitle(C_GossipInfo.GetActiveQuests and C_GossipInfo.GetActiveQuests())
+            end
+        end
+
+        -- Turn-in fallback: match active Quest Log title when GetQuestID() returned nil/0
+        if not qID and lowerTarget ~= "" then
+            local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                               or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+            for i = 1, numEntries do
+                local qTitle, isH, id
+                if C_QuestLog and C_QuestLog.GetInfo then
+                    local ok, info = pcall(C_QuestLog.GetInfo, i)
+                    if ok and info then qTitle, isH, id = info.title, info.isHeader, info.questID end
+                elseif GetQuestLogTitle then
+                    local ok, t, _, _, h, _, _, _, qid = pcall(GetQuestLogTitle, i)
+                    if ok then qTitle, isH, id = t, h, qid end
+                end
+                if not isH and id and id > 0 and qTitle and qTitle ~= "" then
+                    local cleanLog = string.gsub(Utils.CleanQuestTitle(qTitle), "^%s*%[%d+%+?%]%s*", "")
+                    cleanLog = string.gsub(cleanLog, "^%s*(.-)%s*$", "%1")
+                    if string.lower(cleanLog) == lowerTarget then
+                        qID = id
+                        break
+                    end
                 end
             end
         end
 
-        if not qID and addon.lastHoveredQuestID then
-            qID = addon.lastHoveredQuestID
+        if not qID and addon.lastHoveredQuestID and lowerTarget ~= "" then
+            local hoveredTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(addon.lastHoveredQuestID)
+            if hoveredTitle and hoveredTitle ~= "" then
+                local cleanHovered = string.gsub(Utils.CleanQuestTitle(hoveredTitle), "^%s*%[%d+%+?%]%s*", "")
+                cleanHovered = string.gsub(cleanHovered, "^%s*(.-)%s*$", "%1")
+                if string.lower(cleanHovered) == lowerTarget then
+                    qID = addon.lastHoveredQuestID
+                end
+            end
         end
     end
 
     if not qID or qID <= 0 then
+        addon._activeOfferQuestID = nil
         if titleHoverFrame then titleHoverFrame:Hide() end
         return
     end
+
+    addon._activeOfferQuestID = qID
 
     -- Invalidate cached calculation for this quest to ensure live QuestFrame offer rewards & XP are evaluated fresh
     if addon.Engine and addon.Engine.InvalidateCache then
@@ -126,17 +198,8 @@ local function UpdateQuestOfferDialog()
     elseif addon.Engine and addon.Engine.Cache then
         addon.Engine.Cache[qID] = nil
     end
-    if Utils.ClearQuestRewardsCache then
-        Utils.ClearQuestRewardsCache(qID)
-    end
     if Utils.ClearTalkToCache then
         Utils.ClearTalkToCache(qID)
-    end
-    if addon.Data and addon.Data.InvalidatePayoffMemo then
-        addon.Data.InvalidatePayoffMemo(qID)
-    end
-    if addon.Scores and addon.Scores.InvalidateRewardCache then
-        addon.Scores.InvalidateRewardCache(qID)
     end
 
     local worth, breakdown = addon.Engine.CalculateWorth(qID)
@@ -149,7 +212,8 @@ local function UpdateQuestOfferDialog()
     local isHard = (breakdown and breakdown.isHard)
     local isBankable = (breakdown and breakdown.isBankable)
     local isLowValue = (breakdown and breakdown.isLowValue)
-    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue)
+    local isMeta = (breakdown and breakdown.isMeta)
+    local badge = Utils.FormatBadge(worth, isComplete, isHard, isBankable, isLowValue, isMeta)
 
     -- Attach mouseover tooltip only when the corresponding detail title header is visible
     local visibleAnchor = (QuestInfoTitleHeader and ((QuestInfoTitleHeader.IsVisible and QuestInfoTitleHeader:IsVisible()) or (QuestInfoTitleHeader.IsShown and QuestInfoTitleHeader:IsShown())) and QuestInfoTitleHeader)
@@ -178,6 +242,13 @@ local function UpdateQuestOfferDialog()
         or ""
     )
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, cleanOfferName)
+    local metaPrefixLine = ""
+    if (not addon.db or addon.db.showMetaIndicator ~= false) and breakdown and breakdown.metaInfo then
+        local mi = breakdown.metaInfo
+        local metaDesc = (mi.reason and mi.reason ~= "") and mi.reason or (mi.tag or "META")
+        metaPrefixLine = string.format("\n%s |cff663300META [%s]:|r |cff3d1f00%s|r",
+            Utils.META_ICON or "", tostring(mi.tag or "META"), metaDesc)
+    end
     local payoffLine = ""
     if payoff and payoff.tip and payoff.tip ~= "" then
         payoffLine = "\n|cff004d14• Tip: " .. payoff.tip .. "|r"
@@ -208,6 +279,7 @@ local function UpdateQuestOfferDialog()
             payoffLine = "\n|cff103055• " .. table.concat(dynParts, " • ") .. "|r"
         end
     end
+    payoffLine = metaPrefixLine .. payoffLine
 
     -- 1. Badge QuestInfoTitleHeader at the top of the quest offer parchment
     if QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader.SetText then
@@ -262,8 +334,25 @@ local function StripButtonWorthBadge(widget, textRegion)
 end
 
 -- Clean any stale Worth % badges from GossipFrame (pre-selection NPC quest list)
+-- and harvest known quest levels for upcoming QuestFrame detail view
 local function UpdateGossipAvailableQuests()
     if not GossipFrame or not GossipFrame:IsShown() then return end
+
+    if Utils.RecordKnownQuestLevel and C_GossipInfo then
+        for _, getter in ipairs({ C_GossipInfo.GetAvailableQuests, C_GossipInfo.GetActiveQuests }) do
+            if getter then
+                local ok, list = pcall(getter)
+                if ok and type(list) == "table" then
+                    for _, q in ipairs(list) do
+                        local qLvl = q.questLevel or q.level
+                        if q.questID and qLvl and qLvl > 0 then
+                            Utils.RecordKnownQuestLevel(q.questID, q.title, qLvl)
+                        end
+                    end
+                end
+            end
+        end
+    end
 
     if GossipFrame.GreetingPanel and GossipFrame.GreetingPanel.ScrollBox and GossipFrame.GreetingPanel.ScrollBox.GetView then
         local view = GossipFrame.GreetingPanel.ScrollBox:GetView()
@@ -286,9 +375,24 @@ local function UpdateGossipAvailableQuests()
 end
 
 -- Clean any stale Worth % badges from QuestFrameGreetingPanel (pre-selection multi-quest greeting)
+-- and harvest known quest levels for upcoming QuestFrame detail view
 local function UpdateQuestGreetingPanel()
+    addon._activeOfferQuestID = nil
     if titleHoverFrame then titleHoverFrame:Hide() end
     if not QuestFrameGreetingPanel or not QuestFrameGreetingPanel:IsShown() then return end
+
+    if Utils.RecordKnownQuestLevel and GetNumAvailableQuests and GetAvailableLevel and GetAvailableTitle then
+        local okN, numAvail = pcall(GetNumAvailableQuests)
+        if okN and type(numAvail) == "number" and numAvail > 0 then
+            for i = 1, numAvail do
+                local okT, availTitle = pcall(GetAvailableTitle, i)
+                local okL, availLvl = pcall(GetAvailableLevel, i)
+                if okT and okL and availTitle and type(availLvl) == "number" and availLvl > 0 then
+                    Utils.RecordKnownQuestLevel(nil, availTitle, availLvl)
+                end
+            end
+        end
+    end
 
     for i = 1, 32 do
         local button = _G["QuestTitleButton" .. i]
@@ -301,14 +405,15 @@ end
 function UI.InitializeQuestOffer()
     -- Hook QuestInfo_Display (central Blizzard display handler for QuestFrame)
     if QuestInfo_Display then
-        hooksecurefunc("QuestInfo_Display", function()
-            UpdateQuestOfferDialog()
+        hooksecurefunc("QuestInfo_Display", function(template, parentFrame)
+            UpdateQuestOfferDialog(template, parentFrame)
         end)
     end
 
     if QuestFrame and QuestFrame.HookScript then
         pcall(function()
             QuestFrame:HookScript("OnHide", function()
+                addon._activeOfferQuestID = nil
                 if titleHoverFrame then titleHoverFrame:Hide() end
             end)
         end)

@@ -21,45 +21,61 @@ end
 addon.isUpdatingUI = false
 local _combatDeferred = false
 
-local function RefreshAllUI()
-    if addon.isUpdatingUI then return end
+local function RefreshAllUI(force)
+    if addon.isUpdatingUI then
+        if C_Timer and C_Timer.After and not addon._refreshRetryPending then
+            addon._refreshRetryPending = true
+            C_Timer.After(0.08, function()
+                addon._refreshRetryPending = false
+                RefreshAllUI(true)
+            end)
+        end
+        return
+    end
     if InCombatLockdown and InCombatLockdown() then
         _combatDeferred = true
+        if addon.UI and WorldMapFrame and WorldMapFrame:IsShown() then
+            if addon.UI.UpdateWorldMapBanner then addon.UI.UpdateWorldMapBanner() end
+            if addon.UI.UpdateZoneAdvisor then addon.UI.UpdateZoneAdvisor() end
+        end
         return
     end
     _combatDeferred = false
     if addon.UI then
         if addon.UI.UpdateQuestLog then
-            addon.UI.UpdateQuestLog()
+            pcall(addon.UI.UpdateQuestLog, force)
         end
         if addon.UI.UpdateObjectiveTracker then
-            addon.UI.UpdateObjectiveTracker()
+            pcall(addon.UI.UpdateObjectiveTracker, force)
         end
         if addon.UI.UpdateWorldMapBanner then
-            addon.UI.UpdateWorldMapBanner()
+            pcall(addon.UI.UpdateWorldMapBanner)
         end
         if addon.UI.UpdateZoneAdvisor then
-            addon.UI.UpdateZoneAdvisor()
-        end
-        if addon.UI.ApplyQuestObjectHighlight then
-            addon.UI.ApplyQuestObjectHighlight()
+            pcall(addon.UI.UpdateZoneAdvisor)
         end
     end
 end
 
 local _refreshPending = false
-local function DelayedRefresh(delay)
+local _refreshForce = false
+local function DelayedRefresh(delay, force)
+    if force then _refreshForce = true end
     if _refreshPending then return end
     _refreshPending = true
     delay = delay or 0.18
     if C_Timer and C_Timer.After then
         C_Timer.After(delay, function()
+            local useForce = _refreshForce
             _refreshPending = false
-            RefreshAllUI()
+            _refreshForce = false
+            RefreshAllUI(useForce)
         end)
     else
+        local useForce = _refreshForce
         _refreshPending = false
-        RefreshAllUI()
+        _refreshForce = false
+        RefreshAllUI(useForce)
     end
 end
 
@@ -110,20 +126,24 @@ local function OnEvent(self, event, ...)
         if addon.UI and addon.UI.InitializeWorldMap then
             addon.UI.InitializeWorldMap()
         end
-        if addon.UI and addon.UI.ApplyQuestObjectHighlight then
-            addon.UI.ApplyQuestObjectHighlight()
+        if addon.Engine then
+            if addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
+            if addon.Engine.InvalidateSpecCache then addon.Engine.InvalidateSpecCache() end
         end
-        if addon.Engine and addon.Engine.InvalidateCache then
-            addon.Engine.InvalidateCache()
+        if addon.Scores then
+            if addon.Scores.InvalidateClassFitCache then addon.Scores.InvalidateClassFitCache() end
+            if addon.Scores.InvalidateMeleeCache then addon.Scores.InvalidateMeleeCache() end
         end
+        if addon.InvalidateHitExpertiseCache then addon.InvalidateHitExpertiseCache() end
         DelayedRefresh(0.2)
         if C_Timer and C_Timer.After then
             C_Timer.After(0.8, function()
-                if addon.UI and addon.UI.UpdateObjectiveTracker then
-                    addon.UI.UpdateObjectiveTracker(true)
-                end
-                if addon.UI and addon.UI.UpdateQuestLog then
-                    addon.UI.UpdateQuestLog(true)
+                if addon.Player and addon.Player.Update then addon.Player.Update() end
+                if addon.UI then
+                    if addon.UI.UpdateObjectiveTracker then addon.UI.UpdateObjectiveTracker(true) end
+                    if addon.UI.UpdateQuestLog then addon.UI.UpdateQuestLog(true) end
+                    if addon.UI.UpdateWorldMapBanner then addon.UI.UpdateWorldMapBanner() end
+                    if addon.UI.UpdateZoneAdvisor then addon.UI.UpdateZoneAdvisor() end
                 end
             end)
         end
@@ -131,17 +151,22 @@ local function OnEvent(self, event, ...)
     elseif event == "ZONE_CHANGED_NEW_AREA" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" then
         ScanCurrentZoneQuestLines()
         if addon.Engine and addon.Engine.InvalidateCache then
-            addon.Engine.InvalidateCache()
+            addon.Engine.InvalidateCache(nil, true)
         end
         DelayedRefresh(0.1)
 
+    elseif event == "QUEST_DATA_LOAD_RESULT" then
+        if addon.Engine and addon.Engine.InvalidateCache then
+            addon.Engine.InvalidateCache()
+        end
+        DelayedRefresh(0.18)
+
     elseif event == "QUEST_LOG_UPDATE" or
-           event == "QUEST_DATA_LOAD_RESULT" or
            event == "QUEST_WATCH_UPDATE" or
            event == "UNIT_QUEST_LOG_CHANGED" or
            event == "BAG_UPDATE_DELAYED" then
         if addon.Engine and addon.Engine.InvalidateCache then
-            addon.Engine.InvalidateCache()
+            addon.Engine.InvalidateCache(nil, true)
         end
         DelayedRefresh(0.18)
 
@@ -154,8 +179,12 @@ local function OnEvent(self, event, ...)
         if addon.InvalidateHitExpertiseCache then addon.InvalidateHitExpertiseCache() end
         DelayedRefresh(0.18)
 
-    elseif event == "QUEST_ACCEPTED" or
-           event == "QUEST_TURNED_IN" or
+    elseif event == "QUEST_ACCEPTED" then
+        if addon.Engine and addon.Engine.InvalidateCache then addon.Engine.InvalidateCache(nil, true) end
+        if addon.Scores and addon.Scores.InvalidateDensityCache then addon.Scores.InvalidateDensityCache() end
+        DelayedRefresh(0.18)
+
+    elseif event == "QUEST_TURNED_IN" or
            event == "QUEST_REMOVED" then
         if addon.Engine and addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
         if addon.Scores and addon.Scores.InvalidateDensityCache then addon.Scores.InvalidateDensityCache() end
@@ -166,8 +195,10 @@ local function OnEvent(self, event, ...)
            event == "PLAYER_SPECIALIZATION_CHANGED" or
            event == "CHARACTER_POINTS_CHANGED" or
            event == "TRAIT_CONFIG_UPDATED" then
+        local arg1 = ...
+        local newLvl = (event == "PLAYER_LEVEL_UP") and tonumber(arg1) or nil
         if addon.Player and addon.Player.Update then
-            addon.Player.Update()
+            addon.Player.Update(newLvl)
         end
         if addon.Engine then
             if addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
@@ -177,7 +208,8 @@ local function OnEvent(self, event, ...)
             if addon.Scores.InvalidateMeleeCache then addon.Scores.InvalidateMeleeCache() end
             if addon.Scores.InvalidateClassFitCache then addon.Scores.InvalidateClassFitCache() end
         end
-        DelayedRefresh(0.18)
+        if addon.InvalidateHitExpertiseCache then addon.InvalidateHitExpertiseCache() end
+        DelayedRefresh(0.18, true)
 
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         if addon.Engine and addon.Engine.InvalidateCache then
@@ -195,12 +227,9 @@ local function OnEvent(self, event, ...)
         DelayedRefresh(0.18)
 
     elseif event == "PLAYER_REGEN_ENABLED" then
-        if addon.UI and addon.UI.ApplyQuestObjectHighlight and addon._objectHighlightDeferred then
-            addon.UI.ApplyQuestObjectHighlight()
-        end
-        if _combatDeferred then
+        if _combatDeferred or addon._questLogCombatDeferred or addon._trackerCombatDeferred then
             _refreshPending = false
-            DelayedRefresh(0.05)
+            DelayedRefresh(0.05, true)
         else
             DelayedRefresh(0.10)
         end
@@ -231,11 +260,6 @@ local function OnEvent(self, event, ...)
                 addon.UI.UpdateQuestGreetingPanel()
             end
         end
-
-    elseif event == "PLAYER_SOFT_INTERACT_CHANGED" then
-        if addon.UI and addon.UI.UpdateSoftTargetQuestObjectIcon then
-            addon.UI.UpdateSoftTargetQuestObjectIcon(false)
-        end
     end
 end
 
@@ -249,8 +273,7 @@ local EVENTS = {
     "TRAIT_CONFIG_UPDATED", "PLAYER_EQUIPMENT_CHANGED",
     "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED",
     "GET_ITEM_INFO_RECEIVED", "PLAYER_REGEN_ENABLED", "QUEST_DETAIL", "QUEST_PROGRESS",
-    "QUEST_COMPLETE", "GOSSIP_SHOW", "QUEST_GREETING",
-    "PLAYER_SOFT_INTERACT_CHANGED"
+    "QUEST_COMPLETE", "GOSSIP_SHOW", "QUEST_GREETING"
 }
 
 for _, ev in ipairs(EVENTS) do

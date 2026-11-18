@@ -32,21 +32,32 @@ end
 local function UpdateRowContinentIcon(icon, continent, isDungeon)
     if not icon then return end
 
+    -- Always clear any active Atlas before switching textures so Dungeon atlases never stick on Continent rows
+    if icon.SetAtlas then
+        pcall(icon.SetAtlas, icon, nil)
+    end
+    if icon.SetTexture then
+        icon:SetTexture(nil)
+    end
+
     if isDungeon then
         local set = false
         if icon.SetAtlas then
-            local ok = pcall(icon.SetAtlas, icon, "groupfinder-icon-dungeon")
-            if ok and icon:GetTexture() then set = true end
-            if not set then
-                ok = pcall(icon.SetAtlas, icon, "dungeon")
-                if ok and icon:GetTexture() then set = true end
-            end
-            if not set then
-                ok = pcall(icon.SetAtlas, icon, "Dungeon")
-                if ok and icon:GetTexture() then set = true end
+            local atlases = { "groupfinder-icon-dungeon", "dungeon", "Dungeon" }
+            for _, atlas in ipairs(atlases) do
+                if not C_Texture or not C_Texture.GetAtlasInfo or C_Texture.GetAtlasInfo(atlas) then
+                    local ok = pcall(icon.SetAtlas, icon, atlas)
+                    local tex = ok and icon.GetTexture and icon:GetTexture()
+                    local curAtlas = ok and icon.GetAtlas and icon:GetAtlas()
+                    if ok and (curAtlas == atlas or (tex and tex ~= "" and tex ~= "Atlas:nil")) then
+                        set = true
+                        break
+                    end
+                end
             end
         end
         if not set then
+            if icon.SetAtlas then pcall(icon.SetAtlas, icon, nil) end
             icon:SetTexture("Interface\\LFGFrame\\LFG-Eye")
             icon:SetTexCoord(0, 0.125, 0, 0.25)
         else
@@ -55,33 +66,15 @@ local function UpdateRowContinentIcon(icon, continent, isDungeon)
         icon:SetSize(16, 16)
         icon:Show()
     elseif continent == 1 then
-        -- Kalimdor -> Horde Crest Symbol
-        local set = false
-        if icon.SetAtlas then
-            local ok = pcall(icon.SetAtlas, icon, "factionicon-horde")
-            if ok and icon:GetTexture() then set = true end
-        end
-        if not set then
-            icon:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
-            icon:SetTexCoord(0.04, 0.60, 0.04, 0.60)
-        else
-            icon:SetTexCoord(0, 1, 0, 1)
-        end
+        -- Kalimdor -> Horde Crest Symbol (mirrors GetContinentMarkup)
+        icon:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
+        icon:SetTexCoord(0.04, 0.60, 0.04, 0.60)
         icon:SetSize(16, 16)
         icon:Show()
     elseif continent == 2 then
-        -- Eastern Kingdoms -> Alliance Crest Symbol
-        local set = false
-        if icon.SetAtlas then
-            local ok = pcall(icon.SetAtlas, icon, "factionicon-alliance")
-            if ok and icon:GetTexture() then set = true end
-        end
-        if not set then
-            icon:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
-            icon:SetTexCoord(0.04, 0.60, 0.04, 0.60)
-        else
-            icon:SetTexCoord(0, 1, 0, 1)
-        end
+        -- Eastern Kingdoms -> Alliance Crest Symbol (mirrors GetContinentMarkup)
+        icon:SetTexture("Interface\\TargetingFrame\\UI-PVP-Alliance")
+        icon:SetTexCoord(0.04, 0.60, 0.04, 0.60)
         icon:SetSize(16, 16)
         icon:Show()
     else
@@ -376,26 +369,120 @@ local function PopulateZoneTooltip(tooltip, d, isDungeonHint, rankIndex, showCli
         end
     end
 
+    -- Meta Quests Left in Zone (live completion check against player faction/class)
+    if (not addon.db or addon.db.showMetaIndicator ~= false) and addon.Utils and addon.Utils.GetZoneMetaSummary then
+        local metaSum = addon.Utils.GetZoneMetaSummary(d.zoneName)
+        if metaSum and metaSum.total > 0 then
+            tooltip:AddLine(" ")
+            local star = (addon.Utils and addon.Utils.META_ICON) or ""
+            local leftLabel = "  " .. star .. " |cffffd100" .. (L["META_LEFT_IN_ZONE"] or "Meta Quests Left:") .. "|r"
+            if metaSum.remaining == 0 then
+                tooltip:AddDoubleLine(
+                    leftLabel,
+                    string.format("|cff1aff4d%s (%d/%d)|r", L["META_ALL_DONE"] or "All Done", metaSum.done, metaSum.total),
+                    1, 1, 1, 1, 1, 1
+                )
+            else
+                tooltip:AddDoubleLine(
+                    leftLabel,
+                    string.format("|cffffd100%d Left|r |cffaaaaaa(%d/%d Done)|r", metaSum.remaining, metaSum.done, metaSum.total),
+                    1, 1, 1, 1, 1, 1
+                )
+                local maxShow = 4
+                for idx = 1, math.min(#metaSum.remainingItems, maxShow) do
+                    local m = metaSum.remainingItems[idx]
+                    local tBadge = (addon.Utils and addon.Utils.GetMetaTagBadge and addon.Utils.GetMetaTagBadge(m.tag)) or ("[" .. m.tag .. "]")
+                    local logNote = m.inLog and " |cff1aff4d(In Log)|r" or ""
+                    local detail = (m.reason and m.reason ~= "") and m.reason or (m.title or ("Quest #" .. m.questID))
+                    tooltip:AddLine(string.format("    %s |cffffffff%s|r%s |cffaaaaaa— %s|r",
+                        tBadge, m.title or ("Quest #" .. m.questID), logNote, detail), 0.9, 0.9, 0.9, true)
+                end
+                if #metaSum.remainingItems > maxShow then
+                    tooltip:AddLine(string.format("    |cff888888...and %d more (/qw meta for full list)|r", #metaSum.remainingItems - maxShow), 0.7, 0.7, 0.7)
+                end
+            end
+        end
+    end
+
     if showClickHint then
         tooltip:AddLine(" ")
         tooltip:AddLine("|cff00ccffClick to view this zone on the map.|r", 0.7, 0.9, 1)
     end
 end
 
+local STRATA_RANK = {
+    BACKGROUND = 1,
+    LOW = 2,
+    MEDIUM = 3,
+    HIGH = 4,
+    DIALOG = 5,
+    FULLSCREEN = 6,
+    FULLSCREEN_DIALOG = 7,
+    TOOLTIP = 8,
+}
+
+local function GetMapAnchorFrame()
+    if not WorldMapFrame then return nil end
+    local sc = WorldMapFrame.ScrollContainer
+    if sc and (not sc.IsShown or sc:IsShown()) then
+        return sc
+    end
+    return WorldMapFrame
+end
+
+local function SyncMapWidgetLayer(widget, offset)
+    if not (widget and WorldMapFrame) then return end
+    local bestStrata = "HIGH"
+    local bestRank = STRATA_RANK[bestStrata]
+    local maxLvl = 1
+
+    for pass = 1, 3 do
+        local f = (pass == 1 and WorldMapFrame) or (pass == 2 and WorldMapFrame.BorderFrame) or WorldMapFrame.ScrollContainer
+        if f then
+            if f.GetFrameStrata then
+                local s = f:GetFrameStrata()
+                local r = s and STRATA_RANK[s]
+                if r and r > bestRank then
+                    bestRank = r
+                    bestStrata = s
+                end
+            end
+            if f.GetFrameLevel then
+                local lvl = f:GetFrameLevel() or 1
+                if lvl > maxLvl then maxLvl = lvl end
+            end
+        end
+    end
+
+    local targetLevel = math.min(maxLvl + 9020 + (offset or 0), 9930)
+    if widget.GetFrameStrata and widget.SetFrameStrata and widget:GetFrameStrata() ~= bestStrata then
+        widget:SetFrameStrata(bestStrata)
+    end
+    if widget.GetFrameLevel and widget.SetFrameLevel and widget:GetFrameLevel() ~= targetLevel then
+        widget:SetFrameLevel(targetLevel)
+    end
+end
+
 local function CreateWorldMapBanner()
-    if mapBanner then return mapBanner end
+    if mapBanner then
+        if WorldMapFrame and mapBanner.GetParent and mapBanner:GetParent() ~= WorldMapFrame and mapBanner.SetParent then
+            mapBanner:SetParent(WorldMapFrame)
+        end
+        SyncMapWidgetLayer(mapBanner, 5)
+        return mapBanner
+    end
     if not WorldMapFrame then return nil end
 
-    local scrollContainer = (WorldMapFrame.ScrollContainer) or WorldMapFrame
     local frame = CreateFrame("Button", "WorthItWorldMapBanner", WorldMapFrame, "BackdropTemplate")
     frame:SetHeight(20)
-    frame:SetFrameStrata("HIGH")
-    frame:SetFrameLevel(WorldMapFrame:GetFrameLevel() + 25)
+    SyncMapWidgetLayer(frame, 5)
 
     -- Anchor directly at the height of the Zones % button (Y = -1 on ScrollContainer)
+    local anchor = GetMapAnchorFrame() or WorldMapFrame
+    frame._qwAnchor = anchor
     frame:ClearAllPoints()
-    if WorldMapFrame.ScrollContainer then
-        frame:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -1)
+    if WorldMapFrame.ScrollContainer and anchor == WorldMapFrame.ScrollContainer then
+        frame:SetPoint("TOP", anchor, "TOP", 0, -1)
     else
         frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
     end
@@ -432,7 +519,6 @@ local function CreateWorldMapBanner()
 end
 
 function UI.UpdateWorldMapBanner()
-    if InCombatLockdown and InCombatLockdown() then return end
     if not (addon.db and addon.db.enabled and addon.db.showInWorldMap ~= false) then
         if mapBanner then mapBanner:Hide() end
         return
@@ -473,12 +559,16 @@ function UI.UpdateWorldMapBanner()
     banner.data = res
     banner.isDungeon = res.isDungeon
 
-    -- Keep anchor aligned with Zones button at Y = -1
-    banner:ClearAllPoints()
-    if WorldMapFrame.ScrollContainer then
-        banner:SetPoint("TOP", WorldMapFrame.ScrollContainer, "TOP", 0, -1)
-    else
-        banner:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
+    -- Keep anchor and strata/level synced only when changed
+    local anchor = GetMapAnchorFrame() or WorldMapFrame
+    if banner._qwAnchor ~= anchor then
+        banner._qwAnchor = anchor
+        banner:ClearAllPoints()
+        if WorldMapFrame.ScrollContainer and anchor == WorldMapFrame.ScrollContainer then
+            banner:SetPoint("TOP", anchor, "TOP", 0, -1)
+        else
+            banner:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
+        end
     end
 
     local badge = res.isCompletedDungeon and "|cff00ff00[Done]|r" or Utils.FormatBadge(res.worth, false, false, false, res.isLowValue)
@@ -493,18 +583,29 @@ function UI.UpdateWorldMapBanner()
     local contMarkup = GetContinentMarkup(cont, res.isDungeon)
     local contPrefix = (contMarkup ~= "") and (contMarkup .. " ") or ""
 
+    local metaSuffix = ""
+    if (not addon.db or addon.db.showMetaIndicator ~= false) and Utils and Utils.GetZoneMetaSummary then
+        local metaSum = Utils.GetZoneMetaSummary(res.zoneName, true)
+        if metaSum and metaSum.remaining > 0 then
+            metaSuffix = string.format("  %s |cffffd100%d Meta|r", (Utils and Utils.META_ICON) or "", metaSum.remaining)
+        end
+    end
+
     -- Display only the core zone evaluation without cluttering with Log quest count
-    local displayText = string.format("%s %s|cffffffff%s|r%s  %s%s|r",
-        badge, contPrefix, res.zoneName, levelStr, statusColor, res.status)
+    local displayText = string.format("%s %s|cffffffff%s|r%s  %s%s|r%s",
+        badge, contPrefix, res.zoneName, levelStr, statusColor, res.status, metaSuffix)
 
-    banner.Text:SetText(displayText)
+    if banner._lastDisplayText ~= displayText then
+        banner._lastDisplayText = displayText
+        banner.Text:SetText(displayText)
+        local textWidth = (banner.Text and banner.Text.GetStringWidth and banner.Text:GetStringWidth()) or 180
+        banner:SetWidth(math.max(190, textWidth + 24))
+        banner:SetHeight(20)
+    end
 
-    -- Dynamic width with comfortable padding
-    local textWidth = (banner.Text and banner.Text.GetStringWidth and banner.Text:GetStringWidth()) or 180
-    banner:SetWidth(math.max(190, textWidth + 24))
-    banner:SetHeight(20)
-
-    banner:Show()
+    if not banner:IsShown() then
+        banner:Show()
+    end
 end
 
 -- =========================================================================
@@ -524,28 +625,31 @@ local function UpdateAdvisorToggleText(btn, isOpen)
     if fs and fs.SetText then fs:SetText(text) end
 end
 
-local function CreateZoneAdvisorToggle(parent)
+local function CreateZoneAdvisorToggle(anchor)
+    local parent = WorldMapFrame or anchor
+    local targetAnchor = anchor or GetMapAnchorFrame() or parent
     if advisorToggleButton then
-        if parent and advisorToggleButton._worthItParent ~= parent and advisorToggleButton.SetParent then
+        if parent and advisorToggleButton.GetParent and advisorToggleButton:GetParent() ~= parent and advisorToggleButton.SetParent then
             advisorToggleButton:SetParent(parent)
-            advisorToggleButton:ClearAllPoints()
-            advisorToggleButton:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -1)
-            advisorToggleButton:SetFrameLevel((parent:GetFrameLevel() or 1) + 15)
-            advisorToggleButton._worthItParent = parent
         end
+        if targetAnchor and advisorToggleButton._worthItAnchor ~= targetAnchor then
+            advisorToggleButton:ClearAllPoints()
+            advisorToggleButton:SetPoint("TOPLEFT", targetAnchor, "TOPLEFT", 8, -1)
+            advisorToggleButton._worthItAnchor = targetAnchor
+        end
+        SyncMapWidgetLayer(advisorToggleButton, 8)
         return advisorToggleButton
     end
     if not parent then return nil end
 
     local btn = CreateFrame("Button", "WorthItAdvisorToggleButton", parent, "UIPanelButtonTemplate")
-    btn._worthItParent = parent
+    btn._worthItAnchor = targetAnchor
     btn:SetSize(106, 20)
-    btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -1)
-    btn:SetFrameStrata("HIGH")
-    btn:SetFrameLevel(parent:GetFrameLevel() + 15)
+    btn:SetPoint("TOPLEFT", targetAnchor, "TOPLEFT", 8, -1)
+    SyncMapWidgetLayer(btn, 8)
 
     UpdateAdvisorToggleText(btn, false)
-    if btn:GetFontString() then
+    if btn.GetFontString and btn:GetFontString() then
         btn:GetFontString():SetFontObject("GameFontNormalSmall")
     end
 
@@ -579,7 +683,7 @@ local function CreateAdvisorRow(index, parent)
 
     -- Authentic Blizzard Quest Title Highlight on mouse hover
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-    local hl = row:GetHighlightTexture()
+    local hl = row.GetHighlightTexture and row:GetHighlightTexture()
     if hl then
         hl:SetAlpha(0.35)
         hl:SetAllPoints(row)
@@ -716,27 +820,30 @@ local function CreateAdvisorRow(index, parent)
     return row
 end
 
-local function CreateZoneAdvisorPanel(parent)
+local function CreateZoneAdvisorPanel(anchor)
+    local parent = WorldMapFrame or anchor
+    local targetAnchor = anchor or GetMapAnchorFrame() or parent
     if advisorPanel then
-        if parent and advisorPanel._worthItParent ~= parent and advisorPanel.SetParent then
+        if parent and advisorPanel.GetParent and advisorPanel:GetParent() ~= parent and advisorPanel.SetParent then
             advisorPanel:SetParent(parent)
-            advisorPanel:ClearAllPoints()
-            advisorPanel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -25)
-            advisorPanel:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 22)
-            advisorPanel:SetFrameLevel((parent:GetFrameLevel() or 1) + 25)
-            advisorPanel._worthItParent = parent
         end
+        if targetAnchor and advisorPanel._worthItAnchor ~= targetAnchor then
+            advisorPanel:ClearAllPoints()
+            advisorPanel:SetPoint("TOPLEFT", targetAnchor, "TOPLEFT", 8, -25)
+            advisorPanel:SetPoint("BOTTOMLEFT", targetAnchor, "BOTTOMLEFT", 8, 22)
+            advisorPanel._worthItAnchor = targetAnchor
+        end
+        SyncMapWidgetLayer(advisorPanel, 12)
         return advisorPanel
     end
     if not parent then return nil end
 
     local panel = CreateFrame("Frame", "WorthItZoneAdvisorPanel", parent, "BackdropTemplate")
-    panel._worthItParent = parent
+    panel._worthItAnchor = targetAnchor
     panel:SetWidth(286)
-    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -25)
-    panel:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 8, 22)
-    panel:SetFrameStrata("HIGH")
-    panel:SetFrameLevel(parent:GetFrameLevel() + 25)
+    panel:SetPoint("TOPLEFT", targetAnchor, "TOPLEFT", 8, -25)
+    panel:SetPoint("BOTTOMLEFT", targetAnchor, "BOTTOMLEFT", 8, 22)
+    SyncMapWidgetLayer(panel, 12)
 
     -- Authentic Blizzard Warcraft panel backdrop: Deep slate rock with antique gold border
     panel:SetBackdrop({
@@ -912,16 +1019,22 @@ local function CreateZoneAdvisorPanel(parent)
     return advisorPanel
 end
 
+local _advisorList = {}
+local _advisorItemPool = {}
+
 function UI.UpdateZoneAdvisor()
-    if InCombatLockdown and InCombatLockdown() then return end
     if not advisorPanel or not advisorPanel:IsShown() then return end
+    SyncMapWidgetLayer(advisorPanel, 12)
+    if advisorToggleButton then
+        SyncMapWidgetLayer(advisorToggleButton, 8)
+    end
     if advisorPanel.UpdateFilterVisuals then
         advisorPanel.UpdateFilterVisuals()
     end
 
     local curFilter = addon.db and addon.db.zoneAdvisorFilter or "ALL"
-    local list = {}
-    local seen = {}
+    local list = _advisorList
+    local listCount = 0
 
     local playerClass = (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
     if not playerClass then
@@ -985,18 +1098,25 @@ function UI.UpdateZoneAdvisor()
                     end
 
                     if include then
-                        list[#list + 1] = {
-                            name = name,
-                            res = res,
-                            mapID = zData.mapID,
-                            continent = zData.continent,
-                            isDungeon = isDung,
-                        }
+                        listCount = listCount + 1
+                        local entry = _advisorItemPool[listCount]
+                        if not entry then
+                            entry = {}
+                            _advisorItemPool[listCount] = entry
+                        end
+                        entry.name = name
+                        entry.res = res
+                        entry.mapID = zData.mapID
+                        entry.continent = zData.continent
+                        entry.isDungeon = isDung
+                        list[listCount] = entry
                     end
                 end
             end
-            seen[name] = true
         end
+    end
+    for i = listCount + 1, #list do
+        list[i] = nil
     end
 
     local playerRace = (addon.Player and addon.Player.GetRace and addon.Player.GetRace())
@@ -1005,6 +1125,21 @@ function UI.UpdateZoneAdvisor()
         playerRace = r or "Human"
     end
     local homeCont = addon.Engine and addon.Engine.GetHomeContinent and addon.Engine.GetHomeContinent(playerRace)
+    local starterZone = addon.Engine and addon.Engine.GetStarterZone and addon.Engine.GetStarterZone(playerRace)
+
+    local currentPlayerZone = nil
+    if C_Map and C_Map.GetBestMapForUnit then
+        local okM, pMapID = pcall(C_Map.GetBestMapForUnit, "player")
+        if okM and pMapID and pMapID > 0 then
+            currentPlayerZone = ResolveZoneName(pMapID)
+        end
+    end
+    if not currentPlayerZone and GetRealZoneText then
+        local okZ, rz = pcall(GetRealZoneText)
+        if okZ and type(rz) == "string" and rz ~= "" then
+            currentPlayerZone = rz
+        end
+    end
 
     table.sort(list, function(a, b)
         local aDone = (a and a.isDungeon and a.res and a.res.isCompletedDungeon) and true or false
@@ -1017,7 +1152,20 @@ function UI.UpdateZoneAdvisor()
         if math.abs(aWorth - bWorth) > 0.005 then
             return aWorth > bWorth
         end
-        -- Home continent tie-breaker for low-level travel proximity
+        -- Tie-breakers when zones score identically within 0.5%:
+        -- 1. Current physical zone where the player is actively questing (if viable >= 50%)
+        if currentPlayerZone and aWorth >= 0.50 and bWorth >= 0.50 then
+            local aCur = (a.name == currentPlayerZone)
+            local bCur = (b.name == currentPlayerZone)
+            if aCur ~= bCur then return aCur end
+        end
+        -- 2. Racial starting zone (if viable starter >= 70%)
+        if starterZone and aWorth >= 0.70 and bWorth >= 0.70 then
+            local aStart = (a.name == starterZone)
+            local bStart = (b.name == starterZone)
+            if aStart ~= bStart then return aStart end
+        end
+        -- 3. Home continent tie-breaker for low-level travel proximity
         if homeCont and a and b and a.continent ~= b.continent then
             if a.continent == homeCont then return true end
             if b.continent == homeCont then return false end
@@ -1104,7 +1252,11 @@ function UI.UpdateZoneAdvisor()
             end
         end
 
-        row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -((i - 1) * rowHeight))
+        if row._qwLayoutIndex ~= i then
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", child, "TOPLEFT", 0, -((i - 1) * rowHeight))
+            row._qwLayoutIndex = i
+        end
         row:Show()
     end
 
@@ -1147,11 +1299,12 @@ function UI.UpdateZoneAdvisor()
 end
 
 function UI.ToggleZoneAdvisor(enable)
-    local parent = (WorldMapFrame.ScrollContainer) or WorldMapFrame
-    if not parent then return end
+    local anchor = GetMapAnchorFrame()
+    if not anchor then return end
 
-    local panel = CreateZoneAdvisorPanel(parent)
-    local toggle = CreateZoneAdvisorToggle(parent)
+    local panel = CreateZoneAdvisorPanel(anchor)
+    local toggle = CreateZoneAdvisorToggle(anchor)
+    if not panel then return end
 
     local targetState
     if enable ~= nil then
@@ -1164,14 +1317,14 @@ function UI.ToggleZoneAdvisor(enable)
         addon.db.showZoneAdvisor = targetState
     end
 
-    if InCombatLockdown and InCombatLockdown() then
-        if toggle then
-            UpdateAdvisorToggleText(toggle, targetState)
-        end
-        return
-    end
-
     pcall(function()
+        if toggle then
+            if addon.db and addon.db.enabled == false then
+                toggle:Hide()
+            else
+                toggle:Show()
+            end
+        end
         if targetState then
             panel:Show()
             UI.UpdateZoneAdvisor()
@@ -1192,12 +1345,30 @@ local mapWatcher = CreateFrame("Frame", "WorthIt_MapWatcherFrame")
 local _lastWatchedMapID = nil
 local _watchThrottle = 0
 
+local function SyncMapWidgetsLayout()
+    if not (WorldMapFrame and WorldMapFrame:IsShown()) then return end
+    local anchor = GetMapAnchorFrame()
+    if anchor then
+        local toggle = CreateZoneAdvisorToggle(anchor)
+        if toggle then
+            if addon.db and addon.db.enabled == false then
+                toggle:Hide()
+            else
+                toggle:Show()
+            end
+        end
+        local panel = CreateZoneAdvisorPanel(anchor)
+        if panel and panel:IsShown() then
+            UI.UpdateZoneAdvisor()
+        end
+    end
+    UI.UpdateWorldMapBanner()
+end
+
 local function OnMapWatchUpdate(self, elapsed)
     _watchThrottle = _watchThrottle + elapsed
     if _watchThrottle < 0.10 then return end
     _watchThrottle = 0
-
-    if InCombatLockdown and InCombatLockdown() then return end
 
     if not (WorldMapFrame and WorldMapFrame:IsShown()) then
         _lastWatchedMapID = nil
@@ -1207,9 +1378,14 @@ local function OnMapWatchUpdate(self, elapsed)
     end
 
     local currentMapID = (WorldMapFrame.GetMapID and WorldMapFrame:GetMapID())
-    if currentMapID ~= _lastWatchedMapID then
+    local wantBanner = (not addon.db or (addon.db.enabled ~= false and addon.db.showInWorldMap ~= false))
+    if currentMapID ~= _lastWatchedMapID or (wantBanner and not (mapBanner and mapBanner:IsShown())) then
         _lastWatchedMapID = currentMapID
         UI.UpdateWorldMapBanner()
+    else
+        if mapBanner and mapBanner:IsShown() then SyncMapWidgetLayer(mapBanner, 5) end
+        if advisorToggleButton then SyncMapWidgetLayer(advisorToggleButton, 8) end
+        if advisorPanel and advisorPanel:IsShown() then SyncMapWidgetLayer(advisorPanel, 12) end
     end
 end
 
@@ -1218,9 +1394,34 @@ local isWorldMapHooked = false
 function UI.InitializeWorldMap()
     if not WorldMapFrame then return end
 
-    local parent = (WorldMapFrame.ScrollContainer) or WorldMapFrame
-    CreateZoneAdvisorToggle(parent)
-    CreateZoneAdvisorPanel(parent)
+    local anchor = GetMapAnchorFrame()
+    CreateZoneAdvisorToggle(anchor)
+    CreateZoneAdvisorPanel(anchor)
+
+    if WorldMapFrame.QuestLog and WorldMapFrame.QuestLog.HookScript and not WorldMapFrame.QuestLog._worthItMapSyncHooked then
+        WorldMapFrame.QuestLog._worthItMapSyncHooked = true
+        pcall(function()
+            WorldMapFrame.QuestLog:HookScript("OnShow", SyncMapWidgetsLayout)
+            WorldMapFrame.QuestLog:HookScript("OnHide", SyncMapWidgetsLayout)
+        end)
+    end
+
+    WorldMapFrame._qwHookedMethods = WorldMapFrame._qwHookedMethods or {}
+    for _, methodName in ipairs({
+        "OnMapChanged", "SetMapID", "SetDisplayState", "Maximize", "Minimize",
+        "RefreshOverlayFrames", "UpdateSpacerFrameAnchoring",
+        "HandleUserActionToggleSidePanel", "HandleUserActionOpenSidePanel", "HandleUserActionCloseSidePanel"
+    }) do
+        if WorldMapFrame[methodName] and not WorldMapFrame._qwHookedMethods[methodName] then
+            WorldMapFrame._qwHookedMethods[methodName] = true
+            hooksecurefunc(WorldMapFrame, methodName, function()
+                if methodName == "OnMapChanged" or methodName == "SetMapID" then
+                    _lastWatchedMapID = nil
+                end
+                SyncMapWidgetsLayout()
+            end)
+        end
+    end
 
     if isWorldMapHooked then return end
     isWorldMapHooked = true
@@ -1234,11 +1435,14 @@ function UI.InitializeWorldMap()
     WorldMapFrame:HookScript("OnShow", function()
         _lastWatchedMapID = nil
         mapWatcher:Show()
-        UI.UpdateWorldMapBanner()
+        SyncMapWidgetsLayout()
         if addon.db and addon.db.showZoneAdvisor ~= false then
             UI.ToggleZoneAdvisor(true)
         else
             UI.ToggleZoneAdvisor(false)
+        end
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0.05, SyncMapWidgetsLayout)
         end
     end)
 
@@ -1252,19 +1456,4 @@ function UI.InitializeWorldMap()
             advisorPanel:Hide()
         end
     end)
-
-    -- Also hook explicit Blizzard events/methods as backup
-    if WorldMapFrame.OnMapChanged then
-        hooksecurefunc(WorldMapFrame, "OnMapChanged", function()
-            _lastWatchedMapID = nil
-            UI.UpdateWorldMapBanner()
-        end)
-    end
-
-    if WorldMapFrame.SetMapID then
-        hooksecurefunc(WorldMapFrame, "SetMapID", function()
-            _lastWatchedMapID = nil
-            UI.UpdateWorldMapBanner()
-        end)
-    end
 end

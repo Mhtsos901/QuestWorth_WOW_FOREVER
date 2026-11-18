@@ -35,9 +35,9 @@ end
 
 -- Safe helper to fetch XP reward for a quest
 local function GetQuestXP(questID)
-    if not Utils.IsValidQuestID(questID) then return 0 end
+    if not Utils.IsValidQuestID(questID) then return 0, false end
     if _xpCache[questID] and _xpCache[questID] > 0 then
-        return _xpCache[questID]
+        return _xpCache[questID], false
     end
 
     local xp = 0
@@ -46,52 +46,40 @@ local function GetQuestXP(questID)
         if ok and val and val > 0 then xp = val end
     end
     if xp == 0 and GetQuestLogRewardXP then
+        local ok, val = pcall(GetQuestLogRewardXP, questID)
+        if ok and type(val) == "number" and val > 0 then xp = val end
+    end
+    if xp == 0 and GetQuestLogRewardXP then
         local val = Utils.WithSelectedQuest(questID, function()
             return GetQuestLogRewardXP(questID)
         end)
         if val and val > 0 then xp = val end
     end
 
-    if xp == 0 and QuestFrame and QuestFrame:IsShown() then
-        local matchesOffer = false
-        if GetQuestID then
-            local okID, currentID = pcall(GetQuestID)
-            if okID and currentID and currentID == questID then
-                matchesOffer = true
-            end
+    if xp == 0 and Utils.IsActiveOfferQuest and Utils.IsActiveOfferQuest(questID) then
+        if GetRewardXP then
+            local ok, val = pcall(GetRewardXP)
+            if ok and val and val > 0 then xp = val end
         end
-        if not matchesOffer and GetTitleText then
-            local qTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(questID)
-            local frameTitle = GetTitleText()
-            if qTitle and frameTitle and qTitle == frameTitle then
-                matchesOffer = true
-            end
+        if xp == 0 and GetQuestRewardXP then
+            local ok, val = pcall(GetQuestRewardXP)
+            if ok and val and val > 0 then xp = val end
         end
-        if matchesOffer then
-            if GetRewardXP then
-                local ok, val = pcall(GetRewardXP)
-                if ok and val and val > 0 then xp = val end
-            end
-            if xp == 0 and GetQuestRewardXP then
-                local ok, val = pcall(GetQuestRewardXP)
-                if ok and val and val > 0 then xp = val end
-            end
-            if xp == 0 and QuestInfoFrame and QuestInfoFrame.rewards and QuestInfoFrame.rewards.xp then
-                xp = QuestInfoFrame.rewards.xp or 0
-            end
+        if xp == 0 and QuestInfoFrame and QuestInfoFrame.rewards and QuestInfoFrame.rewards.xp then
+            xp = QuestInfoFrame.rewards.xp or 0
         end
     end
 
     if xp > 0 then
         _xpCache[questID] = xp
-        return xp
+        return xp, false
     end
 
     local fallbackXP = (addon.Data and addon.Data.QuestXPFallback and addon.Data.QuestXPFallback[questID])
         or (_G.ForeverDungeonJournal_NS and _G.ForeverDungeonJournal_NS.FOREVER_QUEST_XP_FALLBACK and _G.ForeverDungeonJournal_NS.FOREVER_QUEST_XP_FALLBACK[questID])
         or (_G.ForeverDungeonJournal and _G.ForeverDungeonJournal.FOREVER_QUEST_XP_FALLBACK and _G.ForeverDungeonJournal.FOREVER_QUEST_XP_FALLBACK[questID])
     if type(fallbackXP) == "number" and fallbackXP > 0 then
-        return fallbackXP
+        return fallbackXP, false
     end
 
     -- Fallback for unaccepted quests not currently open in QuestFrame (e.g. Gossip listing):
@@ -110,7 +98,7 @@ local function GetQuestXP(questID)
         levelFactor = math.max(0.10, 1.0 + (delta + greenRange) * 0.20)
     end
     local estimatedXP = math.floor(qMobXP * mult * levelFactor)
-    return estimatedXP
+    return estimatedXP, true
 end
 
 -- Safe helper to fetch direct Money reward for a quest
@@ -126,27 +114,17 @@ local function GetQuestMoney(questID)
         if ok and val and val > 0 then money = val end
     end
     if money == 0 and GetQuestLogRewardMoney then
+        local ok, val = pcall(GetQuestLogRewardMoney, questID)
+        if ok and type(val) == "number" and val > 0 then money = val end
+    end
+    if money == 0 and GetQuestLogRewardMoney then
         local val = Utils.WithSelectedQuest(questID, function()
             return GetQuestLogRewardMoney(questID)
         end)
         if val and val > 0 then money = val end
     end
-    if money == 0 and QuestFrame and QuestFrame:IsShown() then
-        local matchesOffer = false
-        if GetQuestID then
-            local okID, currentID = pcall(GetQuestID)
-            if okID and currentID and currentID == questID then
-                matchesOffer = true
-            end
-        end
-        if not matchesOffer and GetTitleText then
-            local qTitle = Utils.GetQuestTitle and Utils.GetQuestTitle(questID)
-            local frameTitle = GetTitleText()
-            if qTitle and frameTitle and qTitle == frameTitle then
-                matchesOffer = true
-            end
-        end
-        if matchesOffer and GetRewardMoney then
+    if money == 0 and Utils.IsActiveOfferQuest and Utils.IsActiveOfferQuest(questID) then
+        if GetRewardMoney then
             local ok, val = pcall(GetRewardMoney)
             if ok and val and val > 0 then money = val end
         end
@@ -161,11 +139,11 @@ end
 -- Safe helper to fetch item links and calculate vendor sell values (uses addon.SafeGetItemInfo via GetQuestRewardData)
 local function GetQuestVendorPrices(questID)
     if Utils and Utils.GetQuestRewardData then
-        local _, _, maxChoicePrice, fixedPricesSum = Utils.GetQuestRewardData(questID)
-        return (maxChoicePrice or 0) + (fixedPricesSum or 0)
+        local _, _, maxChoicePrice, fixedPricesSum, anyUncachedItem = Utils.GetQuestRewardData(questID)
+        return (maxChoicePrice or 0) + (fixedPricesSum or 0), anyUncachedItem and true or false
     end
     -- Fallback: Uses addon.SafeGetItemInfo directly
-    return 0
+    return 0, false
 end
 
 function Scores.CalculateReward(questID)
@@ -181,16 +159,16 @@ function Scores.CalculateReward(questID)
     local mobMultiplier = GetBenchmarkMultiplier(playerLevel, isTalkTo)
     local benchmarkQuestXP = mobXP * mobMultiplier
 
-    local rewardXP = GetQuestXP(questID)
+    local rewardXP, isEstimatedXP = GetQuestXP(questID)
     local xpScore = 0.0
 
     if not isMaxLevel and benchmarkQuestXP > 0 then
         if rewardXP > 0 then
             xpScore = math.min(1.0, rewardXP / benchmarkQuestXP)
 
-            local xpMax = UnitXPMax("player")
+            local xpMax = (UnitXPMax and UnitXPMax("player")) or 0
             if not xpMax or xpMax <= 0 then xpMax = 1 end
-            local currentXP = UnitXP("player") or 0
+            local currentXP = (UnitXP and UnitXP("player")) or 0
             if currentXP < 0 then currentXP = 0 end
             local xpNeeded = math.max(1, xpMax - currentXP)
             if rewardXP >= xpNeeded then
@@ -202,7 +180,7 @@ function Scores.CalculateReward(questID)
     end
 
     local directMoney = GetQuestMoney(questID)
-    local vendorResell = GetQuestVendorPrices(questID)
+    local vendorResell, anyUncachedItem = GetQuestVendorPrices(questID)
     local totalMoney = directMoney + vendorResell
 
     if isMaxLevel and rewardXP > 0 then
@@ -217,15 +195,14 @@ function Scores.CalculateReward(questID)
     if isMaxLevel then
         finalScore = moneyScore
     else
-        -- Leveling priority: If quest offers exceptional XP, ensure lack of vendor copper doesn't suppress it
-        if xpScore >= 0.85 or (benchmarkQuestXP > 0 and rewardXP >= benchmarkQuestXP) then
-            finalScore = (xpScore * 0.88) + (moneyScore * 0.12)
-            if benchmarkQuestXP > 0 and rewardXP > benchmarkQuestXP then
-                local bonus = math.min(0.12, ((rewardXP - benchmarkQuestXP) / benchmarkQuestXP) * 0.20)
-                finalScore = math.min(1.0, finalScore + bonus)
-            end
-        else
-            finalScore = (xpScore * 0.75) + (moneyScore * 0.25)
+        -- Leveling priority: smoothly shift weight toward XP as XP approaches/exceeds benchmark (strictly monotonic)
+        local xpBlend = math.max(0.0, math.min(1.0, (xpScore - 0.70) / 0.30))
+        local wXP = 0.75 + (0.13 * xpBlend)
+        local wMoney = 0.25 - (0.13 * xpBlend)
+        finalScore = (xpScore * wXP) + (moneyScore * wMoney)
+        if benchmarkQuestXP > 0 and rewardXP > benchmarkQuestXP then
+            local bonus = math.min(0.12, ((rewardXP - benchmarkQuestXP) / benchmarkQuestXP) * 0.20)
+            finalScore = math.min(1.0, finalScore + bonus)
         end
     end
 
@@ -233,7 +210,7 @@ function Scores.CalculateReward(questID)
 
     local reason = nil
     if finalScore < 0.30 then
-        reason = "Low XP"
+        reason = isMaxLevel and "Low Gold" or "Low XP"
     elseif isTalkTo and finalScore >= 0.70 then
         reason = "Talk-To"
     elseif finalScore >= 0.85 then
@@ -250,6 +227,8 @@ function Scores.CalculateReward(questID)
         vendorResell = vendorResell,
         isMaxLevel = isMaxLevel,
         isTalkTo = isTalkTo,
+        isEstimatedXP = isEstimatedXP and true or false,
+        isPending = anyUncachedItem and true or false,
         final = finalScore,
         reason = reason,
     }

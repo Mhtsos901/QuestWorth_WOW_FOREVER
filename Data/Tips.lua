@@ -118,6 +118,7 @@ Data.QuestTips = {
     [348]  = "SOUTH STV: Witch Doctor Unbagwa is inside the Mistvale Gorilla cave outside Booty Bay (Lvl 40-42 mobs).",
     [575]  = "NORTH STV: Large River Crocolisk Skins drop from young/river crocolisks along the northern STV river (Lvl 30-32, NOT South STV).",
     [578]  = "NORTHWEST STV: The haunted island is off the northwestern coast (west of Zul'Kunda), guarded by Level 37-39 Water Elementals.",
+    [587]  = "SOUTH STV: Loot 15 Snuff from Bloodsail pirates (Raiders, Swashbucklers, Warlocks) along the southern coast & ships south/southeast of Booty Bay.",
     [605]  = "NORTH STV: Singing Crystal Shards drop from Basilisks around the crystal mines north of Lake Nazferiti (Lvl 34-36).",
     [606]  = "SOUTH STV: Mistvale Giblets drop from Elder Mistvale Gorillas in the valley outside Booty Bay (Lvl 40-42 mobs).",
     [617]  = "Akiris reeds grow in large bundles along the riverbanks and naga coast in northern Stranglethorn.",

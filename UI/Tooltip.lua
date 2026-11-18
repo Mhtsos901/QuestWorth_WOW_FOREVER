@@ -136,6 +136,12 @@ local function GetReasonSummary(b)
         table.insert(reasons, "|cffff9900Save for Later|r")
     end
 
+    -- 7. Meta Quest Highlight (Iconic Rewards / Keys / Attunements)
+    if (not addon.db or addon.db.showMetaIndicator ~= false) and b.metaInfo then
+        local tagBadge = Utils.GetMetaTagBadge and Utils.GetMetaTagBadge(b.metaInfo.tag) or ("|cffffd100[" .. tostring(b.metaInfo.tag or "META") .. "]|r")
+        table.insert(reasons, 1, (Utils.META_ICON or "") .. " " .. tagBadge)
+    end
+
     return reasons
 end
 
@@ -153,7 +159,7 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
     if not worth or not b then return end
 
     local isBankable = b.isBankable
-    local badge = Utils.FormatBadge(worth, b.isComplete, b.isHard, isBankable, b.isLowValue)
+    local badge = Utils.FormatBadge(worth, b.isComplete, b.isHard, isBankable, b.isLowValue, b.isMeta)
 
     tooltip:AddLine(" ")
 
@@ -212,7 +218,7 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         local dDelta = b.details and b.details.difficulty and b.details.difficulty.levelDelta
         if dColor == "gray" then
             adviceText = "|cffccccccSkip or Abandon (Outleveled)|r"
-        elseif dDelta and dDelta <= -3 then
+        elseif dDelta and dDelta <= -5 then
             adviceText = "|cffccccccLow Level • No Chain (Skip)|r"
         else
             adviceText = "|cffccccccLow Reward • No Chain (Optional)|r"
@@ -281,6 +287,15 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
 
     tooltip:AddLine(" ")
     tooltip:AddLine("|cffffd100" .. L["PAYOFF_HEADER"] .. "|r")
+
+    -- 0. Curated / Wowhead Meta Quest Indicator
+    if (not addon.db or addon.db.showMetaIndicator ~= false) and b.metaInfo then
+        local mi = b.metaInfo
+        local tagBadge = Utils.GetMetaTagBadge and Utils.GetMetaTagBadge(mi.tag) or ("[" .. tostring(mi.tag or "META") .. "]")
+        local metaLabel = L["META_QUEST_LABEL"] or "Meta Quest"
+        local metaReason = (mi.reason and mi.reason ~= "") and mi.reason or metaLabel
+        tooltip:AddLine("  " .. (Utils.META_ICON or "") .. " |cffffd100" .. metaLabel .. "|r " .. tagBadge .. "|cffffd100:|r |cffffffff" .. metaReason .. "|r", 1, 1, 1, true)
+    end
 
     -- 1. Quest Tip / Objective Guide (Prominent & immediately visible!)
     if tipText and tipText ~= "" then
@@ -505,415 +520,9 @@ function UI.ShowQuestTooltip(tooltip, questID, owner)
 end
 
 -- Clear the deduplication token when tooltip is cleared
-local _softTargetIconActive = false
-
 local function OnTooltipCleared(tooltip)
     tooltip._worthItAddedQuestID = nil
     tooltip._worthItAddedItemID = nil
-    tooltip._worthItAddedObjectText = nil
-    if tooltip == GameTooltip and not tooltip._worthItInObjectCheck and _softTargetIconActive and UI.UpdateSoftTargetQuestObjectIcon then
-        UI.UpdateSoftTargetQuestObjectIcon(false)
-    end
-end
-
--- =========================================================================
--- Quest World Object Highlight (3D Glow, Sparkles, Soft-Target Icon & Tooltip)
--- Specifically highlights interactable Quest GameObjects (NOT mobs/items).
--- =========================================================================
-local OBJECT_HIGHLIGHT_CVARS = {
-    questPOI = "1",
-    Outline = "2",
-    OutlineEngineMode = "2",
-    graphicsOutlineMode = "2",
-    SoftTargetInteract = "0",
-    SoftTargetIconQuest = "0",
-    SoftTargetIconGameObject = "0",
-    SoftTargetIconEnemy = "0",
-    SoftTargetEnemy = "0",
-    SoftTargetFriend = "0",
-}
-
-local OBJECT_HIGHLIGHT_FALLBACK_OFF = {
-    Outline = "0",
-    SoftTargetInteract = "0",
-    SoftTargetIconGameObject = "0",
-}
-
-local function SafeGetCVar(name)
-    if C_CVar and C_CVar.GetCVar then
-        local ok, val = pcall(C_CVar.GetCVar, name)
-        if ok then return val end
-    end
-    if GetCVar then
-        local ok, val = pcall(GetCVar, name)
-        if ok then return val end
-    end
-    return nil
-end
-
-local function SafeSetCVar(name, value)
-    local strVal = tostring(value)
-    local current = SafeGetCVar(name)
-    if current ~= nil and tostring(current) == strVal then
-        return true
-    end
-    if C_CVar and C_CVar.SetCVar then
-        local ok = pcall(C_CVar.SetCVar, name, strVal)
-        if ok then return true end
-    end
-    if SetCVar then
-        local ok = pcall(SetCVar, name, strVal)
-        if ok then return true end
-    end
-    return false
-end
-
-function UI.ApplyQuestObjectHighlight()
-    if InCombatLockdown and InCombatLockdown() then
-        addon._objectHighlightDeferred = true
-        return false
-    end
-    addon._objectHighlightDeferred = false
-
-    local shouldEnable = addon.db and addon.db.enabled ~= false and addon.db.highlightQuestObjects ~= false
-
-    if shouldEnable then
-        if not addon._savedObjectCVars then
-            addon._savedObjectCVars = {}
-            for k in pairs(OBJECT_HIGHLIGHT_CVARS) do
-                addon._savedObjectCVars[k] = SafeGetCVar(k)
-            end
-        end
-        for k, v in pairs(OBJECT_HIGHLIGHT_CVARS) do
-            SafeSetCVar(k, v)
-        end
-        _softTargetIconActive = false
-        return true
-    else
-        if addon._savedObjectCVars then
-            for k in pairs(OBJECT_HIGHLIGHT_CVARS) do
-                local orig = addon._savedObjectCVars[k]
-                if orig ~= nil then
-                    SafeSetCVar(k, orig)
-                elseif OBJECT_HIGHLIGHT_FALLBACK_OFF[k] ~= nil then
-                    SafeSetCVar(k, OBJECT_HIGHLIGHT_FALLBACK_OFF[k])
-                end
-            end
-        else
-            for k, v in pairs(OBJECT_HIGHLIGHT_FALLBACK_OFF) do
-                SafeSetCVar(k, v)
-            end
-        end
-        SafeSetCVar("SoftTargetIconGameObject", "0")
-        return false
-    end
-end
-
-local function StripTooltipFormatting(str)
-    if type(str) ~= "string" then return "" end
-    local s = string.gsub(str, "|c%x%x%x%x%x%x%x%x", "")
-    s = string.gsub(s, "|r", "")
-    s = string.gsub(s, "|T.-|t", "")
-    s = string.gsub(s, "^%s*(.-)%s*$", "%1")
-    return s
-end
-
-local function IsMonsterKillObjective(objType, lowerText)
-    if objType == "monster" then return true end
-    if string.find(lowerText, " slain", 1, true) or
-       string.find(lowerText, "^kill ") or
-       string.find(lowerText, "^slay ") or
-       string.find(lowerText, "^defeat ") or
-       string.find(lowerText, "σκοτώστε", 1, true) or
-       string.find(lowerText, "νικήστε", 1, true) then
-        return true
-    end
-    return false
-end
-
-local function IsObjectiveFinished(obj)
-    if not obj then return false end
-    if obj.finished == true then return true end
-    local txt = obj.text
-    if type(txt) == "string" then
-        local cur, req = string.match(txt, "(%d+)%s*/%s*(%d+)")
-        if cur and req and tonumber(cur) and tonumber(req) and tonumber(req) > 0 and tonumber(cur) >= tonumber(req) then
-            return true
-        end
-    end
-    return false
-end
-
-local OBJECTIVE_VERB_PREFIXES = {
-    "interact with ",
-    "open ",
-    "search ",
-    "use ",
-    "examine ",
-    "collect ",
-    "gather ",
-    "find ",
-    "retrieve ",
-    "read ",
-    "place ",
-    "plant ",
-    "activate ",
-    "click ",
-    "loot ",
-}
-
-local function ExtractObjectiveObjectName(objText)
-    if type(objText) ~= "string" then return "" end
-    local s = StripTooltipFormatting(objText)
-    -- Strip suffix counts like ": 0/1" or "(0/1)" or "0/1"
-    s = string.gsub(s, "%s*%(?%s*%d+%s*/%s*%d+%s*%)?%s*$", "")
-    s = string.gsub(s, "%s*%(?[Cc]omplete%)?%s*$", "")
-    s = string.gsub(s, "[:%-]+%s*$", "")
-    -- Strip prefix counts like "0/1 " or "0/1: "
-    s = string.gsub(s, "^%d+%s*/%s*%d+[:%-]*%s*", "")
-    s = string.gsub(s, "^%s*(.-)%s*$", "%1")
-
-    local lower = string.lower(s)
-    for _, verb in ipairs(OBJECTIVE_VERB_PREFIXES) do
-        if string.sub(lower, 1, #verb) == verb then
-            s = string.sub(s, #verb + 1)
-            s = string.gsub(s, "^%s*(.-)%s*$", "%1")
-            break
-        end
-    end
-    return s
-end
-
-local function GetQuestNonKillObjectives(questID)
-    local results = {}
-    if C_QuestLog and C_QuestLog.GetQuestObjectives then
-        local ok, objs = pcall(C_QuestLog.GetQuestObjectives, questID)
-        if ok and type(objs) == "table" and #objs > 0 then
-            for _, obj in ipairs(objs) do
-                if obj and obj.text and obj.text ~= "" and not IsObjectiveFinished(obj) then
-                    local lower = string.lower(obj.text)
-                    if not IsMonsterKillObjective(obj.type, lower) then
-                        table.insert(results, obj.text)
-                    end
-                end
-            end
-            return results
-        end
-    end
-
-    if GetNumQuestLeaderBoards and GetQuestLogLeaderBoard and Utils.WithSelectedQuest then
-        Utils.WithSelectedQuest(questID, function()
-            local numLB = GetNumQuestLeaderBoards() or 0
-            for i = 1, numLB do
-                local desc, objType, finished = GetQuestLogLeaderBoard(i)
-                if desc and desc ~= "" and not finished then
-                    local lower = string.lower(desc)
-                    if not IsMonsterKillObjective(objType, lower) then
-                        local cur, req = string.match(desc, "(%d+)%s*/%s*(%d+)")
-                        if not (cur and req and tonumber(cur) and tonumber(req) and tonumber(req) > 0 and tonumber(cur) >= tonumber(req)) then
-                            table.insert(results, desc)
-                        end
-                    end
-                end
-            end
-        end)
-    end
-    return results
-end
-
-local function ReadTooltipLineText(tooltip, index)
-    if type(tooltip) ~= "table" then return nil end
-    local name = tooltip.GetName and tooltip:GetName()
-    if name then
-        local fs = _G[name .. "TextLeft" .. index]
-        if fs and fs.GetText then
-            local txt = fs:GetText()
-            if txt and txt ~= "" then return txt end
-        end
-    end
-    if tooltip.lines and tooltip.lines[index] and tooltip.lines[index].left then
-        return tooltip.lines[index].left
-    end
-    return nil
-end
-
-local _objectTargetsCache = nil
-
-function UI.InvalidateObjectTargetsCache()
-    _objectTargetsCache = nil
-end
-
-local function GetActiveQuestObjectTargets()
-    if _objectTargetsCache then
-        return _objectTargetsCache
-    end
-
-    local entries = {}
-    local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
-        or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-
-    for i = 1, numEntries do
-        local qID, qTitle, isHeader
-        if C_QuestLog and C_QuestLog.GetInfo then
-            local ok, info = pcall(C_QuestLog.GetInfo, i)
-            if ok and info then
-                qID = info.questID
-                qTitle = info.title
-                isHeader = info.isHeader
-            end
-        elseif GetQuestLogTitle then
-            local ok, t, _, _, isH, _, _, _, id = pcall(GetQuestLogTitle, i)
-            if ok then
-                qTitle = t
-                isHeader = isH
-                qID = id
-            end
-        end
-
-        if not isHeader and Utils.IsValidQuestID(qID) then
-            local nonKillObjs = GetQuestNonKillObjectives(qID)
-            if #nonKillObjs > 0 then
-                local cleanQTitle = Utils.CleanQuestTitle and Utils.CleanQuestTitle(qTitle or "") or (qTitle or "")
-                local displayTitle = cleanQTitle ~= "" and cleanQTitle or ("Quest #" .. qID)
-                local lowerQTitle = string.lower(cleanQTitle)
-                local parsedObjs = {}
-                for _, objText in ipairs(nonKillObjs) do
-                    local targetName = ExtractObjectiveObjectName(objText)
-                    table.insert(parsedObjs, {
-                        cleanText = StripTooltipFormatting(objText),
-                        lowerTarget = string.lower(targetName),
-                    })
-                end
-                table.insert(entries, {
-                    questID = qID,
-                    displayTitle = displayTitle,
-                    lowerTitle = lowerQTitle,
-                    firstObjText = parsedObjs[1].cleanText,
-                    objectives = parsedObjs,
-                })
-            end
-        end
-    end
-
-    _objectTargetsCache = entries
-    return entries
-end
-
-function UI.MatchWorldObjectToActiveQuest(rawObjName, extraLinesLower)
-    local cleanObjName = StripTooltipFormatting(rawObjName)
-    if #cleanObjName < 3 then return nil end
-
-    local activeTargets = GetActiveQuestObjectTargets()
-    if #activeTargets == 0 then return nil end
-
-    local lowerObjName = string.lower(cleanObjName)
-    local matchedQuestID, matchedQuestTitle, matchedObjText = nil, nil, nil
-
-    for _, qEntry in ipairs(activeTargets) do
-        -- Pass 1: Match GameObject title against non-kill objective target names
-        for _, obj in ipairs(qEntry.objectives) do
-            local lowerTarget = obj.lowerTarget
-            if #lowerTarget >= 4 then
-                if lowerObjName == lowerTarget or
-                   (#lowerObjName >= 4 and (string.find(lowerObjName, lowerTarget, 1, true) or string.find(lowerTarget, lowerObjName, 1, true))) then
-                    matchedQuestID = qEntry.questID
-                    matchedQuestTitle = qEntry.displayTitle
-                    matchedObjText = obj.cleanText
-                    break
-                end
-            end
-        end
-
-        -- Pass 2: Fallback check on existing tooltip lines 2..N (e.g. modern quest object tooltips)
-        if not matchedQuestID and extraLinesLower and #extraLinesLower > 0 then
-            local lowerQTitle = qEntry.lowerTitle
-            for _, extraLine in ipairs(extraLinesLower) do
-                if lowerQTitle ~= "" and #lowerQTitle >= 4 and string.find(extraLine, lowerQTitle, 1, true) then
-                    matchedQuestID = qEntry.questID
-                    matchedQuestTitle = qEntry.displayTitle
-                    matchedObjText = qEntry.firstObjText
-                    break
-                end
-                for _, obj in ipairs(qEntry.objectives) do
-                    local lowerTarget = obj.lowerTarget
-                    if #lowerTarget >= 4 and string.find(extraLine, lowerTarget, 1, true) then
-                        matchedQuestID = qEntry.questID
-                        matchedQuestTitle = qEntry.displayTitle
-                        matchedObjText = obj.cleanText
-                        break
-                    end
-                end
-                if matchedQuestID then break end
-            end
-        end
-
-        if matchedQuestID then break end
-    end
-
-    if not matchedQuestID then return nil end
-    return matchedQuestID, matchedQuestTitle, matchedObjText, cleanObjName
-end
-
-function UI.UpdateSoftTargetQuestObjectIcon(hoveredMatched)
-    if InCombatLockdown and InCombatLockdown() then return false end
-
-    _softTargetIconActive = false
-    SafeSetCVar("SoftTargetIconGameObject", "0")
-    return false
-end
-
-function UI.AddWorldObjectQuestLines(tooltip)
-    if not (addon.db and addon.db.enabled and addon.db.highlightQuestObjects ~= false) then return end
-    if not tooltip or type(tooltip) ~= "table" or not tooltip.NumLines then return end
-    if tooltip._worthItInObjectCheck then return end
-    if tooltip._worthItAddedQuestID or tooltip._worthItAddedItemID or tooltip._worthItAddedObjectText then return end
-
-    -- Exclude 2D UI widget tooltips (buttons, map pins, frames) and units/items/spells strictly
-    local owner = tooltip.GetOwner and tooltip:GetOwner()
-    if owner and owner ~= UIParent and owner ~= WorldFrame then return end
-    if tooltip.GetUnit and select(1, tooltip:GetUnit()) then return end
-    if tooltip.GetItem and select(2, tooltip:GetItem()) then return end
-    if tooltip.GetSpell and select(1, tooltip:GetSpell()) then return end
-
-    local numLines = tooltip:NumLines() or 0
-    if numLines < 1 then return end
-
-    local rawLine1 = ReadTooltipLineText(tooltip, 1)
-    local extraLinesLower = {}
-    for i = 2, numLines do
-        local lineTxt = StripTooltipFormatting(ReadTooltipLineText(tooltip, i))
-        if lineTxt ~= "" then
-            table.insert(extraLinesLower, string.lower(lineTxt))
-        end
-    end
-
-    local matchedQuestID, matchedQuestTitle, matchedObjText, cleanObjName = UI.MatchWorldObjectToActiveQuest(rawLine1, extraLinesLower)
-    if not matchedQuestID then
-        if tooltip == GameTooltip then
-            UI.UpdateSoftTargetQuestObjectIcon(false)
-        end
-        return false
-    end
-
-    UI.UpdateSoftTargetQuestObjectIcon(true)
-
-    tooltip._worthItInObjectCheck = true
-    tooltip._worthItAddedObjectText = cleanObjName
-
-    local worth, b = addon.Engine and addon.Engine.CalculateWorth and addon.Engine.CalculateWorth(matchedQuestID)
-    local badge = worth and Utils.FormatBadge(worth, b and b.isComplete, b and b.isHard, b and b.isBankable, b and b.isLowValue) or ""
-    local titleDisplay = badge ~= "" and string.format("%s |cffffffff%s|r", badge, matchedQuestTitle) or ("|cffffffff" .. matchedQuestTitle .. "|r")
-
-    tooltip:AddLine(" ")
-    tooltip:AddLine("|TInterface\\GossipFrame\\VendorGossipIcon:14:14:0:0|t |cffffd100★ " .. (L["QUEST_OBJECT_HEADER"] or "QUEST OBJECT (Interact!)") .. "|r")
-    tooltip:AddLine("  " .. titleDisplay, 1, 1, 1, true)
-    if matchedObjText and matchedObjText ~= "" then
-        tooltip:AddLine("  |cff1aff4d• " .. matchedObjText .. "|r", 0.9, 0.9, 0.9, true)
-    end
-
-    if tooltip.Show then tooltip:Show() end
-    tooltip._worthItInObjectCheck = nil
-    return true
 end
 
 function UI.InitializeTooltips()
@@ -934,21 +543,13 @@ function UI.InitializeTooltips()
                 AddItemQuestStarterLines(tooltip)
             end)
         end
-        if Enum.TooltipDataType.Object then
-            TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Object, function(tooltip, data)
-                UI.AddWorldObjectQuestLines(tooltip)
-            end)
-        end
         hooked = true
-        addon.Debug("Hooked TooltipDataProcessor for Quest, Item, and Object tooltips.")
+        addon.Debug("Hooked TooltipDataProcessor for Quest and Item tooltips.")
     end
 
-    -- Hook GameTooltip Clear, SetText & Hide
+    -- Hook GameTooltip Clear & Hide
     if GameTooltip and hooksecurefunc then
         pcall(hooksecurefunc, GameTooltip, "ClearLines", OnTooltipCleared)
-        pcall(hooksecurefunc, GameTooltip, "SetText", function(self)
-            UI.AddWorldObjectQuestLines(self)
-        end)
     end
     if ItemRefTooltip and hooksecurefunc then
         pcall(hooksecurefunc, ItemRefTooltip, "ClearLines", OnTooltipCleared)
@@ -957,7 +558,6 @@ function UI.InitializeTooltips()
         pcall(function()
             GameTooltip:HookScript("OnTooltipCleared", OnTooltipCleared)
             GameTooltip:HookScript("OnHide", OnTooltipCleared)
-            GameTooltip:HookScript("OnShow", UI.AddWorldObjectQuestLines)
         end)
     end
     if ItemRefTooltip and ItemRefTooltip.HookScript then
@@ -985,20 +585,96 @@ function UI.InitializeTooltips()
             GameTooltip:HookScript("OnTooltipSetQuest", function(self)
                 local questID
                 if self.GetQuest then
-                    local ok, _, qid = pcall(self.GetQuest, self)
-                    if ok and qid and qid > 0 then questID = qid end
+                    local ok, v1, v2 = pcall(self.GetQuest, self)
+                    if ok then
+                        local cand = (type(v2) == "number" and v2 > 0 and v2) or (type(v1) == "number" and v1 > 0 and v1)
+                        if cand then questID = cand end
+                    end
                 end
+
+                local tipName = self.GetName and self:GetName()
+                local fs1 = tipName and _G[tipName .. "TextLeft1"]
+                local rawTipTitle = fs1 and fs1.GetText and fs1:GetText()
+                local cleanTipTitle = rawTipTitle and Utils.CleanQuestTitle and Utils.CleanQuestTitle(rawTipTitle) or rawTipTitle
+                if cleanTipTitle then
+                    cleanTipTitle = string.gsub(cleanTipTitle, "^%s*%[%d+%+?%]%s*", "")
+                    cleanTipTitle = string.gsub(cleanTipTitle, "^%s*(.-)%s*$", "%1")
+                end
+
+                local function matchesTipTitle(candidateID)
+                    if not candidateID or candidateID <= 0 then return false end
+                    if not cleanTipTitle or cleanTipTitle == "" then return true end
+                    local qTitle = nil
+                    if C_QuestLog and C_QuestLog.GetTitleForQuestID then
+                        local okT, t = pcall(C_QuestLog.GetTitleForQuestID, candidateID)
+                        if okT and type(t) == "string" and t ~= "" then qTitle = t end
+                    end
+                    if (not qTitle or qTitle == "") and Utils.GetQuestBasicInfo then
+                        local info = Utils.GetQuestBasicInfo(candidateID)
+                        if info and type(info.title) == "string" and info.title ~= "" then qTitle = info.title end
+                    end
+                    if not qTitle or qTitle == "" then return true end
+                    local cleanQ = Utils.CleanQuestTitle and Utils.CleanQuestTitle(qTitle) or qTitle
+                    cleanQ = string.gsub(cleanQ, "^%s*%[%d+%+?%]%s*", "")
+                    cleanQ = string.gsub(cleanQ, "^%s*(.-)%s*$", "%1")
+                    return string.lower(cleanQ) == string.lower(cleanTipTitle)
+                end
+
                 if not questID and C_QuestLog and C_QuestLog.GetSelectedQuest then
                     local ok, qid = pcall(C_QuestLog.GetSelectedQuest)
-                    if ok and qid and qid > 0 then questID = qid end
+                    if ok and qid and qid > 0 and matchesTipTitle(qid) then
+                        questID = qid
+                    end
                 end
                 if not questID and GetQuestLogSelection then
                     local index = GetQuestLogSelection()
                     if index and index > 0 and C_QuestLog and C_QuestLog.GetInfo then
                         local info = C_QuestLog.GetInfo(index)
-                        if info then questID = info.questID end
+                        if info and info.questID and matchesTipTitle(info.questID) then
+                            questID = info.questID
+                        end
                     end
                 end
+                -- Fallback: resolve unfocused quest matching tooltip line 1 from active quest log or gossip offers
+                if not questID and cleanTipTitle and cleanTipTitle ~= "" then
+                    local lowerTip = string.lower(cleanTipTitle)
+                    local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                                       or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+                    for i = 1, numEntries do
+                        local qT, qId, isH
+                        if C_QuestLog and C_QuestLog.GetInfo then
+                            local okI, info = pcall(C_QuestLog.GetInfo, i)
+                            if okI and info then qT = info.title; qId = info.questID; isH = info.isHeader end
+                        elseif GetQuestLogTitle then
+                            local okT, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+                            if okT then qT = t; isH = h; qId = id end
+                        end
+                        if not isH and qId and qId > 0 and qT then
+                            local cleanQ = Utils.CleanQuestTitle and Utils.CleanQuestTitle(qT) or qT
+                            cleanQ = string.gsub(cleanQ, "^%s*%[%d+%+?%]%s*", "")
+                            cleanQ = string.gsub(cleanQ, "^%s*(.-)%s*$", "%1")
+                            if string.lower(cleanQ) == lowerTip then
+                                questID = qId
+                                break
+                            end
+                        end
+                    end
+                    if not questID and C_GossipInfo and C_GossipInfo.GetAvailableQuests then
+                        local okG, avail = pcall(C_GossipInfo.GetAvailableQuests)
+                        if okG and type(avail) == "table" then
+                            for _, q in ipairs(avail) do
+                                if q.questID and q.title then
+                                    local cleanQ = string.gsub(Utils.CleanQuestTitle(q.title), "^%s*(.-)%s*$", "%1")
+                                    if string.lower(cleanQ) == lowerTip then
+                                        questID = q.questID
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
                 if questID then
                     AddWorthLinesToTooltip(self, questID, true)
                 end

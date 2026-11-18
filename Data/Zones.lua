@@ -92,7 +92,7 @@ addon.Data.Zones = {
         density = "Very High", hubMod = 0.05, hordeHub = "Sen'jin Village & Razor Hill",
         summary = "Fast Horde 1-10 progression across Valley of Trials, Sen'jin Village, and Razor Hill." },
     ["Mulgore"]             = { min = 1,  max = 10, faction = "Horde",     continent = 1, mapID = 1412, humanoidHeavy = true, beastHeavy = true, openTerrain = true,
-        density = "Very High", hubMod = 0.04, hordeHub = "Bloodhoof Village",
+        density = "Very High", hubMod = 0.05, hordeHub = "Bloodhoof Village",
         summary = "Smooth open-plains 1-10 questing around Bloodhoof Village with easy kiting and zero clutter." },
     ["Teldrassil"]          = { min = 1,  max = 10, faction = "Alliance",  continent = 1, mapID = 1438, beastHeavy = true, humanoidHeavy = true,
         density = "Very High", hubMod = 0.04, allianceHub = "Shadowglen & Dolanaar",

@@ -16,9 +16,10 @@ local DEFAULT_SETTINGS = {
     showInTracker = true,
     showInWorldMap = true,
     showZoneAdvisor = true,
-    highlightQuestObjects = true,
+    showMetaIndicator = true,
     zoneAdvisorFilter = "ALL",
     completedDungeons = {},
+    completedDungeonsByChar = {},
     weights = {
         reward = 0.40,
         classFit = 0.25,
@@ -52,13 +53,14 @@ local function SanitizeSettings(db)
     local boolKeys = {
         "enabled", "debug", "showInTooltip", "showBreakdown",
         "showInQuestLog", "showInTracker", "showInWorldMap", "showZoneAdvisor",
-        "highlightQuestObjects"
+        "showMetaIndicator"
     }
     for _, k in ipairs(boolKeys) do
         if type(db[k]) ~= "boolean" then
             db[k] = DEFAULT_SETTINGS[k]
         end
     end
+    db.highlightQuestObjects = nil
 
     -- Verify zoneAdvisorFilter
     if db.zoneAdvisorFilter == "ACTIVE" then
@@ -69,6 +71,9 @@ local function SanitizeSettings(db)
 
     if type(db.completedDungeons) ~= "table" then
         db.completedDungeons = {}
+    end
+    if type(db.completedDungeonsByChar) ~= "table" then
+        db.completedDungeonsByChar = {}
     end
 
     -- Verify weights table and values
@@ -142,35 +147,51 @@ local function FindMatchingDungeonKey(tbl, zoneName)
     return nil
 end
 
-function DB.IsDungeonCompleted(zoneName)
+local function GetCharDungeonTable(createIfMissing)
     local db = addon.db or WorthItDB
-    if type(db) ~= "table" or type(db.completedDungeons) ~= "table" or type(zoneName) ~= "string" or zoneName == "" then
+    if type(db) ~= "table" then return nil end
+    if type(db.completedDungeonsByChar) ~= "table" then
+        if not createIfMissing then return nil end
+        db.completedDungeonsByChar = {}
+    end
+    local charKey = (addon.Player and addon.Player.GetCharacterKey and addon.Player.GetCharacterKey()) or "Default"
+    local charTbl = db.completedDungeonsByChar[charKey]
+    if type(charTbl) ~= "table" then
+        if not createIfMissing then return nil end
+        charTbl = {}
+        db.completedDungeonsByChar[charKey] = charTbl
+    end
+    return charTbl
+end
+
+function DB.IsDungeonCompleted(zoneName)
+    if type(zoneName) ~= "string" or zoneName == "" then
         return false
     end
-    local key = FindMatchingDungeonKey(db.completedDungeons, zoneName)
-    return key ~= nil and db.completedDungeons[key] == true
+    local charTbl = GetCharDungeonTable(false)
+    if not charTbl then return false end
+    local key = FindMatchingDungeonKey(charTbl, zoneName)
+    return key ~= nil and charTbl[key] == true
 end
 
 function DB.SetDungeonCompleted(zoneName, completed)
-    local db = addon.db or WorthItDB
-    if type(db) ~= "table" or type(zoneName) ~= "string" or zoneName == "" then
+    if type(zoneName) ~= "string" or zoneName == "" then
         return false
     end
-    if type(db.completedDungeons) ~= "table" then
-        db.completedDungeons = {}
-    end
+    local charTbl = GetCharDungeonTable(true)
+    if not charTbl then return false end
     local isDone = completed and true or false
     if isDone then
-        local existing = FindMatchingDungeonKey(db.completedDungeons, zoneName)
-        db.completedDungeons[existing or zoneName] = true
+        local existing = FindMatchingDungeonKey(charTbl, zoneName)
+        charTbl[existing or zoneName] = true
     else
         local targetToken = NormalizeDungeonToken(zoneName)
-        for k in pairs(db.completedDungeons) do
+        for k in pairs(charTbl) do
             if type(k) == "string" and NormalizeDungeonToken(k) == targetToken then
-                db.completedDungeons[k] = nil
+                charTbl[k] = nil
             end
         end
-        db.completedDungeons[zoneName] = nil
+        charTbl[zoneName] = nil
     end
     if addon.Engine and addon.Engine.InvalidateCache then
         addon.Engine.InvalidateCache()
