@@ -391,20 +391,20 @@ function Engine.CalculateWorth(questID)
     local wD, wR, wC, wF, wH
     if hasNoGear and not isMajorChain then
         -- Standalone / XP / Hub quests without gear rewards:
-        -- Shift unused ClassFit and excess Chain weight into Reward and Density (and Difficulty if user active)
+        -- Shift unused ClassFit and excess Chain weight into Reward (and Difficulty if user active); never bloat Density weight
         local effC = math.min(rawC, 0.06)
         local released = rawF + (rawC - effC)
         local effD = isZeroDiff and 0.00 or (rawD + (released * 0.45))
-        local effH = rawH + (released * (isZeroDiff and 0.45 or 0.35))
-        local effR = rawR + (released * (isZeroDiff and 0.55 or 0.20))
+        local effH = rawH
+        local effR = rawR + (released * (isZeroDiff and 1.00 or 0.55))
         local effF = 0.00
         wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, effC, effF, effH)
     elseif hasNoGear and isMajorChain then
         -- Major chain quest offering no gear rewards (XP/story starter):
         local released = rawF
         local effD = isZeroDiff and 0.00 or (rawD + (released * 0.30))
-        local effH = rawH + (released * (isZeroDiff and 0.40 or 0.30))
-        local effR = rawR + (released * (isZeroDiff and 0.60 or 0.40))
+        local effH = rawH
+        local effR = rawR + (released * (isZeroDiff and 1.00 or 0.70))
         wD, wR, wC, wF, wH = Utils.NormalizeWeights(effD, effR, rawC, 0.00, effH)
     elseif not hasNoGear and not isMajorChain and cScore <= 0.20 then
         -- Standalone quest with gear: shift excess Chain weight to ClassFit (gear upgrade) & Reward (or Difficulty if user active)
@@ -418,8 +418,16 @@ function Engine.CalculateWorth(questID)
         wD, wR, wC, wF, wH = Utils.NormalizeWeights(rawD, rawR, rawC, rawF, rawH)
     end
 
-    -- 4. 5-Factor Weighted Average
-    local totalWorth = (dScore * wD) + (rScore * wR) + (cScore * wC) + (fScore * wF) + (hScore * wH)
+    -- 4. 5-Factor Weighted Average with Solution C (Bonus-Only Hub Density: never penalizes a quest below its 4-factor intrinsic value)
+    local fiveFactorWorth = (dScore * wD) + (rScore * wR) + (cScore * wC) + (fScore * wF) + (hScore * wH)
+    local intrinsicSum = wD + wR + wC + wF
+    local intrinsicWorth = (intrinsicSum > 0.001)
+        and (((dScore * wD) + (rScore * wR) + (cScore * wC) + (fScore * wF)) / intrinsicSum)
+        or fiveFactorWorth
+    local totalWorth = math.max(fiveFactorWorth, intrinsicWorth)
+    if hasNoGear and isMajorChain and not (cDetails and cDetails.isClassOrProfession) then
+        totalWorth = math.min(0.92, totalWorth)
+    end
 
     local metaInfo = (addon.Data and addon.Data.GetMetaQuestInfo and addon.Data.GetMetaQuestInfo(questID)) or nil
     local isMeta = (metaInfo ~= nil)
@@ -532,10 +540,10 @@ function Engine.CalculateWorth(questID)
         if color == "gray" then
             isLowValue = true
             totalWorth = math.min(0.15, totalWorth * 0.25)
-        elseif color == "deep_green" and (delta <= -6 or rScore < 0.42 or hScore < 0.65) then
+        elseif color == "deep_green" and (delta <= -6 or rScore < 0.42) then
             isLowValue = true
             totalWorth = math.min(0.22, totalWorth * 0.38)
-        elseif delta <= -5 and rScore < 0.45 and hScore < 0.65 then
+        elseif delta <= -5 and rScore < 0.45 then
             isLowValue = true
             totalWorth = math.min(0.26, totalWorth * 0.45)
         elseif (delta <= -3 and rScore < 0.38) or (rScore < 0.38 and fScore < 0.70) then

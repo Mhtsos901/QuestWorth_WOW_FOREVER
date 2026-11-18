@@ -93,26 +93,33 @@ local CANONICAL_ZONE_ALIASES = {
     ["blackrock spire"] = "Lower Blackrock Spire",
 }
 
+local _canonZoneMemo = {}
+
 local function ResolveCanonicalZoneName(zoneName)
     if type(zoneName) ~= "string" or zoneName == "" then return "" end
+    local cached = _canonZoneMemo[zoneName]
+    if cached then return cached end
     local clean = string.gsub(zoneName, "%s*%(%d+/?%d*%)%s*$", "")
     clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
     if clean == "" then return "" end
 
     local lower = string.lower(clean)
     if CANONICAL_ZONE_ALIASES[lower] then
-        return CANONICAL_ZONE_ALIASES[lower]
+        _canonZoneMemo[zoneName] = CANONICAL_ZONE_ALIASES[lower]
+        return _canonZoneMemo[zoneName]
     end
 
     local Zones = addon.Data and addon.Data.Zones
     if Zones then
         local direct = Zones[clean]
         if direct and not direct.isAlias then
+            _canonZoneMemo[zoneName] = clean
             return clean
         end
         if direct and direct.isAlias and direct.mapID then
             for k, zData in pairs(Zones) do
                 if not zData.isAlias and zData.mapID == direct.mapID then
+                    _canonZoneMemo[zoneName] = k
                     return k
                 end
             end
@@ -123,12 +130,14 @@ local function ResolveCanonicalZoneName(zoneName)
                 local kLower = string.lower(k)
                 local kNoThe = string.gsub(kLower, "^the%s+", "")
                 if kLower == lower or kNoThe == noThe then
+                    _canonZoneMemo[zoneName] = k
                     return k
                 end
             end
         end
     end
 
+    _canonZoneMemo[zoneName] = clean
     return clean
 end
 
@@ -350,64 +359,257 @@ function Scores.IsNonZoneHeader(headerTitle)
     return NON_ZONE_HEADERS[headerTitle] == true
 end
 
-function Scores.CalculateDensity(questID)
-    if not Utils.IsValidQuestID(questID) then
-        return 0.30, { count = 0, zone = "Unknown", final = 0.30 }
+-- =========================================================================
+-- Zone Good Quests Index (Counts eligible good quests in the zone itself,
+-- not just what the player has already picked up in their Quest Log!)
+-- =========================================================================
+local _zoneGoodQuestsIndex = nil
+
+local CLASS_CATEGORY_NAMES = {
+    ["Warrior"] = "WARRIOR", ["Paladin"] = "PALADIN", ["Hunter"] = "HUNTER",
+    ["Rogue"] = "ROGUE", ["Priest"] = "PRIEST", ["Shaman"] = "SHAMAN",
+    ["Mage"] = "MAGE", ["Warlock"] = "WARLOCK", ["Druid"] = "DRUID",
+}
+
+local function BuildZoneGoodQuestsIndex()
+    local idx = {}
+    local seenByZone = {}
+    local Data = addon.Data
+    if not Data then
+        _zoneGoodQuestsIndex = idx
+        return idx
     end
-    ScanQuestLogClusters()
 
-    local zone = questZoneMap[questID]
-    local isUnaccepted = not zone
-    local isAtNPC = (QuestFrame and QuestFrame:IsShown()) or (GossipFrame and GossipFrame:IsShown())
-    local count = 1
+    local function addEntry(zoneName, qID, lvl, side, reqClass, isMeta, perm)
+        local canon = ResolveCanonicalZoneName(zoneName)
+        if canon == "" or canon == "Unknown" or NON_ZONE_HEADERS[canon] then return end
+        local zBucket = idx[canon]
+        if not zBucket then
+            zBucket = {}
+            idx[canon] = zBucket
+            seenByZone[canon] = {}
+        end
+        if seenByZone[canon][qID] then return end
+        seenByZone[canon][qID] = true
+        zBucket[#zBucket + 1] = {
+            qID = qID,
+            lvl = (type(lvl) == "number" and lvl > 0) and lvl or 1,
+            side = side or "B",
+            reqClass = reqClass,
+            isMeta = isMeta and true or false,
+            perm = perm and true or false,
+        }
+    end
 
-    if zone then
-        count = zoneClusterCounts[zone] or 1
-    else
-        -- Quest is not in active quest log yet (e.g. tooltip on questgiver NPC / link)
-        zone = ResolvePlayerCurrentZone()
-        local existingInZone = (zone and zoneClusterCounts[zone]) or #(Scores.GetQuestsForZone(zone))
-        local npcAvailable = isAtNPC and CountNPCAvailableQuestsExcluding(questID) or 0
-        count = math.max(1, existingInZone + 1 + npcAvailable)
-
-        local zInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(zone)
-        if zInfo and (zInfo.density == "High" or zInfo.density == "Very High") and isAtNPC then
-            count = math.max(2, count)
+    -- 1. Index all 543 MetaQuests (Keys, Attunements, Mounts, Bags, Epics, Class, BiS)
+    for qID, raw in pairs(Data.MetaQuests or {}) do
+        if type(raw[3]) == "string" and raw[3] ~= "" then
+            addEntry(raw[3], qID, raw[4], raw[5], raw[7], true, raw[6])
         end
     end
 
-    -- Cap cluster count to prevent oversized zone headers from giving blanket 100% density
-    local effectiveCount = math.min(5, count)
-
-    local score
-    if effectiveCount <= 1 then
-        score = 0.35 -- Lonely quest: travel time kills XP/hour
-    elseif effectiveCount == 2 then
-        score = 0.65
-    elseif effectiveCount == 3 then
-        score = 0.85
-    else
-        score = 1.00 -- 4+ quests: dense leveling hub
+    -- 2. Index good quests from ForeverCatalog (2,266 quests: gear rewards, chains, payoffs, elites/dungeons, or strong XP)
+    local chainIdx = Data.ChainIndex or {}
+    local payoffs = Data.QuestPayoffs or {}
+    local metaTbl = Data.MetaQuests or {}
+    for qID, cat in pairs(Data.ForeverCatalog or {}) do
+        local rawZone = cat[1]
+        if type(rawZone) == "string" and rawZone ~= "" and not CLASS_CATEGORY_NAMES[rawZone] then
+            local lvl = tonumber(cat[2]) or 1
+            local xp = tonumber(cat[3]) or 0
+            local side = cat[4] or "B"
+            local tag = cat[5]
+            local rew = cat[6]
+            local isMeta = (metaTbl[qID] ~= nil)
+            local isChainOrPayoff = (chainIdx[qID] ~= nil) or (payoffs[qID] ~= nil)
+            local hasGear = (type(rew) == "string" and rew ~= "")
+            local isSpecialTag = (tag == "Dungeon" or tag == "Elite" or tag == "Raid")
+            local goodXPThreshold = ((lvl * 5) + 45) * 4.5
+            if isMeta or isChainOrPayoff or hasGear or isSpecialTag or (xp >= goodXPThreshold) then
+                addEntry(rawZone, qID, lvl, side, nil, isMeta, isMeta and metaTbl[qID] and metaTbl[qID][6])
+            end
+        end
     end
 
-    -- Unaccepted Hub Density Boost:
-    -- When talking to an NPC (Quest Offer), assume hub synergy (0.65 minimum)
-    if isUnaccepted and isAtNPC then
-        score = math.max(0.65, score)
+    _zoneGoodQuestsIndex = idx
+    return idx
+end
+
+local function IsQuestDoneForDensity(questID)
+    if C_QuestLog and C_QuestLog.IsQuestFlaggedCompleted then
+        local ok, done = pcall(C_QuestLog.IsQuestFlaggedCompleted, questID)
+        if ok and done then return true end
+    elseif IsQuestFlaggedCompleted then
+        local ok, done = pcall(IsQuestFlaggedCompleted, questID)
+        if ok and done then return true end
+    end
+    return false
+end
+
+local DENSITY_TIER_BASELINE = {
+    ["Very High"] = 6,
+    ["High"]      = 4,
+    ["Medium"]    = 3,
+    ["Low"]       = 2,
+    ["Sparse"]    = 1,
+}
+
+local _zoneGoodCountMemo = {}
+local _memoCtxKey = nil
+
+-- Count available uncompleted good quests in a zone for the player's current level, faction, and class
+function Scores.GetZoneGoodQuestCount(zoneName, playerLevel, playerFaction, playerClass)
+    if type(zoneName) ~= "string" or zoneName == "" or string.find(zoneName, "^ClassOrProf:") then
+        return 0, 0
+    end
+    local canonical = ResolveCanonicalZoneName(zoneName)
+    if canonical == "" or canonical == "Unknown" or NON_ZONE_HEADERS[canonical] then
+        return 0, 0
+    end
+
+    local pLevel = tonumber(playerLevel) or (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or (UnitLevel and UnitLevel("player")) or 1
+    local rawFac = playerFaction or (addon.Player and addon.Player.GetFaction and addon.Player.GetFaction()) or (UnitFactionGroup and UnitFactionGroup("player")) or "Alliance"
+    local pSide = (rawFac == "Horde" or rawFac == "H") and "H" or ((rawFac == "Alliance" or rawFac == "A") and "A" or "B")
+    local pClass = playerClass or (addon.Player and addon.Player.GetClass and addon.Player.GetClass())
+    if not pClass and UnitClass then
+        local _, engC = UnitClass("player")
+        pClass = engC
+    end
+    pClass = (type(pClass) == "string" and pClass ~= "") and string.upper(pClass) or "WARRIOR"
+
+    local ctxKey = pLevel .. ":" .. pSide .. ":" .. pClass
+    if _memoCtxKey ~= ctxKey then
+        wipe(_zoneGoodCountMemo)
+        _memoCtxKey = ctxKey
+    end
+    local cached = _zoneGoodCountMemo[canonical]
+    if cached then
+        return cached[1], cached[2]
+    end
+
+    local greenRange = 5 + math.floor(pLevel / 10)
+    local minViableLvl = pLevel - greenRange
+    local maxViableLvl = pLevel + 4
+
+    local idx = _zoneGoodQuestsIndex or BuildZoneGoodQuestsIndex()
+    local bucket = idx[canonical]
+    local catalogGoodCount = 0
+
+    if bucket then
+        for i = 1, #bucket do
+            local e = bucket[i]
+            local sideOk = (pSide == "B" or e.side == "B" or e.side == pSide)
+            local classOk = (not e.reqClass or not pClass or e.reqClass == pClass)
+            if sideOk and classOk then
+                local lvlOk = (e.lvl >= minViableLvl and e.lvl <= maxViableLvl) or (e.perm and e.lvl <= maxViableLvl)
+                if lvlOk and not IsQuestDoneForDensity(e.qID) then
+                    catalogGoodCount = catalogGoodCount + 1
+                end
+            end
+        end
+    end
+
+    -- Classic zone bracket baseline (covers classic vanilla hub quests not duplicated in ForeverCatalog)
+    local bracketBaseline = 0
+    local zInfo = addon.Data and addon.Data.GetZoneInfo and addon.Data.GetZoneInfo(canonical)
+    if zInfo and not zInfo.isCity then
+        local zFac = zInfo.faction
+        local facOk = (not zFac or zFac == "Contested" or zFac == "Neutral" or zFac == rawFac)
+        local clsOk = (not zInfo.class or not pClass or zInfo.class == pClass)
+        if facOk and clsOk then
+            local effMin = (addon.Engine and addon.Engine.GetEffectiveMinLevel and addon.Engine.GetEffectiveMinLevel(zInfo, rawFac)) or zInfo.min or 1
+            local maxLvl = zInfo.max or 60
+            if pLevel >= (effMin - 2) and pLevel <= (maxLvl + 3) then
+                bracketBaseline = DENSITY_TIER_BASELINE[zInfo.density or "Medium"] or 3
+            end
+        end
+    end
+
+    local totalZoneGood = math.max(catalogGoodCount, bracketBaseline)
+    _zoneGoodCountMemo[canonical] = { totalZoneGood, catalogGoodCount }
+    return totalZoneGood, catalogGoodCount
+end
+
+local function ResolveQuestZone(questID, isAtNPC)
+    local z = questZoneMap[questID]
+    if z and z ~= "" and z ~= "Unknown" then
+        return z, false
+    end
+    if isAtNPC or (Utils and Utils.IsActiveOfferQuest and Utils.IsActiveOfferQuest(questID)) then
+        local curZ = ResolvePlayerCurrentZone()
+        if curZ and curZ ~= "" and curZ ~= "Unknown" then
+            return curZ, true
+        end
+    end
+    local Data = addon.Data
+    if Data then
+        local m = Data.MetaQuests and Data.MetaQuests[questID]
+        if m and type(m[3]) == "string" and m[3] ~= "" then
+            local canon = ResolveCanonicalZoneName(m[3])
+            if canon ~= "" and not NON_ZONE_HEADERS[canon] then
+                return canon, true
+            end
+        end
+        local cat = Data.ForeverCatalog and Data.ForeverCatalog[questID]
+        if cat and type(cat[1]) == "string" and cat[1] ~= "" and not CLASS_CATEGORY_NAMES[cat[1]] then
+            local canon = ResolveCanonicalZoneName(cat[1])
+            if canon ~= "" and not NON_ZONE_HEADERS[canon] then
+                return canon, true
+            end
+        end
+    end
+    return ResolvePlayerCurrentZone(), true
+end
+
+function Scores.CalculateDensity(questID)
+    if not Utils.IsValidQuestID(questID) then
+        return 0.75, { count = 0, clusterCount = 0, inLogCount = 0, zoneGoodCount = 0, zone = "Unknown", final = 0.75 }
+    end
+    ScanQuestLogClusters()
+
+    local isAtNPC = (QuestFrame and QuestFrame:IsShown()) or (GossipFrame and GossipFrame:IsShown())
+    local zone, isUnaccepted = ResolveQuestZone(questID, isAtNPC)
+    local inLogCount = 1
+
+    if not isUnaccepted then
+        inLogCount = zoneClusterCounts[zone] or 1
+    else
+        local existingInZone = (zone and zoneClusterCounts[zone]) or #(Scores.GetQuestsForZone(zone))
+        local npcAvailable = isAtNPC and CountNPCAvailableQuestsExcluding(questID) or 0
+        inLogCount = math.max(1, existingInZone + 1 + npcAvailable)
+    end
+
+    -- Count good quests available in the zone itself (not just the player's current Quest Log)
+    local zoneGoodCount, catalogGoodCount = Scores.GetZoneGoodQuestCount(zone)
+    local totalHubQuests = math.max(inLogCount, zoneGoodCount)
+
+    -- Solution C Curve: Never penalizes good quests when arriving at a zone (neutral 0.75 baseline -> 1.00 hub synergy)
+    local score
+    if totalHubQuests <= 1 then
+        score = 0.75 -- Standalone / Sparse zone: neutral baseline (zero unfair penalty)
+    elseif totalHubQuests == 2 then
+        score = 0.84
+    elseif totalHubQuests == 3 then
+        score = 0.92
+    else
+        score = 1.00 -- 4+ good quests in zone or log: full Zone Hub synergy
     end
 
     local reason = nil
-    if score <= 0.35 then
-        reason = "Isolated"
-    elseif score >= 0.85 then
+    if totalHubQuests >= 3 then
         reason = "Quest Hub"
-    elseif isUnaccepted and isAtNPC then
+    elseif totalHubQuests == 2 or (isUnaccepted and isAtNPC) then
         reason = "NPC Hub"
+    else
+        reason = "Standalone"
     end
 
     local details = {
         zone = zone,
-        clusterCount = count,
+        clusterCount = totalHubQuests,
+        inLogCount = inLogCount,
+        zoneGoodCount = zoneGoodCount,
+        catalogGoodCount = catalogGoodCount,
         isUnaccepted = isUnaccepted,
         isAtNPC = isAtNPC,
         final = score,
@@ -415,8 +617,8 @@ function Scores.CalculateDensity(questID)
     }
 
     if addon.db and addon.db.debug then
-        addon.Debug("Density [Q:%d]: Zone='%s' (Cluster: %d, Unaccepted=%s, AtNPC=%s) -> Score=%.2f",
-            questID, zone, count, tostring(isUnaccepted), tostring(isAtNPC), score)
+        addon.Debug("Density [Q:%d]: Zone='%s' (TotalGood: %d, ZoneGood: %d, InLog: %d) -> Score=%.2f",
+            questID, zone, totalHubQuests, zoneGoodCount, inLogCount, score)
     end
 
     return score, details
@@ -426,5 +628,6 @@ end
 function Scores.InvalidateDensityCache()
     _forceRescan = true
     lastScanTime = 0
+    wipe(_zoneGoodCountMemo)
     PruneZoneQuests()
 end

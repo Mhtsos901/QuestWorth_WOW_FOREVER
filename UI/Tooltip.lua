@@ -81,24 +81,33 @@ local function GetReasonSummary(b)
         end
     end
 
-    -- 4. Hub Density Reason
+    -- 4. Hub Density Reason (Zone Good Quests + Active Log Quests)
     local hDetails = b.details.density
     local hReason = hDetails and hDetails.reason
     if not hReason and b.h then
-        if b.h <= 0.35 then hReason = "Isolated"
-        elseif b.h >= 0.85 then hReason = "Quest Hub"
+        if b.h >= 0.85 then hReason = "Quest Hub"
         elseif hDetails and hDetails.isUnaccepted then hReason = "NPC Hub"
         end
     end
     if hReason then
-        if hReason == "Quest Hub" then
-            local cnt = (hDetails and hDetails.clusterCount) or 4
-            table.insert(reasons, string.format("|cff00ccffQuest Hub (%dQ)|r", cnt))
-        elseif hReason == "NPC Hub" then
-            table.insert(reasons, "|cff00ccffNPC Hub|r")
-        elseif hReason == "Isolated" then
-            table.insert(reasons, "|cffffaa00Isolated Solo|r")
-        else
+        local zGood = (hDetails and hDetails.zoneGoodCount) or 0
+        local inLog = (hDetails and hDetails.inLogCount) or 0
+        local cnt = (hDetails and hDetails.clusterCount) or 4
+        if hReason == "Quest Hub" or zGood >= 3 then
+            if zGood >= 2 and inLog >= 2 then
+                table.insert(reasons, string.format("|cff00ccffZone Hub (%d Good • %d in Log)|r", zGood, inLog))
+            elseif zGood >= 2 then
+                table.insert(reasons, string.format("|cff00ccffZone Hub (%d Good Qs)|r", zGood))
+            else
+                table.insert(reasons, string.format("|cff00ccffQuest Hub (%dQ)|r", cnt))
+            end
+        elseif hReason == "NPC Hub" or zGood == 2 then
+            if zGood >= 2 then
+                table.insert(reasons, string.format("|cff00ccffZone Hub (%d Good Qs)|r", zGood))
+            else
+                table.insert(reasons, "|cff00ccffNPC Hub|r")
+            end
+        elseif hReason ~= "Standalone" and hReason ~= "Isolated" then
             table.insert(reasons, hReason)
         end
     end
@@ -385,8 +394,13 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         end
 
         local hNote = ""
-        if b.details and b.details.density and b.details.density.clusterCount then
-            hNote = string.format(" |cffb8d8f8(%d in zone)|r", b.details.density.clusterCount)
+        if b.details and b.details.density then
+            local hd = b.details.density
+            if hd.zoneGoodCount and hd.zoneGoodCount > 0 then
+                hNote = string.format(" |cffb8d8f8(%d Good in zone • %d in Log)|r", hd.zoneGoodCount, hd.inLogCount or 0)
+            elseif hd.clusterCount then
+                hNote = string.format(" |cffb8d8f8(%d in zone)|r", hd.clusterCount)
+            end
         end
 
         local diffText

@@ -3222,14 +3222,15 @@ print("\n[Phase 4J] Deep Logic Audit Regressions & Boundary Invariants:")
     local fPalLibram = Scores.CalculateClassFit(990801)
     assert_true(fPalLibram >= 0.50, "Paladin retains positive fit for Libram: " .. tostring(fPalLibram))
 
-    -- 7. Bug 7: Density.InvalidateDensityCache works immediately when GetTime() < 5.0
+    -- 7. Bug 7 & Solution C: InvalidateDensityCache rescans immediately at GetTime() < 5.0
+    -- and counts the zone's available good quests (not just the player's Quest Log) without penalizing 1-quest starts
     _G.GetTime = function() return 0.05 end
     mockLog4J = {
         { title = "Stranglethorn Vale", level = 0, isHeader = true },
         { title = "Q1", level = 40, questID = 990901 },
     }
     Scores.InvalidateDensityCache()
-    local dOne = Scores.CalculateDensity(990901)
+    local dOne, dOneDet = Scores.CalculateDensity(990901)
     mockLog4J = {
         { title = "Stranglethorn Vale", level = 0, isHeader = true },
         { title = "Q1", level = 40, questID = 990901 },
@@ -3238,8 +3239,9 @@ print("\n[Phase 4J] Deep Logic Audit Regressions & Boundary Invariants:")
     }
     Scores.InvalidateDensityCache()
     local dThree, dThreeDet = Scores.CalculateDensity(990901)
-    assert_true(dOne < 0.50 and dThree >= 0.85 and dThreeDet.clusterCount == 3,
-        string.format("InvalidateDensityCache rescans immediately at GetTime()<5: 1Q=%.2f -> 3Q=%.2f (count=%s)", dOne, dThree, tostring(dThreeDet.clusterCount)))
+    assert_true(dOne >= 0.85 and dOneDet.inLogCount == 1 and (dOneDet.zoneGoodCount or 0) >= 6 and dThree >= 0.85 and dThreeDet.inLogCount == 3,
+        string.format("InvalidateDensityCache rescans immediately at GetTime()<5 & counts zone good quests: 1Q=%.2f (inLog=%s, zoneGood=%s) -> 3Q=%.2f (inLog=%s)",
+            dOne, tostring(dOneDet.inLogCount), tostring(dOneDet.zoneGoodCount), dThree, tostring(dThreeDet.inLogCount)))
 
     -- Restore globals cleanly
     _G.UnitLevel = origUnitLevel
@@ -3708,6 +3710,26 @@ print("\n[Phase 4L] Dynamic Multi-Alt Context, Level 3 Progression, Tie-Breaking
         if not (ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7) then newFuzzFails = newFuzzFails + 1 end
     end
     assert_eq(newFuzzFails, 0, "All new Meta, StarterZone & ColorHex APIs survive hostile input fuzzing (incl. NaN/Inf) with 0 errors")
+
+    -- 8. Solution C: Hub Density counts the zone's available good quests (not just player log) and never penalizes a good quest
+    mockPlayerState.level = 38
+    mockPlayerState.faction = "Alliance"
+    mockPlayerState.classToken = "WARRIOR"
+    mockPlayerState.zone = "Riverglades"
+    Player.Update()
+    local rgTotalGood, rgCatalogGood = addonTable.Scores.GetZoneGoodQuestCount("Riverglades", 38, "Alliance", "WARRIOR")
+    assert_true(rgTotalGood >= 10 and rgCatalogGood >= 10, string.format("Riverglades at L38 counts >= 10 available good quests from catalog (got %d)", rgTotalGood))
+
+    -- Even with 0 quests in Quest Log, a good quest in Riverglades (95982) gets full 1.00 Zone Hub density
+    local savedLog4L = mockQuestLog
+    mockQuestLog = {}
+    addonTable.Scores.InvalidateDensityCache()
+    Engine.InvalidateCache()
+    local d95982, det95982 = addonTable.Scores.CalculateDensity(95982)
+    assert_eq(d95982, 1.00, "First quest in a rich zone (0 in log) receives 1.00 Density from the zone's good quests")
+    assert_true((det95982.zoneGoodCount or 0) >= 10, "Density details reports zoneGoodCount >= 10 even with 0 quests in log")
+    mockQuestLog = savedLog4L
+    addonTable.Scores.InvalidateDensityCache()
 
     restoreAll()
 end)()
