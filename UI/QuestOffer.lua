@@ -49,16 +49,46 @@ local function EnsureTitleHoverFrame()
     return titleHoverFrame
 end
 
+local DESC_START_MARK = "|cfffefffe|r"
+local DESC_END_MARK = "|cfffefefe|r\n\n"
+
 local function CleanOfferTitle(raw)
     local stripped = string.gsub(raw or "", "\n|cff.-$", "")
     return Utils.CleanQuestTitle(stripped)
 end
 
+local function StripInjectedDescBlock(raw)
+    if not raw or raw == "" then return "" end
+    local s, e = string.find(raw, DESC_END_MARK, 1, true)
+    if s and string.sub(raw, 1, #DESC_START_MARK) == DESC_START_MARK then
+        return string.sub(raw, e + 1)
+    end
+    return raw
+end
+
+local function ClearInjectedDescriptions()
+    for _, fs in ipairs({ QuestInfoDescriptionText, QuestDetailDescriptionText }) do
+        if fs and fs.GetText and fs.SetText then
+            local raw = fs:GetText() or ""
+            local clean = StripInjectedDescBlock(raw)
+            if clean ~= raw then
+                fs:SetText(clean)
+            end
+        end
+    end
+end
+
 -- Update Quest Detail / Offer dialog (QuestFrameDetailPanel / QuestInfoTitleHeader)
 local function UpdateQuestOfferDialog(template, parentFrame)
     if QUEST_TEMPLATE_LOG and template == QUEST_TEMPLATE_LOG then return end
+    if QUEST_TEMPLATE_MAP_DETAILS and template == QUEST_TEMPLATE_MAP_DETAILS then return end
+    if QUEST_TEMPLATE_MAP_REWARDS and template == QUEST_TEMPLATE_MAP_REWARDS then return end
+    if template and QuestInfoFrame and QuestInfoFrame.questLog then return end
     if parentFrame and QuestLogDetailScrollFrame and parentFrame == QuestLogDetailScrollFrame then return end
-    if parentFrame and QuestMapFrame and QuestMapFrame.DetailsFrame and parentFrame == QuestMapFrame.DetailsFrame.ScrollFrame then return end
+    if parentFrame and QuestMapFrame and QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame.ScrollFrame
+        and (parentFrame == QuestMapFrame.DetailsFrame.ScrollFrame or parentFrame == QuestMapFrame.DetailsFrame.ScrollFrame.ScrollChild) then
+        return
+    end
     if not (addon.db and addon.db.enabled) then
         addon._activeOfferQuestID = nil
         if titleHoverFrame then titleHoverFrame:Hide() end
@@ -73,6 +103,7 @@ local function UpdateQuestOfferDialog(template, parentFrame)
                 end
             end
         end
+        ClearInjectedDescriptions()
         return
     end
     if not QuestFrame or not QuestFrame:IsShown() then
@@ -234,7 +265,7 @@ local function UpdateQuestOfferDialog(template, parentFrame)
     end
 
     local hintText = L["HOVER_TITLE_HINT"] or "Hover title for Worth details & score breakdown"
-    local hintLine = "\n|cff331a00<" .. hintText .. ">|r"
+    local hintLine = "|cff4a3518<" .. hintText .. ">|r"
 
     local cleanOfferName = Utils.CleanQuestTitle(
         (QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader:GetText())
@@ -242,18 +273,17 @@ local function UpdateQuestOfferDialog(template, parentFrame)
         or ""
     )
     local payoff = addon.Data and addon.Data.GetQuestPayoff and addon.Data.GetQuestPayoff(qID, cleanOfferName)
-    local metaPrefixLine = ""
+    local guideLines = {}
     if (not addon.db or addon.db.showMetaIndicator ~= false) and breakdown and breakdown.metaInfo then
         local mi = breakdown.metaInfo
         local metaDesc = (mi.reason and mi.reason ~= "") and mi.reason or (mi.tag or "META")
-        metaPrefixLine = string.format("\n%s |cff663300META [%s]:|r |cff3d1f00%s|r",
-            Utils.META_ICON or "", tostring(mi.tag or "META"), metaDesc)
+        table.insert(guideLines, string.format("%s |cff662200META [%s]:|r |cff1a1208%s|r",
+            Utils.META_ICON or "", tostring(mi.tag or "META"), metaDesc))
     end
-    local payoffLine = ""
     if payoff and payoff.tip and payoff.tip ~= "" then
-        payoffLine = "\n|cff004d14• Tip: " .. payoff.tip .. "|r"
+        table.insert(guideLines, "|cff005a14• " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cff1a1208" .. payoff.tip .. "|r")
     elseif payoff and payoff.summary and payoff.summary ~= "" then
-        payoffLine = "\n|cff5a1807• " .. payoff.summary .. "|r"
+        table.insert(guideLines, "|cff5a1807•|r |cff1a1208" .. payoff.summary .. "|r")
     else
         local liveInfo = Utils.GetQuestLiveSummary and Utils.GetQuestLiveSummary(qID)
         local dynParts = {}
@@ -276,17 +306,57 @@ local function UpdateQuestOfferDialog(template, parentFrame)
             table.insert(dynParts, string.format("Zone Hub (%dQ)", breakdown.details.density.clusterCount))
         end
         if #dynParts > 0 then
-            payoffLine = "\n|cff103055• " .. table.concat(dynParts, " • ") .. "|r"
+            table.insert(guideLines, "|cff103066•|r |cff1a1208" .. table.concat(dynParts, " • ") .. "|r")
         end
     end
-    payoffLine = metaPrefixLine .. payoffLine
 
-    -- 1. Badge QuestInfoTitleHeader at the top of the quest offer parchment
+    -- Append structured dependency / prerequisite steps in clean readable ink font
+    local guide = addon.Data and addon.Data.GetQuestGuide and addon.Data.GetQuestGuide(qID, cleanOfferName)
+    if guide and guide.steps and #guide.steps > 0 then
+        local maxOfferSteps = math.min(#guide.steps, 3)
+        local isSingleDuplicate = (#guide.steps == 1 and payoff and payoff.tip and payoff.tip == guide.steps[1].text)
+        if not isSingleDuplicate then
+            table.insert(guideLines, "|cff5a1807• " .. (L["GUIDE_NEED_FIRST"] or "Steps / Need First:") .. "|r")
+            for idx = 1, maxOfferSteps do
+                local st = guide.steps[idx]
+                local bagSuffix = ""
+                if addon.Data and addon.Data.GetStepBagProgress and (st.itemID or st.itemName) then
+                    local _, _, satisfied = addon.Data.GetStepBagProgress(st)
+                    if satisfied then bagSuffix = " |cff005a14[OK]|r" end
+                end
+                table.insert(guideLines, string.format("|cff103066  %d.|r |cff1a1208%s|r%s", idx, st.text or "", bagSuffix))
+            end
+            if #guide.steps > maxOfferSteps then
+                table.insert(guideLines, string.format("|cff4a3518  ...+%d more (hover title)|r", #guide.steps - maxOfferSteps))
+            end
+        end
+    end
+
+    local guideBlock = hintLine .. ((#guideLines > 0) and ("\n" .. table.concat(guideLines, "\n")) or "")
+
+    -- Place guide block inside clean body font (QuestInfoDescriptionText / QuestDetailDescriptionText) matching Blizzard's black quest text
+    local descTarget = nil
+    for _, fs in ipairs({ QuestInfoDescriptionText, QuestDetailDescriptionText }) do
+        if fs and fs.GetText and fs.SetText and (not fs.IsShown or fs:IsShown()) then
+            descTarget = fs
+            break
+        end
+    end
+
+    if descTarget then
+        local rawDesc = StripInjectedDescBlock(descTarget:GetText() or "")
+        local targetDesc = DESC_START_MARK .. guideBlock .. DESC_END_MARK .. rawDesc
+        if (descTarget:GetText() or "") ~= targetDesc then
+            descTarget:SetText(targetDesc)
+        end
+    end
+
+    -- Keep TitleHeaders clean (1 line [XX%] Title) in stylized title font
     if QuestInfoTitleHeader and QuestInfoTitleHeader.GetText and QuestInfoTitleHeader.SetText then
         local rawTitle = QuestInfoTitleHeader:GetText() or ""
         if rawTitle ~= "" then
             local clean = Utils.CleanQuestTitle(rawTitle)
-            local targetTitle = badge .. " " .. clean .. hintLine .. payoffLine
+            local targetTitle = badge .. " " .. clean
             if rawTitle ~= targetTitle then
                 QuestInfoTitleHeader:SetText(targetTitle)
             end
@@ -298,7 +368,7 @@ local function UpdateQuestOfferDialog(template, parentFrame)
         local raw = QuestDetailTitleText:GetText() or ""
         if raw ~= "" then
             local clean = Utils.CleanQuestTitle(raw)
-            local target = badge .. " " .. clean .. hintLine .. payoffLine
+            local target = badge .. " " .. clean
             if raw ~= target then
                 QuestDetailTitleText:SetText(target)
             end

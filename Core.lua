@@ -54,6 +54,12 @@ local function RefreshAllUI(force)
         if addon.UI.UpdateZoneAdvisor then
             pcall(addon.UI.UpdateZoneAdvisor)
         end
+        if addon.UI.UpdateDependencyPins then
+            pcall(addon.UI.UpdateDependencyPins)
+        end
+        if addon.UI.UpdateQuestDetailsGuide then
+            pcall(addon.UI.UpdateQuestDetailsGuide)
+        end
     end
 end
 
@@ -93,6 +99,9 @@ local function OnEvent(self, event, ...)
             if addon.UI.InitializeWorldMap then
                 addon.UI.InitializeWorldMap()
             end
+            if addon.UI.InitializeMapPins then
+                addon.UI.InitializeMapPins()
+            end
             ScanCurrentZoneQuestLines()
             addon.Print(L["ADDON_LOADED"])
         elseif loadedAddon == "Blizzard_ObjectiveTracker" or
@@ -112,6 +121,9 @@ local function OnEvent(self, event, ...)
             if addon.UI and addon.UI.InitializeWorldMap then
                 addon.UI.InitializeWorldMap()
             end
+            if addon.UI and addon.UI.InitializeMapPins then
+                addon.UI.InitializeMapPins()
+            end
             DelayedRefresh(0.1)
         end
 
@@ -125,6 +137,9 @@ local function OnEvent(self, event, ...)
         end
         if addon.UI and addon.UI.InitializeWorldMap then
             addon.UI.InitializeWorldMap()
+        end
+        if addon.UI and addon.UI.InitializeMapPins then
+            addon.UI.InitializeMapPins()
         end
         if addon.Engine then
             if addon.Engine.InvalidateCache then addon.Engine.InvalidateCache() end
@@ -144,6 +159,8 @@ local function OnEvent(self, event, ...)
                     if addon.UI.UpdateQuestLog then addon.UI.UpdateQuestLog(true) end
                     if addon.UI.UpdateWorldMapBanner then addon.UI.UpdateWorldMapBanner() end
                     if addon.UI.UpdateZoneAdvisor then addon.UI.UpdateZoneAdvisor() end
+                    if addon.UI.UpdateDependencyPins then addon.UI.UpdateDependencyPins() end
+                    if addon.UI.UpdateQuestDetailsGuide then addon.UI.UpdateQuestDetailsGuide() end
                 end
             end)
         end

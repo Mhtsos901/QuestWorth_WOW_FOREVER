@@ -1073,6 +1073,42 @@ local function IsActiveQuestInLog(questID)
     return false
 end
 
+-- Shared scratch state for Objective Tracker updates (zero per-refresh closures/tables)
+local _moduleListSeen = {}
+local _moduleListOut = {}
+local _trackerActiveQuests = {}
+local _trackerRawTitles = {}
+local _trackerTitleToID = {}
+local _trackerTitleIndexBuilt = false
+local _trackerProcessedBlocks = {}
+local _trackerEnumerated = false
+local _trackerContainers = {}
+local _trackerCurrentModules = nil
+
+local function EnsureTrackerTitleIndex()
+    if _trackerTitleIndexBuilt then
+        return _trackerTitleToID
+    end
+    for qid, qTitle in pairs(_trackerRawTitles) do
+        if qTitle and qTitle ~= "" then
+            local clean = Utils.CleanQuestTitle(qTitle)
+            local noLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
+            clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
+            noLevel = string.gsub(noLevel, "^%s*(.-)%s*$", "%1")
+            local norm = NormalizeQuestTitle(qTitle)
+
+            _trackerTitleToID[clean] = qid
+            _trackerTitleToID[noLevel] = qid
+            if norm ~= "" then
+                _trackerTitleToID[norm] = qid
+                _trackerTitleToID[string.lower(norm)] = qid
+            end
+        end
+    end
+    _trackerTitleIndexBuilt = true
+    return _trackerTitleToID
+end
+
 -- Helper to safely resolve a questID from an Objective Tracker block or header text
 local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
     if not block then return nil end
@@ -1144,15 +1180,16 @@ local function ResolveBlockQuestID(block, currentText, activeQuests, titleToID)
         titleNoLevel = string.gsub(titleNoLevel, "^%s*(.-)%s*$", "%1")
 
         local matchedID = nil
-        if titleToID then
-            if norm ~= "" and titleToID[norm] then
-                matchedID = titleToID[norm]
-            elseif norm ~= "" and titleToID[string.lower(norm)] then
-                matchedID = titleToID[string.lower(norm)]
-            elseif titleToID[clean] then
-                matchedID = titleToID[clean]
-            elseif titleToID[titleNoLevel] then
-                matchedID = titleToID[titleNoLevel]
+        local lookupTitleToID = titleToID or (next(_trackerRawTitles) and EnsureTrackerTitleIndex() or nil)
+        if lookupTitleToID then
+            if norm ~= "" and lookupTitleToID[norm] then
+                matchedID = lookupTitleToID[norm]
+            elseif norm ~= "" and lookupTitleToID[string.lower(norm)] then
+                matchedID = lookupTitleToID[string.lower(norm)]
+            elseif lookupTitleToID[clean] then
+                matchedID = lookupTitleToID[clean]
+            elseif lookupTitleToID[titleNoLevel] then
+                matchedID = lookupTitleToID[titleNoLevel]
             end
         end
 
@@ -1240,6 +1277,18 @@ local function HookBlockHeaderText(block)
     block._worthItTextHooked = true
 end
 
+local function ResolveTrackerBlockHover(self)
+    local targetBlock = (self and self._worthItOwnerBlock) or self
+    if not targetBlock then return nil end
+    local id = targetBlock._worthItActiveQuestID
+    if not id or id <= 0 then
+        local fs = GetBlockHeaderFontString(targetBlock)
+        local txt = fs and fs.GetText and fs:GetText() or ""
+        id = ResolveBlockQuestID(targetBlock, Utils.CleanQuestTitle(txt), _trackerActiveQuests, next(_trackerRawTitles) and EnsureTrackerTitleIndex() or nil)
+    end
+    return id
+end
+
 -- Apply badge to a single Objective Tracker block header (leaves objective detail lines 100% untouched)
 local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     if not block then return end
@@ -1290,71 +1339,223 @@ local function BadgeObjectiveBlock(block, activeQuests, titleToID)
     end
 
     -- Hook OnEnter/OnLeave to inject Worth Meter & Meta-Knowledge into Tracker Tooltips
-    HookQuestWidgetHover(block, function(self)
-        local id = self._worthItActiveQuestID
-        if not id or id <= 0 then
-            local fs = GetBlockHeaderFontString(self)
-            local txt = fs and fs.GetText and fs:GetText() or ""
-            id = ResolveBlockQuestID(self, Utils.CleanQuestTitle(txt), activeQuests, titleToID)
-        end
-        return id
-    end)
+    if not block._worthItHoverHooked then
+        HookQuestWidgetHover(block, ResolveTrackerBlockHover)
+    end
     if block.Header then
-        HookQuestWidgetHover(block.Header, function()
-            local id = block._worthItActiveQuestID
-            if not id or id <= 0 then
-                local fs = GetBlockHeaderFontString(block)
-                local txt = fs and fs.GetText and fs:GetText() or ""
-                id = ResolveBlockQuestID(block, Utils.CleanQuestTitle(txt), activeQuests, titleToID)
-            end
-            return id
-        end)
+        block.Header._worthItOwnerBlock = block
+        if not block.Header._worthItHoverHooked then
+            HookQuestWidgetHover(block.Header, ResolveTrackerBlockHover)
+        end
     end
 end
 
--- Dynamic module list getter (QUEST MODULES ONLY across Classic & Modern clients)
-local function GetModuleList()
-    local seen, list = {}, {}
-    local function add(mod)
-        if mod and not seen[mod] then
-            seen[mod] = true
-            list[#list + 1] = mod
-        end
+-- Dynamic module list getter (QUEST MODULES ONLY across Classic & Modern clients, reusing scratch tables)
+local function AddTrackerModule(mod)
+    if mod and not _moduleListSeen[mod] then
+        _moduleListSeen[mod] = true
+        _moduleListOut[#_moduleListOut + 1] = mod
     end
+end
 
-    add(QuestObjectiveTracker)
-    add(CampaignQuestObjectiveTracker)
-    add(WorldQuestObjectiveTracker)
-    add(QUEST_TRACKER_MODULE)
-    add(CAMPAIGN_QUEST_TRACKER_MODULE)
-    add(WORLD_QUEST_TRACKER_MODULE)
+local function GetModuleList()
+    wipe(_moduleListSeen)
+    wipe(_moduleListOut)
+
+    AddTrackerModule(QuestObjectiveTracker)
+    AddTrackerModule(CampaignQuestObjectiveTracker)
+    AddTrackerModule(WorldQuestObjectiveTracker)
+    AddTrackerModule(QUEST_TRACKER_MODULE)
+    AddTrackerModule(CAMPAIGN_QUEST_TRACKER_MODULE)
+    AddTrackerModule(WORLD_QUEST_TRACKER_MODULE)
 
     if ObjectiveTrackerManager and ObjectiveTrackerManager.modules then
         for _, mod in ipairs(ObjectiveTrackerManager.modules) do
             if mod == QuestObjectiveTracker or mod == CampaignQuestObjectiveTracker or mod == WorldQuestObjectiveTracker then
-                add(mod)
+                AddTrackerModule(mod)
             elseif mod.isQuestTracker or (mod.GetName and string.find(string.lower(mod:GetName() or ""), "quest")) then
-                add(mod)
+                AddTrackerModule(mod)
             end
         end
     end
 
     if ObjectiveTrackerFrame and ObjectiveTrackerFrame.MODULES then
         for _, mod in ipairs(ObjectiveTrackerFrame.MODULES) do
-            add(mod)
+            AddTrackerModule(mod)
         end
     end
 
-    return list
+    return _moduleListOut
 end
 
 function UI.InvalidateModuleListCache()
-    -- Kept for API compatibility; GetModuleList is now always dynamic
+    -- Kept for API compatibility; GetModuleList reuses scratch tables safely on each refresh
 end
 
 local _lastTrackerUpdate = 0
 local _isUpdatingTracker = false
 local _trackerUpdatePending = false
+
+local function ProcessTrackerBlock(block)
+    if not block or _trackerProcessedBlocks[block] then return end
+    _trackerProcessedBlocks[block] = true
+    HookBlockHeaderText(block)
+    BadgeObjectiveBlock(block, _trackerActiveQuests, nil)
+end
+
+local function RunEnumerateBlocks(mod)
+    for block in mod:EnumerateBlocks() do
+        ProcessTrackerBlock(block)
+        _trackerEnumerated = true
+    end
+end
+
+local function RunBlockPoolsEnum(pools)
+    for block in pools:EnumerateActive() do
+        ProcessTrackerBlock(block)
+        _trackerEnumerated = true
+    end
+end
+
+local function RunBlockPoolEnum(pool)
+    for block in pool:EnumerateActive() do
+        ProcessTrackerBlock(block)
+        _trackerEnumerated = true
+    end
+end
+
+local function GetFrameChildrenPacked(frame)
+    return { frame:GetChildren() }
+end
+
+local function ScanTrackerContainerTree(frame, depth)
+    if not frame or depth > 4 then return end
+    if GetBlockHeaderFontString(frame) then
+        ProcessTrackerBlock(frame)
+    end
+    if frame.GetChildren then
+        local okC, kids = pcall(GetFrameChildrenPacked, frame)
+        if okC and kids then
+            for _, child in ipairs(kids) do
+                if child and child:IsShown() then
+                    ScanTrackerContainerTree(child, depth + 1)
+                end
+            end
+        end
+    end
+end
+
+local function RunObjectiveTrackerUpdate()
+    local modules = GetModuleList()
+    _trackerCurrentModules = modules
+
+    -- Ensure any newly loaded tracker modules are hooked (reusing modules list)
+    if UI.HookTrackerModules then
+        UI.HookTrackerModules(modules)
+    end
+
+    wipe(_trackerActiveQuests)
+    wipe(_trackerRawTitles)
+    wipe(_trackerTitleToID)
+    _trackerTitleIndexBuilt = false
+    wipe(_trackerProcessedBlocks)
+
+    local getInfo = C_QuestLog and C_QuestLog.GetInfo
+    local getNumEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries) or GetNumQuestLogEntries
+    local numEntries = (getNumEntries and getNumEntries()) or 0
+
+    for i = 1, numEntries do
+        local qTitle, qid, isH
+        if getInfo then
+            local okI, info = pcall(getInfo, i)
+            if okI and info then
+                isH = info.isHeader
+                qTitle = info.title
+                qid = info.questID
+            end
+        elseif GetQuestLogTitle then
+            local okT, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+            if okT then
+                isH = h
+                qTitle = t
+                qid = id
+            end
+        end
+
+        if not isH and qid and qid > 0 then
+            _trackerActiveQuests[qid] = true
+            _trackerRawTitles[qid] = qTitle
+        end
+    end
+
+    -- 1. Enumerate blocks across quest tracker modules
+    for _, mod in ipairs(modules) do
+        if mod then
+            _trackerEnumerated = false
+
+            -- Modern Dragonflight API: mod:EnumerateBlocks()
+            if mod.EnumerateBlocks then
+                if not pcall(RunEnumerateBlocks, mod) then
+                    _trackerEnumerated = false
+                end
+            end
+
+            -- Modern Dragonflight FramePoolCollection: mod.blockPools
+            if not _trackerEnumerated and mod.blockPools and mod.blockPools.EnumerateActive then
+                if not pcall(RunBlockPoolsEnum, mod.blockPools) then
+                    _trackerEnumerated = false
+                end
+            end
+
+            -- Legacy pool: mod.blockPool
+            if not _trackerEnumerated and mod.blockPool and mod.blockPool.EnumerateActive then
+                if not pcall(RunBlockPoolEnum, mod.blockPool) then
+                    _trackerEnumerated = false
+                end
+            end
+
+            -- Handle mod.usedBlocks
+            if not _trackerEnumerated and mod.usedBlocks and type(mod.usedBlocks) == "table" then
+                for _, v in pairs(mod.usedBlocks) do
+                    if type(v) == "table" then
+                        if GetBlockHeaderFontString(v) or v.id or v.questID then
+                            ProcessTrackerBlock(v)
+                        else
+                            for _, subBlock in pairs(v) do
+                                if type(subBlock) == "table" and (GetBlockHeaderFontString(subBlock) or subBlock.id or subBlock.questID) then
+                                    ProcessTrackerBlock(subBlock)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- Query mod:GetExistingBlock(questID) for all active quests
+            if mod.GetExistingBlock then
+                for qid in pairs(_trackerActiveQuests) do
+                    local okB, block = pcall(mod.GetExistingBlock, mod, qid)
+                    if okB and block then
+                        ProcessTrackerBlock(block)
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Fallback: Recursive container frame scanning (only when module enumeration found no blocks)
+    if not next(_trackerProcessedBlocks) then
+        _trackerContainers[1] = ObjectiveTrackerBlocksFrame
+        _trackerContainers[2] = ObjectiveTrackerFrame and ObjectiveTrackerFrame.BlocksFrame
+        _trackerContainers[3] = ObjectiveTrackerFrame
+        for i = 1, 3 do
+            local container = _trackerContainers[i]
+            if container then
+                ScanTrackerContainerTree(container, 1)
+            end
+        end
+    end
+end
 
 -- Master function to update all visible quest entries in the Objective Tracker
 function UI.UpdateObjectiveTracker(force)
@@ -1394,164 +1595,7 @@ function UI.UpdateObjectiveTracker(force)
 
     _isUpdatingTracker = true
 
-    local ok, err = pcall(function()
-        -- Ensure any newly loaded tracker modules are hooked
-        if UI.HookTrackerModules then
-            UI.HookTrackerModules()
-        end
-
-        -- Precompute active quests & fast title lookup table once for this cycle
-        local activeQuests = {}
-        local titleToID = {}
-        local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
-                           or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
-
-        for i = 1, numEntries do
-            local qTitle, qid, isH
-            if C_QuestLog and C_QuestLog.GetInfo then
-                local okI, info = pcall(C_QuestLog.GetInfo, i)
-                if okI and info then
-                    isH = info.isHeader
-                    qTitle = info.title
-                    qid = info.questID
-                end
-            elseif GetQuestLogTitle then
-                local okT, t, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
-                if okT then
-                    isH = h
-                    qTitle = t
-                    qid = id
-                end
-            end
-
-            if not isH and qid and qid > 0 then
-                activeQuests[qid] = true
-                if qTitle and qTitle ~= "" then
-                    local clean = Utils.CleanQuestTitle(qTitle)
-                    local noLevel = string.gsub(clean, "^%s*%[%d+%]%s*", "")
-                    clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
-                    noLevel = string.gsub(noLevel, "^%s*(.-)%s*$", "%1")
-                    local norm = NormalizeQuestTitle(qTitle)
-
-                    titleToID[clean] = qid
-                    titleToID[noLevel] = qid
-                    if norm ~= "" then
-                        titleToID[norm] = qid
-                        titleToID[string.lower(norm)] = qid
-                    end
-                end
-            end
-        end
-
-        local processedBlocks = {}
-        local function ProcessBlock(block)
-            if not block or processedBlocks[block] then return end
-            processedBlocks[block] = true
-            HookBlockHeaderText(block)
-            BadgeObjectiveBlock(block, activeQuests, titleToID)
-        end
-
-        local modules = GetModuleList()
-
-        -- 1. Enumerate blocks across quest tracker modules
-        for _, mod in ipairs(modules) do
-            if mod then
-                local enumerated = false
-
-                -- Modern Dragonflight API: mod:EnumerateBlocks()
-                if mod.EnumerateBlocks then
-                    local okE = pcall(function()
-                        for block in mod:EnumerateBlocks() do
-                            ProcessBlock(block)
-                            enumerated = true
-                        end
-                    end)
-                    if not okE then enumerated = false end
-                end
-
-                -- Modern Dragonflight FramePoolCollection: mod.blockPools
-                if not enumerated and mod.blockPools and mod.blockPools.EnumerateActive then
-                    local okP = pcall(function()
-                        for block in mod.blockPools:EnumerateActive() do
-                            ProcessBlock(block)
-                            enumerated = true
-                        end
-                    end)
-                    if not okP then enumerated = false end
-                end
-
-                -- Legacy pool: mod.blockPool
-                if not enumerated and mod.blockPool and mod.blockPool.EnumerateActive then
-                    local okP = pcall(function()
-                        for block in mod.blockPool:EnumerateActive() do
-                            ProcessBlock(block)
-                            enumerated = true
-                        end
-                    end)
-                    if not okP then enumerated = false end
-                end
-
-                -- Handle mod.usedBlocks
-                if not enumerated and mod.usedBlocks and type(mod.usedBlocks) == "table" then
-                    for _, v in pairs(mod.usedBlocks) do
-                        if type(v) == "table" then
-                            if GetBlockHeaderFontString(v) or v.id or v.questID then
-                                ProcessBlock(v)
-                            else
-                                for _, subBlock in pairs(v) do
-                                    if type(subBlock) == "table" and (GetBlockHeaderFontString(subBlock) or subBlock.id or subBlock.questID) then
-                                        ProcessBlock(subBlock)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-
-                -- Query mod:GetExistingBlock(questID) for all active quests
-                if mod.GetExistingBlock then
-                    for qid in pairs(activeQuests) do
-                        local okB, block = pcall(mod.GetExistingBlock, mod, qid)
-                        if okB and block then
-                            ProcessBlock(block)
-                        end
-                    end
-                end
-            end
-        end
-
-        -- 2. Fallback: Recursive container frame scanning (only when module enumeration found no blocks)
-        if not next(processedBlocks) then
-            local containers = {
-                ObjectiveTrackerBlocksFrame,
-                ObjectiveTrackerFrame and ObjectiveTrackerFrame.BlocksFrame,
-                ObjectiveTrackerFrame,
-            }
-
-            local function ScanContainerTree(frame, depth)
-                if not frame or depth > 4 then return end
-                if GetBlockHeaderFontString(frame) then
-                    ProcessBlock(frame)
-                end
-                if frame.GetChildren then
-                    local okC, kids = pcall(function() return { frame:GetChildren() } end)
-                    if okC and kids then
-                        for _, child in ipairs(kids) do
-                            if child and child:IsShown() then
-                                ScanContainerTree(child, depth + 1)
-                            end
-                        end
-                    end
-                end
-            end
-
-            for _, container in ipairs(containers) do
-                if container then
-                    ScanContainerTree(container, 1)
-                end
-            end
-        end
-    end)
+    local ok, err = pcall(RunObjectiveTrackerUpdate)
 
     _isUpdatingTracker = false
     if not ok and err and addon.Debug then
@@ -1560,8 +1604,8 @@ function UI.UpdateObjectiveTracker(force)
 end
 
 -- Hook all available Objective Tracker modules and global update functions
-local function HookTrackerModules()
-    local modules = GetModuleList()
+local function HookTrackerModules(modules)
+    modules = modules or GetModuleList()
 
     for _, mod in ipairs(modules) do
         if mod then
@@ -1647,6 +1691,266 @@ local function ScheduleQuestLogShowRefresh()
     end
 end
 
+-- =========================================================================
+-- Quest Details Inline Dependency & Prerequisite Guide Card
+-- Shows "Need Item/Step A before Final Objective B" with live bag checks
+-- and [Pin Steps] button directly on QuestMapFrame.DetailsFrame / QuestLogFrame.
+-- =========================================================================
+local _detailsGuideBox = nil
+local _detailsSelectedQuestID = nil
+
+local function GetDetailsAnchorFrame()
+    if QuestMapFrame and QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame.IsShown and QuestMapFrame.DetailsFrame:IsShown() then
+        return QuestMapFrame.DetailsFrame, true
+    end
+    if QuestLogFrame and QuestLogFrame.IsShown and QuestLogFrame:IsShown() then
+        if QuestLogDetailScrollFrame and (not QuestLogDetailScrollFrame.IsShown or QuestLogDetailScrollFrame:IsShown()) then
+            return QuestLogFrame, false
+        end
+    end
+    if QuestLogDetailScrollFrame and QuestLogDetailScrollFrame.IsShown and QuestLogDetailScrollFrame:IsShown() then
+        return QuestLogDetailScrollFrame, false
+    end
+    return nil, false
+end
+
+local function ResolveDetailsQuestID(explicitQuestID)
+    if explicitQuestID and type(explicitQuestID) == "number" and explicitQuestID > 0 then
+        return explicitQuestID
+    end
+    if QuestMapFrame and QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame.questID and QuestMapFrame.DetailsFrame.questID > 0 then
+        return QuestMapFrame.DetailsFrame.questID
+    end
+    if QuestInfoFrame and QuestInfoFrame.questID and QuestInfoFrame.questID > 0 then
+        return QuestInfoFrame.questID
+    end
+    if C_QuestLog and C_QuestLog.GetSelectedQuest then
+        local ok, qid = pcall(C_QuestLog.GetSelectedQuest)
+        if ok and qid and qid > 0 then return qid end
+    end
+    if GetQuestLogSelection and GetQuestLogTitle then
+        local idx = GetQuestLogSelection()
+        if idx and idx > 0 then
+            if C_QuestLog and C_QuestLog.GetInfo then
+                local ok, info = pcall(C_QuestLog.GetInfo, idx)
+                if ok and info and not info.isHeader and info.questID and info.questID > 0 then
+                    return info.questID
+                end
+            else
+                local ok, _, _, _, isH, _, _, _, qid = pcall(GetQuestLogTitle, idx)
+                if ok and not isH and qid and qid > 0 then
+                    return qid
+                end
+            end
+        end
+    end
+    return _detailsSelectedQuestID
+end
+
+local function EnsureDetailsGuideBox()
+    if _detailsGuideBox then return _detailsGuideBox end
+    if not CreateFrame or not UIParent then return nil end
+
+    local L = addon.L or {}
+    local Theme = addon.UI and addon.UI.Theme
+    local f = CreateFrame("Frame", "WorthIt_DetailsGuideBox", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    f:SetWidth(300)
+    f:SetHeight(80)
+    f:SetFrameStrata("HIGH")
+    if Theme and Theme.DressParchmentCard then
+        Theme.DressParchmentCard(f)
+    elseif f.SetBackdrop then
+        f:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 14,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        f:SetBackdropColor(0.06, 0.08, 0.12, 0.94)
+        f:SetBackdropBorderColor(0.75, 0.60, 0.20, 0.90)
+    end
+    f:Hide()
+
+    local icon = f:CreateTexture(nil, "OVERLAY")
+    icon:SetSize(16, 16)
+    icon:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -8)
+    icon:SetTexture("Interface\\Icons\\INV_Misc_Book_08")
+    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    f.icon = icon
+
+    local hdr = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    hdr:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+    hdr:SetText("|cffffd100" .. (L["GUIDE_HEADER"] or "Quest Steps & Prerequisites:") .. "|r")
+    f.header = hdr
+
+    if Theme and Theme.CreateHeaderRule then
+        Theme.CreateHeaderRule(f, 8, -28)
+    end
+
+    local pinBtn = CreateFrame("Button", "WorthIt_DetailsPinBtn", f, "UIPanelButtonTemplate")
+    pinBtn:SetSize(74, 18)
+    pinBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -6)
+    pinBtn:SetText(L["GUIDE_PIN_BUTTON"] or "Pin Steps")
+    pinBtn:SetScript("OnClick", function()
+        if f._questID and UI.PinQuestGuide then
+            UI.PinQuestGuide(f._questID, true)
+            UI.UpdateQuestDetailsGuide(f._questID)
+        end
+    end)
+    f.pinBtn = pinBtn
+
+    local clearBtn = CreateFrame("Button", "WorthIt_DetailsClearBtn", f, "UIPanelButtonTemplate")
+    clearBtn:SetSize(56, 18)
+    clearBtn:SetPoint("RIGHT", pinBtn, "LEFT", -4, 0)
+    clearBtn:SetText(L["GUIDE_CLEAR_PIN"] or "Clear")
+    clearBtn:SetScript("OnClick", function()
+        if UI.ClearManualGuidePin then
+            UI.ClearManualGuidePin(true)
+        end
+        if f._questID then
+            UI.UpdateQuestDetailsGuide(f._questID)
+        end
+    end)
+    f.clearBtn = clearBtn
+
+    f.lines = {}
+    for i = 1, 7 do
+        local fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        fs:SetJustifyH("LEFT")
+        fs:SetWordWrap(true)
+        fs:Hide()
+        f.lines[i] = fs
+    end
+
+    _detailsGuideBox = f
+    return f
+end
+
+function UI.UpdateQuestDetailsGuide(explicitQuestID)
+    if explicitQuestID and type(explicitQuestID) == "number" and explicitQuestID > 0 then
+        _detailsSelectedQuestID = explicitQuestID
+    end
+
+    if not (addon.db and addon.db.enabled ~= false and addon.db.showQuestDetailsGuide ~= false) then
+        if _detailsGuideBox then _detailsGuideBox:Hide() end
+        return
+    end
+
+    local anchor, isWorldMapDetails = GetDetailsAnchorFrame()
+    if not anchor then
+        if _detailsGuideBox then _detailsGuideBox:Hide() end
+        return
+    end
+
+    local qid = ResolveDetailsQuestID(explicitQuestID)
+    if not qid or qid <= 0 then
+        if _detailsGuideBox then _detailsGuideBox:Hide() end
+        return
+    end
+
+    local guide = addon.Data and addon.Data.GetQuestGuide and addon.Data.GetQuestGuide(qid)
+    if not guide or ((not guide.steps or #guide.steps == 0) and (not guide.summary or guide.summary == "") and (not guide.warning or guide.warning == "")) then
+        if _detailsGuideBox then _detailsGuideBox:Hide() end
+        return
+    end
+
+    local box = EnsureDetailsGuideBox()
+    if not box then return end
+    box._questID = qid
+
+    local L = addon.L or {}
+    local targetWidth = math.max(280, math.min(360, (anchor.GetWidth and anchor:GetWidth()) or 300))
+    box:SetWidth(targetWidth)
+    local textWidth = targetWidth - 20
+
+    local hasCoords = (guide.pins and #guide.pins > 0)
+    if not hasCoords and guide.steps then
+        for _, st in ipairs(guide.steps) do
+            if st.mapID and st.x and st.y then
+                hasCoords = true
+                break
+            end
+        end
+    end
+    if hasCoords then
+        box.pinBtn:Show()
+        if (UI.GetManualPinnedQuestID and UI.GetManualPinnedQuestID() == qid)
+            or (UI.HasVisiblePinsForQuest and UI.HasVisiblePinsForQuest(qid)) then
+            box.clearBtn:Show()
+        else
+            box.clearBtn:Hide()
+        end
+        box.header:SetWidth(targetWidth - 168)
+    else
+        box.pinBtn:Hide()
+        box.clearBtn:Hide()
+        box.header:SetWidth(targetWidth - 40)
+    end
+
+    local lineTexts = {}
+    if guide.warning and guide.warning ~= "" then
+        table.insert(lineTexts, "|cffff6644! Warning:|r |cfff5ebd6" .. guide.warning .. "|r")
+    end
+    local steps = guide.steps or {}
+    if #steps > 0 then
+        local maxRows = math.min(#steps, 6)
+        for i = 1, maxRows do
+            local st = steps[i]
+            local bagTag = ""
+            if addon.Data and addon.Data.GetStepBagProgress and (st.itemID or st.itemName) then
+                local have, need, satisfied = addon.Data.GetStepBagProgress(st)
+                if satisfied then
+                    bagTag = " |cff44ff77" .. (L["GUIDE_IN_BAGS"] or "[In Bags]") .. "|r"
+                elseif have > 0 and need > 1 then
+                    bagTag = string.format(" |cffffcc00(%d/%d)|r", have, need)
+                end
+            end
+            local coordTag = (st.mapID and st.x and st.y) and string.format(" |cff9fd0ff(%.1f, %.1f)|r", st.x * 100, st.y * 100) or ""
+            table.insert(lineTexts, string.format("|cffffd100%d.|r |cfff5ebd6%s|r%s%s", i, st.text or "", coordTag, bagTag))
+        end
+        if #steps > maxRows then
+            table.insert(lineTexts, string.format("|cffb8a47e...+%d more step(s)|r", #steps - maxRows))
+        end
+    elseif guide.summary and guide.summary ~= "" then
+        table.insert(lineTexts, "|cfff5ebd6" .. guide.summary .. "|r")
+    end
+
+    local yOffset = -35
+    for idx = 1, 7 do
+        local fs = box.lines[idx]
+        local str = lineTexts[idx]
+        if str then
+            fs:ClearAllPoints()
+            fs:SetWidth(textWidth)
+            fs:SetPoint("TOPLEFT", box, "TOPLEFT", 10, yOffset)
+            fs:SetText(str)
+            fs:Show()
+            local h = (fs.GetStringHeight and fs:GetStringHeight()) or 14
+            if h < 12 then h = 14 end
+            yOffset = yOffset - h - 4
+        else
+            fs:SetText("")
+            fs:Hide()
+        end
+    end
+
+    box:SetHeight(math.max(54, (-yOffset) + 6))
+    box:ClearAllPoints()
+    local anchorBottom = anchor.GetBottom and anchor:GetBottom() or 300
+    if isWorldMapDetails and anchorBottom < 140 then
+        box:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMLEFT", -6, 0)
+    elseif anchorBottom < 120 then
+        box:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 6, 0)
+    else
+        box:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4)
+    end
+    box:SetParent(anchor)
+    if box.SetFrameLevel and anchor.GetFrameLevel then
+        box:SetFrameLevel(math.max(20, (anchor:GetFrameLevel() or 5) + 15))
+    end
+    box:Show()
+end
+
 function UI.InitializeQuestLog()
     -- 1. Hook Quest Log functions once
     if QuestLogQuests_Update and not isHooked then
@@ -1679,6 +1983,7 @@ function UI.InitializeQuestLog()
 
     if QuestMapFrame_ReturnFromQuestDetails and not UI._questReturnDetailsHooked then
         hooksecurefunc("QuestMapFrame_ReturnFromQuestDetails", function()
+            if _detailsGuideBox then _detailsGuideBox:Hide() end
             if not addon.isUpdatingUI then
                 ScheduleQuestLogShowRefresh()
             end
@@ -1686,7 +1991,48 @@ function UI.InitializeQuestLog()
         UI._questReturnDetailsHooked = true
     end
 
-    -- Note: Do NOT hook QuestMapFrame_ShowQuestDetails or SelectQuestLogEntry here.
+    if QuestMapFrame_ShowQuestDetails and not UI._questShowDetailsGuideHooked then
+        hooksecurefunc("QuestMapFrame_ShowQuestDetails", function(questID)
+            UI.UpdateQuestDetailsGuide(questID)
+        end)
+        UI._questShowDetailsGuideHooked = true
+    end
+
+    if QuestLog_UpdateQuestDetails and not UI._classicDetailsGuideHooked then
+        hooksecurefunc("QuestLog_UpdateQuestDetails", function()
+            UI.UpdateQuestDetailsGuide()
+        end)
+        UI._classicDetailsGuideHooked = true
+    end
+
+    if SelectQuestLogEntry and not UI._selectLogDetailsHooked then
+        hooksecurefunc("SelectQuestLogEntry", function()
+            if addon._isInternalQuestSelection then return end
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0.02, function() UI.UpdateQuestDetailsGuide() end)
+            else
+                UI.UpdateQuestDetailsGuide()
+            end
+        end)
+        UI._selectLogDetailsHooked = true
+    end
+
+    if QuestMapFrame and QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame.HookScript and not QuestMapFrame.DetailsFrame._worthItGuideHideHooked then
+        QuestMapFrame.DetailsFrame._worthItGuideHideHooked = true
+        pcall(function()
+            QuestMapFrame.DetailsFrame:HookScript("OnShow", function() UI.UpdateQuestDetailsGuide() end)
+            QuestMapFrame.DetailsFrame:HookScript("OnHide", function() UI.UpdateQuestDetailsGuide() end)
+        end)
+    end
+
+    if QuestLogFrame and QuestLogFrame.HookScript and not QuestLogFrame._worthItGuideHideHooked then
+        QuestLogFrame._worthItGuideHideHooked = true
+        pcall(function()
+            QuestLogFrame:HookScript("OnHide", function() UI.UpdateQuestDetailsGuide() end)
+        end)
+    end
+
+    -- Note: Do NOT call UpdateQuestLog inside QuestMapFrame_ShowQuestDetails or SelectQuestLogEntry.
     -- Selecting a quest or viewing details does not change Worth % scores,
     -- and triggering UpdateQuestLog on selection causes redundant UI redraws and map flickering.
 

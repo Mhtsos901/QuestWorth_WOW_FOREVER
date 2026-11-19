@@ -311,6 +311,38 @@ local function AddWorthLinesToTooltip(tooltip, questID, isLegacy)
         tooltip:AddLine("  |cff1aff4d★ " .. (L["PAYOFF_TIP"] or "Tip:") .. "|r |cffffffff" .. tipText .. "|r", 1, 1, 1, true)
     end
 
+    -- 1B. Multi-Step Prerequisites & "Need Item A First" Guide
+    local guide = addon.Data and addon.Data.GetQuestGuide and addon.Data.GetQuestGuide(questID)
+    if guide then
+        if guide.warning and guide.warning ~= "" then
+            tooltip:AddLine("  |cffff5533! Warning:|r |cffffffff" .. guide.warning .. "|r", 1, 0.8, 0.8, true)
+        end
+        local steps = guide.steps
+        if steps and #steps > 0 then
+            local singleRedundant = (#steps == 1 and tipText and steps[1].text == tipText)
+            if not singleRedundant then
+                tooltip:AddLine("  |cff00ccff" .. (L["GUIDE_HEADER"] or "Quest Steps & Prerequisites:") .. "|r")
+                local maxSteps = math.min(#steps, 4)
+                for idx = 1, maxSteps do
+                    local st = steps[idx]
+                    local bagTag = ""
+                    if addon.Data and addon.Data.GetStepBagProgress and (st.itemID or st.itemName) then
+                        local have, need, satisfied = addon.Data.GetStepBagProgress(st)
+                        if satisfied then
+                            bagTag = " |cff1aff4d" .. (L["GUIDE_IN_BAGS"] or "[In Bags]") .. "|r"
+                        elseif have > 0 and need > 1 then
+                            bagTag = string.format(" |cffffcc00(%d/%d)|r", have, need)
+                        end
+                    end
+                    tooltip:AddLine(string.format("    |cffffd100%d.|r |cffffffff%s|r%s", idx, st.text or "", bagTag), 1, 1, 1, true)
+                end
+                if #steps > maxSteps then
+                    tooltip:AddLine(string.format("    |cffaaaaaa...+%d more step(s) in Quest Details|r", #steps - maxSteps), 0.7, 0.7, 0.7)
+                end
+            end
+        end
+    end
+
     -- 2. Dynamic Task Classification
     if liveInfo and liveInfo.taskType and liveInfo.taskType ~= "" then
         tooltip:AddLine("  |cff00ccffTask:|r |cffffffff" .. liveInfo.taskType .. "|r", 1, 1, 1, true)
@@ -469,8 +501,8 @@ local function TooltipHasQuestStarterText(tooltip)
     return false
 end
 
--- Inject Hidden / Item Quest Starter notification when hovering items in inventory
-local function AddItemQuestStarterLines(tooltip)
+-- Inject Hidden / Item Quest Starter & Prerequisite Dependency info when hovering items
+local function AddItemQuestContextLines(tooltip)
     if not (addon.db and addon.db.enabled) then return end
     if not tooltip or not tooltip.GetItem then return end
 
@@ -493,6 +525,13 @@ local function AddItemQuestStarterLines(tooltip)
         end
     end
 
+    local usage = addon.Data and addon.Data.GetItemQuestUsage and addon.Data.GetItemQuestUsage(itemID, name)
+    local hasUsage = usage and (usage.dep ~= nil or (usage.usages and #usage.usages > 0))
+    if not isStarter and not hasUsage then
+        return
+    end
+
+    local addedAny = false
     if isStarter then
         tooltip:AddLine(" ")
         tooltip:AddLine("|cffffd100★ " .. L["ITEM_QUEST_STARTER"] .. "|r")
@@ -512,6 +551,45 @@ local function AddItemQuestStarterLines(tooltip)
             tooltip:AddLine("  |cffcccccc• " .. starter.drop .. "|r", 0.85, 0.85, 0.85, true)
         end
         tooltip:AddLine("  |cff1aff4d" .. L["ITEM_CLICK_TO_START"] .. "|r")
+        addedAny = true
+    end
+
+    if hasUsage then
+        if not addedAny then
+            tooltip:AddLine(" ")
+        end
+        tooltip:AddLine("|cff00ccff★ " .. (L["GUIDE_ITEM_USED_FOR"] or "Quest Prerequisite / Dependency:") .. "|r")
+        if usage.dep then
+            if usage.dep.before and usage.dep.before ~= "" then
+                tooltip:AddLine("  |cff1aff4d" .. (L["GUIDE_HOW_TO_GET"] or "Before / How:") .. "|r |cffffffff" .. usage.dep.before .. "|r", 1, 1, 1, true)
+            elseif usage.dep.source and usage.dep.source ~= "" then
+                tooltip:AddLine("  |cff1aff4d" .. (L["GUIDE_HOW_TO_GET"] or "Before / How:") .. "|r |cffffffff" .. usage.dep.source .. "|r", 1, 1, 1, true)
+            end
+            if usage.dep.leadsTo and usage.dep.leadsTo ~= "" then
+                tooltip:AddLine("  |cffffd100-> Leads To:|r |cffffffff" .. usage.dep.leadsTo .. "|r", 1, 1, 1, true)
+            end
+        end
+        if usage.usages and #usage.usages > 0 then
+            local limit = math.min(#usage.usages, 3)
+            for idx = 1, limit do
+                local u = usage.usages[idx]
+                local logTag = u.inLog and " |cff1aff4d[In Log]|r" or ""
+                local rolePrefix = (u.role == "precursor") and "|cffffcc00[Precursor]|r " or ""
+                local titleText = tostring(u.title or ("Quest #" .. tostring(u.questID)))
+                local line = string.format("  |cff00ccff%s|r %s|cffffffff%s|r%s", (L["GUIDE_USED_BY"] or "Used For:"), rolePrefix, titleText, logTag)
+                if u.source and u.source ~= "" then
+                    line = line .. " |cffcccccc— " .. u.source .. "|r"
+                end
+                tooltip:AddLine(line, 1, 1, 1, true)
+            end
+            if #usage.usages > limit then
+                tooltip:AddLine(string.format("  |cffaaaaaa...and %d more quest(s)|r", #usage.usages - limit), 0.7, 0.7, 0.7)
+            end
+        end
+        addedAny = true
+    end
+
+    if addedAny then
         tooltip._worthItAddedItemID = itemID
         if tooltip.Show then tooltip:Show() end
     end
@@ -554,7 +632,7 @@ function UI.InitializeTooltips()
         end
         if Enum.TooltipDataType.Item then
             TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
-                AddItemQuestStarterLines(tooltip)
+                AddItemQuestContextLines(tooltip)
             end)
         end
         hooked = true
@@ -584,12 +662,12 @@ function UI.InitializeTooltips()
     -- Hook Item tooltips for Legacy / Classic client
     if GameTooltip and GameTooltip.HookScript then
         pcall(function()
-            GameTooltip:HookScript("OnTooltipSetItem", AddItemQuestStarterLines)
+            GameTooltip:HookScript("OnTooltipSetItem", AddItemQuestContextLines)
         end)
     end
     if ItemRefTooltip and ItemRefTooltip.HookScript then
         pcall(function()
-            ItemRefTooltip:HookScript("OnTooltipSetItem", AddItemQuestStarterLines)
+            ItemRefTooltip:HookScript("OnTooltipSetItem", AddItemQuestContextLines)
         end)
     end
 
@@ -772,6 +850,79 @@ function UI.InitializeTooltips()
                 addon.lastHoveredQuestID = qID
                 AddWorthLinesToTooltip(GameTooltip, qID, true)
             end
+        end)
+    end
+
+    -- Method 5: Hook World Map Quest POI pins (Blizzard built-in Questie & OpenMap pins)
+    if GameTooltip and GameTooltip.HookScript then
+        local _inPinTooltipAppend = false
+        pcall(function()
+            GameTooltip:HookScript("OnShow", function(self)
+                if _inPinTooltipAppend then return end
+                if not (addon.db and addon.db.enabled and addon.db.showInTooltip) then return end
+                if self._worthItAddedQuestID or self._worthItAddedItemID then return end
+                local iName, iLink = self.GetItem and self:GetItem()
+                if iName or iLink then return end
+                local uName, uToken = self.GetUnit and self:GetUnit()
+                if uName or uToken then return end
+                local sName, sID = self.GetSpell and self:GetSpell()
+                if sName or sID then return end
+
+                local owner = self.GetOwner and self:GetOwner()
+                if not owner or type(owner) ~= "table" or owner._worthItQuestPin then return end
+
+                local fs1 = _G["GameTooltipTextLeft1"]
+                local rawLine1 = fs1 and fs1.GetText and fs1:GetText()
+                if not rawLine1 or rawLine1 == "" then return end
+
+                local candID = tonumber(owner.questID)
+                    or (type(owner.data) == "table" and tonumber(owner.data.id or owner.data.questID))
+
+                -- Strict verification: if came from owner.data.id (e.g. OpenMap pin), confirm title matches quest ID
+                if candID and candID > 0 then
+                    local cleanL1 = string.gsub(Utils.CleanQuestTitle and Utils.CleanQuestTitle(rawLine1) or rawLine1, "^%s*%[%d+%+?%]%s*", "")
+                    cleanL1 = string.lower(string.gsub(cleanL1, "^%s*(.-)%s*$", "%1"))
+                    local qTitle = C_QuestLog and C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(candID)
+                    if (not qTitle or qTitle == "") and Utils.GetQuestBasicInfo then
+                        local info = Utils.GetQuestBasicInfo(candID)
+                        qTitle = info and info.title
+                    end
+                    if qTitle and qTitle ~= "" then
+                        local cleanQ = string.gsub(Utils.CleanQuestTitle and Utils.CleanQuestTitle(qTitle) or qTitle, "^%s*%[%d+%+?%]%s*", "")
+                        cleanQ = string.lower(string.gsub(cleanQ, "^%s*(.-)%s*$", "%1"))
+                        if cleanQ ~= cleanL1 then
+                            candID = nil
+                        end
+                    elseif not owner.questID then
+                        -- Non-quest pin with numeric data.id and no matching quest title -> ignore
+                        candID = nil
+                    end
+                elseif WorldMapFrame and WorldMapFrame:IsShown() and (owner.pinTemplate or owner.owningMap or (owner.GetParent and owner:GetParent() == (WorldMapFrame.GetCanvas and WorldMapFrame:GetCanvas()))) then
+                    -- Fallback for Blizzard WorldMap pins whose questID sits in MapPin title line
+                    local cleanL1 = string.gsub(Utils.CleanQuestTitle and Utils.CleanQuestTitle(rawLine1) or rawLine1, "^%s*%[%d+%+?%]%s*", "")
+                    cleanL1 = string.lower(string.gsub(cleanL1, "^%s*(.-)%s*$", "%1"))
+                    if cleanL1 ~= "" and addon.Utils and addon.Utils.GetActiveQuestIDs then
+                        for _, qid in ipairs(addon.Utils.GetActiveQuestIDs()) do
+                            local qt = addon.Utils.GetQuestTitle and addon.Utils.GetQuestTitle(qid)
+                            if qt and qt ~= "" then
+                                local cq = string.gsub(Utils.CleanQuestTitle(qt), "^%s*%[%d+%+?%]%s*", "")
+                                cq = string.lower(string.gsub(cq, "^%s*(.-)%s*$", "%1"))
+                                if cq == cleanL1 then
+                                    candID = qid
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if candID and candID > 0 and Utils.IsValidQuestID(candID) then
+                    _inPinTooltipAppend = true
+                    addon.lastHoveredQuestID = candID
+                    pcall(AddWorthLinesToTooltip, self, candID, true)
+                    _inPinTooltipAppend = false
+                end
+            end)
         end)
     end
 end

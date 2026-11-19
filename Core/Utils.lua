@@ -206,6 +206,58 @@ function Utils.GetQuestLogIndex(questID)
     return _questLogIndexMap[questID]
 end
 
+-- Check whether a questID is currently present in the player's Quest Log
+function Utils.IsQuestInLog(questID)
+    if not questID or type(questID) ~= "number" or questID <= 0 or questID ~= questID then return false end
+    if C_QuestLog and C_QuestLog.IsOnQuest then
+        local ok, on = pcall(C_QuestLog.IsOnQuest, questID)
+        if ok and on then return true end
+    end
+    return Utils.GetQuestLogIndex(questID) ~= nil
+end
+
+-- Check whether an active quest in the player's Quest Log is ready for turn-in
+function Utils.IsQuestComplete(questID)
+    if not questID or type(questID) ~= "number" or questID <= 0 or questID ~= questID then return false end
+    if C_QuestLog and C_QuestLog.IsComplete then
+        local ok, comp = pcall(C_QuestLog.IsComplete, questID)
+        if ok and comp == true then return true end
+    end
+    local idx = Utils.GetQuestLogIndex(questID)
+    if not idx then return false end
+    if C_QuestLog and C_QuestLog.GetInfo then
+        local ok, info = pcall(C_QuestLog.GetInfo, idx)
+        if ok and info and info.isComplete then return true end
+    elseif GetQuestLogTitle then
+        local ok, _, _, _, _, _, isComp = pcall(GetQuestLogTitle, idx)
+        if ok and isComp and isComp ~= 0 then return true end
+    end
+    return false
+end
+
+-- Collect all active quest IDs currently in the player's Quest Log
+function Utils.GetActiveQuestIDs()
+    local ids = {}
+    local seen = {}
+    local numEntries = (C_QuestLog and C_QuestLog.GetNumQuestLogEntries and C_QuestLog.GetNumQuestLogEntries())
+                       or (GetNumQuestLogEntries and GetNumQuestLogEntries()) or 0
+    for i = 1, numEntries do
+        local isH, qid = nil, nil
+        if C_QuestLog and C_QuestLog.GetInfo then
+            local ok, info = pcall(C_QuestLog.GetInfo, i)
+            if ok and info then isH = info.isHeader; qid = info.questID end
+        elseif GetQuestLogTitle then
+            local ok, _, _, _, h, _, _, _, id = pcall(GetQuestLogTitle, i)
+            if ok then isH = h; qid = id end
+        end
+        if not isH and qid and type(qid) == "number" and qid > 0 and not seen[qid] then
+            seen[qid] = true
+            table.insert(ids, qid)
+        end
+    end
+    return ids
+end
+
 -- Helper: Check if questID corresponds to the currently open NPC QuestFrame offer/turn-in dialog
 function Utils.IsActiveOfferQuest(questID, titleHint)
     if not questID or type(questID) ~= "number" or questID <= 0 then return false end
@@ -282,8 +334,10 @@ function Utils.WithSelectedQuest(questID, callback)
         return callback()
     end
 
-    -- If the map or quest details is currently open, DO NOT alter selection or read the wrong quest
-    local mapShown = (QuestMapFrame and QuestMapFrame:IsShown()) or (WorldMapFrame and WorldMapFrame:IsShown())
+    -- If the map, quest details, or quest log is currently open, DO NOT alter selection or read the wrong quest
+    local mapShown = (QuestMapFrame and QuestMapFrame:IsShown())
+        or (WorldMapFrame and WorldMapFrame:IsShown())
+        or (QuestLogFrame and QuestLogFrame.IsShown and QuestLogFrame:IsShown())
     if mapShown then
         return nil
     end
@@ -291,6 +345,7 @@ function Utils.WithSelectedQuest(questID, callback)
     local prevSelectedQuestID = currID
     local prevIndex = currIdx
     local changed = false
+    addon._isInternalQuestSelection = true
 
     if C_QuestLog and C_QuestLog.SetSelectedQuest then
         local okSel = pcall(C_QuestLog.SetSelectedQuest, questID)
@@ -311,6 +366,7 @@ function Utils.WithSelectedQuest(questID, callback)
             pcall(C_QuestLog.SetSelectedQuest, prevSelectedQuestID)
         end
     end
+    addon._isInternalQuestSelection = false
 
     if okCall then
         return res1, res2, res3

@@ -474,7 +474,7 @@ local function CreateWorldMapBanner()
     if not WorldMapFrame then return nil end
 
     local frame = CreateFrame("Button", "WorthItWorldMapBanner", WorldMapFrame, "BackdropTemplate")
-    frame:SetHeight(20)
+    frame:SetHeight(22)
     SyncMapWidgetLayer(frame, 5)
 
     -- Anchor directly at the height of the Zones % button (Y = -1 on ScrollContainer)
@@ -487,15 +487,20 @@ local function CreateWorldMapBanner()
         frame:SetPoint("TOP", WorldMapFrame, "TOP", 0, -28)
     end
 
-    -- Backdrop styling: authentic Blizzard dark slate panel with gold border
-    frame:SetBackdrop({
-        bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 }
-    })
-    frame:SetBackdropColor(0.06, 0.06, 0.08, 0.95)
-    frame:SetBackdropBorderColor(0.70, 0.58, 0.32, 0.95)
+    -- Warcraft dark iron-slate banner plaque with antique gold bezel and sheen
+    local Theme = addon.UI and addon.UI.Theme
+    if Theme and Theme.DressBanner then
+        Theme.DressBanner(frame)
+    else
+        frame:SetBackdrop({
+            bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 16, edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 }
+        })
+        frame:SetBackdropColor(0.06, 0.06, 0.08, 0.95)
+        frame:SetBackdropBorderColor(0.70, 0.58, 0.32, 0.95)
+    end
 
     local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
@@ -599,8 +604,8 @@ function UI.UpdateWorldMapBanner()
         banner._lastDisplayText = displayText
         banner.Text:SetText(displayText)
         local textWidth = (banner.Text and banner.Text.GetStringWidth and banner.Text:GetStringWidth()) or 180
-        banner:SetWidth(math.max(190, textWidth + 24))
-        banner:SetHeight(20)
+        banner:SetWidth(math.max(198, textWidth + 28))
+        banner:SetHeight(22)
     end
 
     if not banner:IsShown() then
@@ -618,11 +623,18 @@ local advisorRows = {}
 
 local function UpdateAdvisorToggleText(btn, isOpen)
     if not btn then return end
-    local text = isOpen and "|cff00ff00[< Zones]|r" or "|cff00ccff[Zones %]|r"
-    if btn.SetText then btn:SetText(text) end
+    local text = isOpen and "|cff55ff88< Zones|r" or "|cffffd100Zones %|r"
     if btn.Text and btn.Text.SetText then btn.Text:SetText(text) end
+    if btn.SetText then btn:SetText(text) end
     local fs = btn.GetFontString and btn:GetFontString()
-    if fs and fs.SetText then fs:SetText(text) end
+    if fs and fs ~= btn.Text and fs.SetText then fs:SetText(text) end
+    if btn.SetBackdropBorderColor then
+        if isOpen then
+            btn:SetBackdropBorderColor(1.0, 0.82, 0.25, 0.98)
+        else
+            btn:SetBackdropBorderColor(0.84, 0.69, 0.38, 0.95)
+        end
+    end
 end
 
 local function CreateZoneAdvisorToggle(anchor)
@@ -642,16 +654,31 @@ local function CreateZoneAdvisorToggle(anchor)
     end
     if not parent then return nil end
 
-    local btn = CreateFrame("Button", "WorthItAdvisorToggleButton", parent, "UIPanelButtonTemplate")
+    local btn = CreateFrame("Button", "WorthItAdvisorToggleButton", parent, "BackdropTemplate")
     btn._worthItAnchor = targetAnchor
-    btn:SetSize(106, 20)
+    btn:SetSize(108, 22)
     btn:SetPoint("TOPLEFT", targetAnchor, "TOPLEFT", 8, -1)
     SyncMapWidgetLayer(btn, 8)
 
-    UpdateAdvisorToggleText(btn, false)
-    if btn.GetFontString and btn:GetFontString() then
-        btn:GetFontString():SetFontObject("GameFontNormalSmall")
+    local Theme = addon.UI and addon.UI.Theme
+    if Theme and Theme.DressBanner then
+        Theme.DressBanner(btn)
     end
+
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(14, 14)
+    icon:SetPoint("LEFT", btn, "LEFT", 6, 0)
+    icon:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
+    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    btn.Icon = icon
+
+    local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+    label:SetPoint("RIGHT", btn, "RIGHT", -5, 0)
+    label:SetJustifyH("CENTER")
+    btn.Text = label
+
+    UpdateAdvisorToggleText(btn, false)
 
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOMLEFT", 0, -4)
@@ -675,8 +702,8 @@ end
 
 local function CreateAdvisorRow(index, parent)
     local row = CreateFrame("Button", "WorthItAdvisorRow" .. index, parent, "BackdropTemplate")
-    row:SetHeight(34)
-    row:SetWidth(250)
+    row:SetHeight(38)
+    row:SetWidth(258)
     if row.SetClipsChildren then
         row:SetClipsChildren(true)
     end
@@ -689,21 +716,48 @@ local function CreateAdvisorRow(index, parent)
         hl:SetAllPoints(row)
     end
 
-    -- Alternating subtle row stripe for readability (like standard WoW tables)
+    -- Warm alternating row stripe + bottom hairline separator
     local stripe = row:CreateTexture(nil, "BACKGROUND")
     stripe:SetAllPoints(row)
     if index % 2 == 0 then
-        stripe:SetColorTexture(1, 1, 1, 0.03)
+        stripe:SetColorTexture(1.0, 0.93, 0.78, 0.032)
     else
-        stripe:SetColorTexture(0, 0, 0, 0.22)
+        stripe:SetColorTexture(0, 0, 0, 0.24)
     end
     row.Stripe = stripe
 
+    local sep = row:CreateTexture(nil, "BORDER")
+    sep:SetHeight(1)
+    sep:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 4, 0)
+    sep:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -4, 0)
+    if sep.SetColorTexture then sep:SetColorTexture(0.55, 0.42, 0.22, 0.18) end
+    row.Separator = sep
+
+    local accent = row:CreateTexture(nil, "ARTWORK")
+    accent:SetWidth(3)
+    accent:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -2)
+    accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 2)
+    if accent.Hide then accent:Hide() end
+    row.AccentBar = accent
+
     local badgeFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    badgeFS:SetPoint("TOPLEFT", row, "TOPLEFT", 4, -4)
+    badgeFS:SetPoint("TOPLEFT", row, "TOPLEFT", 6, -5)
     badgeFS:SetWidth(42)
     badgeFS:SetJustifyH("LEFT")
     row.Badge = badgeFS
+
+    -- Mini worth meter bar underneath % badge
+    local barBg = row:CreateTexture(nil, "BORDER")
+    barBg:SetSize(38, 3)
+    barBg:SetPoint("TOPLEFT", row, "TOPLEFT", 6, -24)
+    if barBg.SetColorTexture then barBg:SetColorTexture(0.04, 0.03, 0.02, 0.90) end
+    row.WorthBarBg = barBg
+
+    local barFill = row:CreateTexture(nil, "ARTWORK")
+    barFill:SetSize(19, 3)
+    barFill:SetPoint("LEFT", barBg, "LEFT", 0, 0)
+    if barFill.SetColorTexture then barFill:SetColorTexture(0.94, 0.80, 0.22, 0.95) end
+    row.WorthBarFill = barFill
 
     local icon = row:CreateTexture(nil, "ARTWORK")
     icon:SetSize(16, 16)
@@ -711,7 +765,7 @@ local function CreateAdvisorRow(index, parent)
     row.ContinentIcon = icon
 
     local rightFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    rightFS:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -4)
+    rightFS:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -5)
     rightFS:SetWidth(52)
     rightFS:SetJustifyH("RIGHT")
     row.RightTag = rightFS
@@ -725,15 +779,15 @@ local function CreateAdvisorRow(index, parent)
 
     -- Line 2: Clear 1-line explanation of why the zone got this score
     local subFS = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    subFS:SetPoint("TOPLEFT", row, "TOPLEFT", 48, -19)
-    subFS:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    subFS:SetPoint("TOPLEFT", row, "TOPLEFT", 50, -21)
+    subFS:SetPoint("RIGHT", row, "RIGHT", -6, 0)
     subFS:SetJustifyH("LEFT")
     subFS:SetWordWrap(false)
     row.SubText = subFS
 
     local doneBtn = CreateFrame("Button", "WorthItAdvisorRowDoneBtn" .. index, row)
     doneBtn:SetSize(16, 16)
-    doneBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -3)
+    doneBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", -5, -4)
     doneBtn:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
 
     local doneBg = doneBtn:CreateTexture(nil, "BACKGROUND")
@@ -840,81 +894,111 @@ local function CreateZoneAdvisorPanel(anchor)
 
     local panel = CreateFrame("Frame", "WorthItZoneAdvisorPanel", parent, "BackdropTemplate")
     panel._worthItAnchor = targetAnchor
-    panel:SetWidth(286)
+    panel:SetWidth(296)
     panel:SetPoint("TOPLEFT", targetAnchor, "TOPLEFT", 8, -25)
     panel:SetPoint("BOTTOMLEFT", targetAnchor, "BOTTOMLEFT", 8, 22)
     SyncMapWidgetLayer(panel, 12)
 
-    -- Authentic Blizzard Warcraft panel backdrop: Deep slate rock with antique gold border
-    panel:SetBackdrop({
-        bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    panel:SetBackdropColor(0.06, 0.06, 0.08, 0.96)
-    panel:SetBackdropBorderColor(0.70, 0.58, 0.32, 0.95)
+    local Theme = addon.UI and addon.UI.Theme
+    local titleH = 0
+    if Theme and Theme.DressWindow then
+        titleH = Theme.DressWindow(panel, { parchmentAlpha = 0.08 })
+    else
+        panel:SetBackdrop({
+            bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        panel:SetBackdropColor(0.06, 0.06, 0.08, 0.96)
+        panel:SetBackdropBorderColor(0.70, 0.58, 0.32, 0.95)
+    end
 
-    -- Header Title
+    -- Header emblem & title
+    local titleIcon = panel:CreateTexture(nil, "OVERLAY")
+    titleIcon:SetSize(15, 15)
+    if titleH > 0 then
+        titleIcon:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -4)
+    else
+        titleIcon:SetPoint("TOPLEFT", panel, "TOPLEFT", 11, -9)
+    end
+    titleIcon:SetTexture("Interface\\Icons\\INV_Misc_Map_01")
+    if titleIcon.SetTexCoord then titleIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    panel.TitleIcon = titleIcon
+
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalMed2")
     if not title:GetFont() then
         title:SetFontObject("GameFontNormal")
     end
-    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -10)
+    title:SetPoint("LEFT", titleIcon, "RIGHT", 6, 0)
     title:SetText("|cffffd100Zone Advisor|r")
-
-    -- Subtle sub-label
-    local subTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    subTitle:SetPoint("LEFT", title, "RIGHT", 6, 0)
-    subTitle:SetText("|cff888888Ranked by Efficiency|r")
+    panel.Title = title
 
     -- Blizzard Close Button
     local closeBtn = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
     closeBtn:SetSize(22, 22)
-    closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -3, -3)
+    if closeBtn.SetHitRectInsets then closeBtn:SetHitRectInsets(-4, -4, -4, -4) end
+    if titleH > 0 then
+        closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -1, -1)
+    else
+        closeBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -3, -3)
+    end
     closeBtn:SetScript("OnClick", function()
         UI.ToggleZoneAdvisor(false)
     end)
 
-    -- Decorative gold header divider line
-    local divider = panel:CreateTexture(nil, "ARTWORK")
-    divider:SetHeight(2)
-    divider:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -28)
-    divider:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -28)
-    divider:SetColorTexture(0.55, 0.45, 0.22, 0.80)
+    local subY = -(titleH + 8)
+    local subTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    subTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, subY)
+    subTitle:SetText("|cffcbb890Ranked by Efficiency|r")
+    panel.SubTitle = subTitle
 
-    -- Filter Buttons using Blizzard UIPanelButtonTemplate
-    local filterAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    local filterQ   = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-
-    local function SetupFilterBtn(btn, text, width)
-        btn:SetSize(width, 20)
-        btn:SetText(text)
-        if btn:GetFontString() then
-            btn:GetFontString():SetFontObject("GameFontNormalSmall")
-        end
+    -- Filter Tabs using native Warcraft tabs
+    local filterAll, filterQ
+    if Theme and Theme.CreateTab then
+        filterAll = Theme.CreateTab(panel, "All Zones", 136, 22)
+        filterQ   = Theme.CreateTab(panel, "Dungeons", 136, 22)
+    else
+        filterAll = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        filterQ   = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        filterAll:SetSize(136, 22)
+        filterQ:SetSize(136, 22)
+        filterAll:SetText("All Zones")
+        filterQ:SetText("Dungeons")
     end
 
-    SetupFilterBtn(filterAll, "All", 129)
-    SetupFilterBtn(filterQ,   "Dungeons", 129)
-
-    filterAll:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -34)
+    filterAll:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -(titleH + 26))
     filterQ:SetPoint("LEFT", filterAll, "RIGHT", 4, 0)
+
+    if Theme and Theme.CreateHeaderRule then
+        Theme.CreateHeaderRule(panel, 10, -(titleH + 51))
+    else
+        local divider = panel:CreateTexture(nil, "ARTWORK")
+        divider:SetHeight(1)
+        divider:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -(titleH + 51))
+        divider:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -(titleH + 51))
+        divider:SetColorTexture(0.66, 0.49, 0.28, 0.70)
+    end
 
     local function UpdateFilterVisuals()
         local cur = (addon.db and addon.db.zoneAdvisorFilter == "DUNGEONS") and "DUNGEONS" or "ALL"
-        local function styleBtn(btn, isActive)
-            local fs = btn:GetFontString()
-            if fs then
-                if isActive then
-                    fs:SetTextColor(1, 0.95, 0.40, 1) -- Bright Gold
-                else
-                    fs:SetTextColor(0.75, 0.75, 0.75, 0.9) -- Muted Silver
+        if filterAll.SetActive then
+            filterAll:SetActive(cur == "ALL")
+            filterQ:SetActive(cur == "DUNGEONS")
+        else
+            local function styleBtn(btn, isActive)
+                local fs = btn:GetFontString()
+                if fs then
+                    if isActive then
+                        fs:SetTextColor(1, 0.95, 0.40, 1)
+                    else
+                        fs:SetTextColor(0.75, 0.75, 0.75, 0.9)
+                    end
                 end
             end
+            styleBtn(filterAll, cur == "ALL")
+            styleBtn(filterQ, cur == "DUNGEONS")
         end
-        styleBtn(filterAll, cur == "ALL")
-        styleBtn(filterQ, cur == "DUNGEONS")
     end
 
     filterAll:SetScript("OnClick", function()
@@ -939,18 +1023,22 @@ local function CreateZoneAdvisorPanel(anchor)
 
     panel.UpdateFilterVisuals = UpdateFilterVisuals
 
-    -- Content Inset Panel (Inner recessed dark parchment area for the zone list)
+    -- Content Inset Well (Recessed dark stone/parchment well for the zone list)
     local inset = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    inset:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -58)
-    inset:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 8)
-    inset:SetBackdrop({
-        bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 10,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 }
-    })
-    inset:SetBackdropColor(0.02, 0.02, 0.03, 0.90)
-    inset:SetBackdropBorderColor(0.30, 0.25, 0.18, 0.75)
+    inset:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -(titleH + 55))
+    inset:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 10)
+    if Theme and Theme.DressInset then
+        Theme.DressInset(inset, { parchmentAlpha = 0.06 })
+    else
+        inset:SetBackdrop({
+            bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 10,
+            insets = { left = 2, right = 2, top = 2, bottom = 2 }
+        })
+        inset:SetBackdropColor(0.02, 0.02, 0.03, 0.90)
+        inset:SetBackdropBorderColor(0.30, 0.25, 0.18, 0.75)
+    end
 
     -- ScrollFrame inside inset
     local scrollFrame = CreateFrame("ScrollFrame", "WorthIt_AdvisorScrollFrame", inset)
@@ -958,7 +1046,7 @@ local function CreateZoneAdvisorPanel(anchor)
     scrollFrame:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -16, 4)
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetWidth(250)
+    scrollChild:SetWidth(258)
     scrollChild:SetHeight(200)
     scrollFrame:SetScrollChild(scrollChild)
 
@@ -967,21 +1055,24 @@ local function CreateZoneAdvisorPanel(anchor)
     slider:SetWidth(10)
     slider:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -4, -14)
     slider:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -4, 14)
-    slider:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 8, edgeSize = 6,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 }
-    })
-    slider:SetBackdropColor(0.02, 0.02, 0.03, 0.80)
-    slider:SetBackdropBorderColor(0.35, 0.30, 0.20, 0.80)
-
-    if slider.SetThumbTexture then
-        slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
-    end
-    local thumb = slider.GetThumbTexture and slider:GetThumbTexture()
-    if thumb and thumb.SetSize then
-        thumb:SetSize(14, 20)
+    if Theme and Theme.StyleScrollbar then
+        Theme.StyleScrollbar(slider)
+    else
+        slider:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 8, edgeSize = 6,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        slider:SetBackdropColor(0.02, 0.02, 0.03, 0.80)
+        slider:SetBackdropBorderColor(0.35, 0.30, 0.20, 0.80)
+        if slider.SetThumbTexture then
+            slider:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+        end
+        local thumb = slider.GetThumbTexture and slider:GetThumbTexture()
+        if thumb and thumb.SetSize then
+            thumb:SetSize(14, 20)
+        end
     end
 
     if slider.SetOrientation then
@@ -1045,6 +1136,12 @@ function UI.UpdateZoneAdvisor()
 
     if addon.Data and addon.Data.Zones then
         local pLevel = (addon.Player and addon.Player.GetLevel and addon.Player.GetLevel()) or UnitLevel("player") or 1
+        if advisorPanel.SubTitle and (advisorPanel._lastSubLevel ~= pLevel or advisorPanel._lastSubClass ~= playerClass) then
+            advisorPanel._lastSubLevel = pLevel
+            advisorPanel._lastSubClass = playerClass
+            local fmtClass = string.sub(playerClass, 1, 1) .. string.lower(string.sub(playerClass, 2))
+            advisorPanel.SubTitle:SetText(string.format("|cffcbb890Lv %d %s • Ranked by Efficiency|r", pLevel, fmtClass))
+        end
         for name, zData in pairs(addon.Data.Zones) do
             local isCity = zData.isCity
             local reqClass = zData.class
@@ -1180,7 +1277,7 @@ function UI.UpdateZoneAdvisor()
         return aName < bName
     end)
 
-    local rowHeight = 34
+    local rowHeight = 38
     local child = advisorPanel.scrollChild
     for i = 1, #list do
         local item = list[i]
@@ -1191,15 +1288,49 @@ function UI.UpdateZoneAdvisor()
         row.rankIndex = i
 
         local isDoneDung = item.isDungeon and item.res.isCompletedDungeon
-        local badge = isDoneDung and "|cff00ff00[Done]|r" or Utils.FormatBadge(item.res.worth, false)
+        local worthVal = item.res.worth or 0
+        local badge = isDoneDung and "|cff00ff00[Done]|r" or Utils.FormatBadge(worthVal, false)
         row.Badge:SetText(badge)
+
+        if row.AccentBar then
+            if not isDoneDung and i == 1 and worthVal >= 0.70 then
+                if row.AccentBar.SetColorTexture then row.AccentBar:SetColorTexture(0.25, 0.95, 0.45, 0.95) end
+                if row.AccentBar.Show then row.AccentBar:Show() end
+            elseif not isDoneDung and worthVal >= 0.70 then
+                if row.AccentBar.SetColorTexture then row.AccentBar:SetColorTexture(0.94, 0.76, 0.28, 0.85) end
+                if row.AccentBar.Show then row.AccentBar:Show() end
+            elseif isDoneDung then
+                if row.AccentBar.SetColorTexture then row.AccentBar:SetColorTexture(0.35, 0.72, 0.35, 0.75) end
+                if row.AccentBar.Show then row.AccentBar:Show() end
+            else
+                if row.AccentBar.Hide then row.AccentBar:Hide() end
+            end
+        end
+
+        if row.WorthBarFill then
+            local fillW = math.max(2, math.floor(38 * math.max(0, math.min(1, worthVal)) + 0.5))
+            if row.WorthBarFill.SetWidth then row.WorthBarFill:SetWidth(fillW) end
+            if row.WorthBarFill.SetColorTexture then
+                if isDoneDung then
+                    row.WorthBarFill:SetColorTexture(0.35, 0.75, 0.35, 0.85)
+                elseif worthVal >= 0.75 then
+                    row.WorthBarFill:SetColorTexture(0.18, 0.92, 0.36, 0.95)
+                elseif worthVal >= 0.55 then
+                    row.WorthBarFill:SetColorTexture(0.96, 0.80, 0.18, 0.95)
+                elseif worthVal >= 0.35 then
+                    row.WorthBarFill:SetColorTexture(0.96, 0.54, 0.12, 0.95)
+                else
+                    row.WorthBarFill:SetColorTexture(0.86, 0.24, 0.22, 0.92)
+                end
+            end
+        end
 
         -- Dynamic text hierarchy matching Quest Log styling (Gold for optimal, White for standard, Silver for low)
         local nameColor = (isDoneDung and "|cff88cc88")
-            or (item.res.worth >= 0.70 and "|cffffd100")
-            or (item.res.worth >= 0.50 and "|cffffffff")
+            or (worthVal >= 0.70 and "|cffffd100")
+            or (worthVal >= 0.50 and "|cffffffff")
             or "|cffaaaaaa"
-        local prefix = (not isDoneDung and i == 1 and item.res.worth >= 0.70 and "|cff00ff00#1 |r")
+        local prefix = (not isDoneDung and i == 1 and worthVal >= 0.70 and "|cff00ff00#1 |r")
             or (item.res.isLowValue and "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0|t ")
             or ""
         row.Name:SetText(prefix .. nameColor .. item.name .. "|r")
@@ -1209,10 +1340,10 @@ function UI.UpdateZoneAdvisor()
             local reason = item.res.shortReason or item.res.status or ""
             if isDoneDung then
                 row.SubText:SetText("|cff66aa66" .. reason .. "|r")
-            elseif i == 1 and item.res.worth >= 0.70 then
+            elseif i == 1 and worthVal >= 0.70 then
                 row.SubText:SetText("|cff88ff88Best Pick: " .. reason .. "|r")
-            elseif item.res.worth >= 0.70 then
-                row.SubText:SetText("|cffb0b0b0" .. reason .. "|r")
+            elseif worthVal >= 0.70 then
+                row.SubText:SetText("|cffcbb890" .. reason .. "|r")
             else
                 row.SubText:SetText("|cff808080" .. reason .. "|r")
             end
@@ -1225,9 +1356,9 @@ function UI.UpdateZoneAdvisor()
         if row.RightTag then
             row.RightTag:ClearAllPoints()
             if item.isDungeon then
-                row.RightTag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -22, -4)
+                row.RightTag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -24, -5)
             else
-                row.RightTag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -4, -4)
+                row.RightTag:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -5)
             end
             if item.res.minLevel and item.res.maxLevel then
                 row.RightTag:SetText(string.format("|cff888888(%d-%d)|r", item.res.minLevel, item.res.maxLevel))

@@ -162,6 +162,8 @@ _G.CreateFrame = function(frameType, name, parent, template)
     function f:GetFrameStrata() return self.strata or "MEDIUM" end
     function f:SetAlpha(a) self.alpha = a end
     function f:GetAlpha() return self.alpha or 1 end
+    function f:SetScale(s) self.scale = s end
+    function f:GetScale() return self.scale or 1 end
     function f:SetClipsChildren(b) self.clips = b end
     function f:EnableMouse(b) self.mouse = b end
     function f:EnableMouseWheel(b) self.mouseWheel = b end
@@ -312,6 +314,7 @@ _G.QuestFrame = _G.CreateFrame("Frame", "QuestFrame")
 _G.QuestFrameDetailPanel = _G.CreateFrame("Frame", "QuestFrameDetailPanel", _G.QuestFrame)
 _G.QuestInfoTitleHeader = _G.QuestFrameDetailPanel:CreateFontString("QuestInfoTitleHeader")
 _G.QuestDetailTitleText = _G.QuestFrameDetailPanel:CreateFontString("QuestDetailTitleText")
+_G.QuestInfoDescriptionText = _G.QuestFrameDetailPanel:CreateFontString("QuestInfoDescriptionText")
 
 _G.hooksecurefunc = function(arg1, arg2, arg3)
     if type(arg1) == "string" then
@@ -448,14 +451,18 @@ local files = {
     "Data/Tips.lua",
     "Data/Zones.lua",
     "Data/ForeverData.lua",
+    "Data/ForeverGuides.lua",
+    "Data/QuestGuides.lua",
     "Scores/Difficulty.lua",
     "Scores/Reward.lua",
     "Scores/Chain.lua",
     "Scores/ClassFit.lua",
     "Scores/Density.lua",
     "Core/Engine.lua",
+    "UI/Theme.lua",
     "UI/Tooltip.lua",
     "UI/QuestLog.lua",
+    "UI/MapPins.lua",
     "UI/WorldMap.lua",
     "UI/QuestOffer.lua",
     "UI/Config.lua",
@@ -780,13 +787,16 @@ currentOfferRewards = {}
 QuestFrame:Show()
 QuestFrameDetailPanel:Show()
 QuestInfoTitleHeader:SetText("The Night Watch")
+QuestInfoDescriptionText:SetText("Defend Darkshire against the undead.")
 
 addonTable.UI.UpdateQuestOfferDialog()
 
 local headerText = QuestInfoTitleHeader:GetText()
+local descText = QuestInfoDescriptionText:GetText()
 assert_true(string.find(headerText, "%[%d+%%%]") ~= nil, "Quest offer parchment title includes Worth meter badge")
 assert_true(string.find(headerText, "The Night Watch", 1, true) ~= nil, "Quest offer parchment preserves clean quest title")
-assert_true(string.find(headerText, addonTable.L["HOVER_TITLE_HINT"] or "Hover title", 1, true) ~= nil, "Quest offer parchment displays hover tooltip hint")
+assert_true(string.find(descText, addonTable.L["HOVER_TITLE_HINT"] or "Hover title", 1, true) ~= nil, "Quest offer description displays readable hint in QuestFont")
+assert_true(string.find(descText, "Defend Darkshire against the undead.", 1, true) ~= nil, "Quest offer description preserves original story text cleanly")
 
 local hoverFrame = _G["WorthIt_QuestOfferTitleHover"]
 assert_not_nil(hoverFrame, "Title hover frame created for quest offer dialog")
@@ -1530,13 +1540,19 @@ do
     QuestFrame:Show()
     QuestFrameDetailPanel:Show()
     QuestInfoTitleHeader:SetText("Foreman's Plight")
+    QuestInfoDescriptionText:SetText("Bring back five tools from the mine.")
 
     addonTable.UI.UpdateQuestOfferDialog()
-    local offerTxt = QuestInfoTitleHeader:GetText() or ""
-    assert_true(string.find(offerTxt, "|cff331a00", 1, true) ~= nil, "Quest Offer uses high-contrast dark espresso ink on parchment")
+    local offerTitleTxt = QuestInfoTitleHeader:GetText() or ""
+    local offerTxt = QuestInfoDescriptionText:GetText() or ""
+    assert_true(string.find(offerTitleTxt, "Foreman's Plight", 1, true) ~= nil and not string.find(offerTitleTxt, "\n", 1, true),
+        "Quest Offer title stays single-line in stylized header")
+    assert_true(string.find(offerTxt, "|cff1a1208", 1, true) ~= nil, "Quest Offer uses high-contrast dark espresso ink on parchment")
     assert_true(string.find(offerTxt, "|cff888888", 1, true) == nil, "Quest Offer omits illegible dim gray |cff888888")
     assert_true(string.find(offerTxt, "2214 XP", 1, true) ~= nil, "Unlisted custom quest Offer displays live XP payout")
     assert_true(string.find(offerTxt, "Collection", 1, true) ~= nil, "Unlisted custom quest Offer displays dynamic task classification")
+    assert_true(string.find(offerTxt, "Bring back five tools from the mine.", 1, true) ~= nil,
+        "Quest Offer preserves original quest description beneath readable guide")
 
     local liveSummary = addonTable.Utils.GetQuestLiveSummary(99994)
     assert_not_nil(liveSummary, "GetQuestLiveSummary resolves custom quest 99994")
@@ -3732,6 +3748,353 @@ print("\n[Phase 4L] Dynamic Multi-Alt Context, Level 3 Progression, Tie-Breaking
     addonTable.Scores.InvalidateDensityCache()
 
     restoreAll()
+end)()
+
+-- ============================================================================
+-- PHASE 4M: QUEST PREREQUISITE & ITEM-DEPENDENCY GUIDE SYSTEM
+-- ============================================================================
+print("\n[Phase 4M] Quest Prerequisite & Item-Dependency Guides, Bag Checks, Tooltips, Details & Map Pins...")
+;(function()
+    local Data = addonTable.Data
+    local UI = addonTable.UI
+    local origGetItemCount = _G.GetItemCount
+    local origGetMapID = _G.WorldMapFrame.GetMapID
+    local origGetCanvas = _G.WorldMapFrame.GetCanvas
+    local origGetWidth = _G.WorldMapFrame.GetWidth
+    local origGetHeight = _G.WorldMapFrame.GetHeight
+    local origDetailsFrame = _G.QuestMapFrame and _G.QuestMapFrame.DetailsFrame
+    local origCItemGetCount = _G.C_Item and _G.C_Item.GetItemCount
+
+    local mockBags = {}
+    _G.GetItemCount = function(item)
+        return mockBags[item] or 0
+    end
+    if _G.C_Item then _G.C_Item.GetItemCount = _G.GetItemCount end
+
+    -- 1. Structured dependency guides resolve across Classic, Forever custom, & FDJ quests
+    local g1654 = Data.GetQuestGuide(1654)
+    assert_not_nil(g1654, "Quest 1654 (Test of Righteousness) guide resolves cleanly")
+    assert_true(g1654.steps and #g1654.steps >= 5, "Quest 1654 contains full multi-step dependency sequence")
+    local hasKorExplanation = false
+    for _, st in ipairs(g1654.steps) do
+        if string.find(st.text or "", "Corrupted Kor Gem", 1, true) then hasKorExplanation = true break end
+    end
+    assert_true(hasKorExplanation, "Quest 1654 explains Corrupted Kor Gem precursor needed for Purified Kor Gem")
+
+    local g96018 = Data.GetQuestGuide(96018)
+    assert_not_nil(g96018, "Forever quest 96018 (Powering the Pylons) guide resolves cleanly")
+    assert_true(g96018.steps and #g96018.steps >= 2 and string.find(g96018.steps[1].text or "", "Mana Sieve", 1, true) ~= nil,
+        "Powering the Pylons explains acquiring Mana Sieve BEFORE Ancient Mana Crystals")
+
+    local gWrit = Data.GetQuestGuide(94229, "Craftsman's Writ: Ornate Spyglass")
+    assert_not_nil(gWrit, "Craftsman's Writ: Ornate Spyglass synthesizes recipe guide dynamically")
+    assert_true(gWrit.steps and #gWrit.steps >= 1 and string.find(gWrit.steps[1].text or "", "Engineering (135)", 1, true) ~= nil,
+        "Craftsman's Writ: Ornate Spyglass shows Engineering (135) & Bronze Tube reagent chain")
+
+    -- 2. Live Bag Progress Check ([In Bags] detection)
+    mockBags[11018] = 4 -- Un'Goro Soil
+    local g3785 = Data.GetQuestGuide(3785)
+    assert_not_nil(g3785, "Morrowgrain Research (3785) guide resolves cleanly")
+    local have1, need1, sat1 = Data.GetStepBagProgress(g3785.steps[1])
+    assert_true(sat1 == true and have1 == 4, "GetStepBagProgress marks Un'Goro Soil step satisfied when player holds it in bags")
+    mockBags[11018] = 0
+
+    -- 3. Reverse Item Usage Lookup & Item Tooltip Injection (Bags / Vendor / AH)
+    local savedLog4M = mockQuestLog
+    mockQuestLog = {
+        { title = "Duskwood", isHeader = true },
+        { title = "Look to the Stars", questID = 174, level = 25, isHeader = false, isComplete = false },
+    }
+    local tubeUsage = Data.GetItemQuestUsage(4371, "Bronze Tube")
+    assert_not_nil(tubeUsage, "Bronze Tube resolves reverse ItemQuestUsage")
+    assert_not_nil(tubeUsage.dep, "Bronze Tube includes recipe & vendor dependency explanation")
+    local matched174InLog = false
+    for _, u in ipairs(tubeUsage.usages or {}) do
+        if u.questID == 174 and u.inLog then matched174InLog = true break end
+    end
+    assert_true(matched174InLog, "ItemUsage detects active Quest 174 [In Log] for Bronze Tube")
+
+    GameTooltip:ClearLines()
+    GameTooltip.mockItemName = "Bronze Tube"
+    GameTooltip.mockItemLink = "item:4371"
+    local onSetItem = GameTooltip.GetScript and GameTooltip:GetScript("OnTooltipSetItem")
+    if onSetItem then onSetItem(GameTooltip) end
+    local tipHasBefore, tipHasUsedFor, tipHasInLog = false, false, false
+    for _, line in ipairs(GameTooltip.lines or {}) do
+        local txt = line.left or ""
+        if string.find(txt, "Bronze Bar", 1, true) then tipHasBefore = true end
+        if string.find(txt, "Look to the Stars", 1, true) then tipHasUsedFor = true end
+        if string.find(txt, "[In Log]", 1, true) then tipHasInLog = true end
+    end
+    assert_true(tipHasBefore and tipHasUsedFor and tipHasInLog, "Hovering Bronze Tube item tooltip shows both recipe reagents and Look to the Stars [In Log]")
+    GameTooltip.mockItemName = nil
+    GameTooltip.mockItemLink = nil
+
+    -- 4. World Map POI Pin Tooltip Hook (OpenMap / Blizzard Built-In Questie Pins)
+    local fakeOpenMapPin = { data = { id = 174, complete = false } }
+    mockQuestDB[174] = { title = "Look to the Stars", xp = 2000, money = 0 }
+    GameTooltip:ClearLines()
+    GameTooltip:SetOwner(fakeOpenMapPin, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Look to the Stars")
+    local onShowTip = GameTooltip.GetScript and GameTooltip:GetScript("OnShow")
+    if onShowTip then onShowTip(GameTooltip) end
+    local pinTipHasGuide = false
+    for _, line in ipairs(GameTooltip.lines or {}) do
+        if string.find(line.left or "", "Gearcutter Cogspinner", 1, true) then
+            pinTipHasGuide = true
+            break
+        end
+    end
+    assert_true(pinTipHasGuide, "Hovering an OpenMap / built-in Questie POI pin appends QuestWorth dependency guide")
+    GameTooltip:ClearLines()
+
+    -- 5. Focus-Only Dependency Pins + Built-In Questie (OpenMap) Scaling
+    mockQuestLog = {
+        { title = "Tanaris", isHeader = true },
+        { title = "Cuergo's Gold", questID = 2882, level = 45, isHeader = false, isComplete = false },
+    }
+    local origSuperTrack = _G.C_SuperTrack
+    local origScrollContainer = _G.WorldMapFrame.ScrollContainer
+    local origOpenMapDB = _G.OpenMapDB
+    local mockFocusedID = 0
+    _G.C_SuperTrack = {
+        GetSuperTrackedQuestID = function() return mockFocusedID end,
+        SetSuperTrackedQuestID = function(qid) mockFocusedID = qid end,
+    }
+    _G.WorldMapFrame.ScrollContainer = nil
+    _G.OpenMapDB = nil
+
+    -- 5a. Unfocused complicated quest in log -> 0 clutter pins
+    local unfocusedPins = Data.GetActiveDependencyPins()
+    assert_eq(#unfocusedPins, 0, "Unfocused complicated quest creates 0 map clutter pins by default")
+
+    -- 5b. Focused complicated quest (Cuergo's Gold 2882) -> helper pins appear
+    mockFocusedID = 2882
+    local focusedPins = Data.GetActiveDependencyPins(nil, mockFocusedID)
+    assert_true(#focusedPins >= 2, "GetActiveDependencyPins resolves multiple coordinate pins when Cuergo's Gold is focused (got " .. #focusedPins .. ")")
+
+    local mockCanvas = _G.CreateFrame("Frame", "MockWorldMapCanvas")
+    mockCanvas:SetSize(1000, 668)
+    _G.WorldMapFrame.GetCanvas = function() return mockCanvas end
+    _G.WorldMapFrame.GetMapID = function() return 1446 end -- Tanaris
+    local origGetCanvasScale = _G.WorldMapFrame.GetCanvasScale
+    _G.WorldMapFrame.GetCanvasScale = function() return 3.5 end
+    _G.WorldMapFrame:Show()
+
+    -- 5c. Mode A: OpenMap / Blizzard ScrollContainer viewport layer + OpenMap iconScale
+    local mockScrollContainer = _G.CreateFrame("Frame", "MockWorldMapScrollContainer", _G.WorldMapFrame)
+    mockScrollContainer:SetSize(1000, 668)
+    mockScrollContainer.Child = mockCanvas
+    _G.WorldMapFrame.ScrollContainer = mockScrollContainer
+    _G.OpenMapDB = { worldmap = { iconScale = 1.35 } }
+    UI.UpdateDependencyPins()
+    local pinLayer = _G["WorthIt_DepPinLayer"]
+    local pin1 = _G["WorthIt_DepMapPin_1"]
+    assert_not_nil(pinLayer, "WorthIt_DepPinLayer viewport overlay created on ScrollContainer")
+    assert_not_nil(pin1, "Dependency Map Pin 1 pooled frame created")
+    assert_true(pin1:IsShown() and pin1:GetParent() == pinLayer, "Focused pin renders on unscaled ScrollContainer viewport layer")
+    local pinLayerScale = pin1.GetScale and pin1:GetScale() or 1
+    assert_true(math.abs(pinLayerScale - 1.35) < 0.01, "Focused pin matches OpenMap built-in iconScale (1.35x) even at 3.5x canvas zoom")
+    assert_true(UI.HasVisiblePinsForQuest and UI.HasVisiblePinsForQuest(2882),
+        "HasVisiblePinsForQuest reports true while quest 2882 is focused on map")
+
+    -- Clear(true) hides even auto-focused pins for current quest until reset cleanly
+    UI.ClearManualGuidePin(true)
+    assert_true(not pin1:IsShown(), "ClearManualGuidePin(true) immediately hides auto-focused pins for current quest")
+    assert_true(not (UI.HasVisiblePinsForQuest and UI.HasVisiblePinsForQuest(2882)),
+        "HasVisiblePinsForQuest reports false after ClearManualGuidePin(true)")
+    UI.ClearManualGuidePin()
+    assert_true(pin1:IsShown(), "ClearManualGuidePin() resets hidden pins state cleanly")
+
+    -- 5d. Mode B fallback (no ScrollContainer): counter-scales 1 / canvasScale cleanly
+    _G.WorldMapFrame.ScrollContainer = nil
+    _G.OpenMapDB = nil
+    UI.UpdateDependencyPins()
+    local fallbackScale = pin1.GetScale and pin1:GetScale() or 1
+    assert_true(pin1:IsShown() and math.abs(fallbackScale - (1 / 3.5)) < 0.01,
+        "Fallback canvas pin counter-scales cleanly at 3.5x map zoom (" .. string.format("%.3f", fallbackScale) .. ")")
+
+    -- 5e. Unfocusing immediately clears focused pins from the map
+    mockFocusedID = 0
+    UI.UpdateDependencyPins()
+    assert_true(not pin1:IsShown(), "Unfocusing quest immediately hides focused helper pins")
+
+    -- 5f. Plain single-step quest (Forlorn Gardens 93341) still creates 0 pins even when focused, unless manually pinned
+    mockQuestLog = {
+        { title = "Shen'dralas", isHeader = true },
+        { title = "Forlorn Gardens", questID = 93341, level = 43, isHeader = false, isComplete = false },
+    }
+    local focusedPlain93341 = Data.GetActiveDependencyPins(nil, 93341)
+    assert_eq(#focusedPlain93341, 0, "Focusing plain NPC quest 93341 (Forlorn Gardens) creates 0 redundant helper pins")
+    local manualPins93341 = Data.GetActiveDependencyPins(93341)
+    assert_true(#manualPins93341 >= 1, "Manual [Pin Steps] on quest 93341 still pins its coordinates on demand")
+    assert_true(not string.find(manualPins93341[1].label or "", "â€", 1, true), "Quest 93341 pin label has clean UTF-8 without mojibake")
+    _G.WorldMapFrame.GetCanvasScale = origGetCanvasScale
+
+    -- 6. Quest Details Inline Guide Box + Fuzz Resilience
+    _G.QuestMapFrame = _G.QuestMapFrame or _G.CreateFrame("Frame", "QuestMapFrame")
+    _G.QuestMapFrame.DetailsFrame = _G.CreateFrame("Frame", "QuestMapDetailsFrame", _G.QuestMapFrame)
+    _G.QuestMapFrame.DetailsFrame:SetWidth(300)
+    _G.QuestMapFrame.DetailsFrame.questID = 2882
+    _G.QuestMapFrame.DetailsFrame:Show()
+    UI.UpdateQuestDetailsGuide(2882)
+    local guideBox = _G["WorthIt_DetailsGuideBox"]
+    assert_not_nil(guideBox, "WorthIt_DetailsGuideBox created for Quest Details")
+    assert_true(guideBox:IsShown() and guideBox.pinBtn:IsShown(), "Quest Details Guide Box displays steps and [Pin Steps] button for 2882")
+
+    local guideFuzzFails = 0
+    for _, fv in ipairs({ nil, 0, -99, "bad", 0/0, math.huge, {}, true }) do
+        local ok1 = pcall(Data.GetQuestGuide, fv, fv)
+        local ok2 = pcall(Data.GetItemQuestUsage, fv, fv)
+        local ok3 = pcall(Data.GetStepBagProgress, fv)
+        local ok4 = pcall(UI.PinQuestGuide, fv, false)
+        local ok5 = pcall(Data.GetActiveDependencyPins, fv, fv)
+        if not (ok1 and ok2 and ok3 and ok4 and ok5) then guideFuzzFails = guideFuzzFails + 1 end
+    end
+    assert_eq(guideFuzzFails, 0, "All QuestGuide / ItemUsage / MapPins APIs survive hostile input fuzzing")
+
+    -- 7. Turn-in / Progress dialog when QuestInfoDescriptionText is hidden keeps QuestInfoTitleHeader strictly single-line
+    local prevOfferQID = currentOfferQuestID
+    local prevOfferTitle = currentOfferTitle
+    local wasDescShown = QuestInfoDescriptionText:IsShown()
+    local wasQFShown = QuestFrame:IsShown()
+    local wasDetailShown = QuestFrameDetailPanel:IsShown()
+    currentOfferQuestID = 2882
+    currentOfferTitle = "Cuergo's Gold"
+    QuestFrame:Show()
+    QuestFrameDetailPanel:Show()
+    QuestInfoDescriptionText:Hide()
+    QuestInfoTitleHeader:SetText("Cuergo's Gold")
+    UI.UpdateQuestOfferDialog()
+    local completeHdr = QuestInfoTitleHeader:GetText() or ""
+    assert_true(string.find(completeHdr, "Cuergo's Gold", 1, true) ~= nil and not string.find(completeHdr, "\n", 1, true),
+        "Quest turn-in / complete with hidden QuestInfoDescriptionText keeps QuestInfoTitleHeader single-line")
+    if wasDescShown then QuestInfoDescriptionText:Show() end
+    if not wasDetailShown then QuestFrameDetailPanel:Hide() end
+    if not wasQFShown then QuestFrame:Hide() end
+    currentOfferQuestID = prevOfferQID
+    currentOfferTitle = prevOfferTitle
+
+    -- 8. Warcraft Native UI Theme System & Styled Frame Contracts
+    local Theme = UI.Theme
+    assert_not_nil(Theme, "addonTable.UI.Theme exported cleanly")
+    assert_true(
+        type(Theme.DressWindow) == "function"
+        and type(Theme.DressInset) == "function"
+        and type(Theme.DressParchmentCard) == "function"
+        and type(Theme.DressBanner) == "function"
+        and type(Theme.CreateTab) == "function"
+        and type(Theme.CreateFramedIcon) == "function"
+        and type(Theme.CreateHeaderRule) == "function"
+        and type(Theme.StyleScrollbar) == "function",
+        "UI.Theme exposes full Warcraft styling primitives"
+    )
+    local advisorPanel4M = _G["WorthItZoneAdvisorPanel"]
+    local advisorRow1_4M = _G["WorthItAdvisorRow1"]
+    assert_true(advisorPanel4M and advisorPanel4M.SubTitle ~= nil, "Zone Advisor panel includes SubTitle character context")
+    assert_true(advisorRow1_4M and advisorRow1_4M.AccentBar ~= nil and advisorRow1_4M.WorthBarFill ~= nil,
+        "Zone Advisor rows include Warcraft AccentBar & mini WorthBarFill meter")
+    if UI.InitializeConfig then UI.InitializeConfig() end
+    local cfgPanel4M = _G["WorthItOptionsPanel"]
+    assert_not_nil(cfgPanel4M, "WorthItOptionsPanel constructs cleanly with themed section cards")
+
+    -- Clean up mocks
+    if guideBox then guideBox:Hide() end
+    UI.ClearManualGuidePin()
+    _G.WorldMapFrame:Hide()
+    _G.C_SuperTrack = origSuperTrack
+    _G.WorldMapFrame.ScrollContainer = origScrollContainer
+    _G.OpenMapDB = origOpenMapDB
+    _G.GetItemCount = origGetItemCount
+    if _G.C_Item then _G.C_Item.GetItemCount = origCItemGetCount end
+    _G.WorldMapFrame.GetMapID = origGetMapID
+    _G.WorldMapFrame.GetCanvas = origGetCanvas
+    _G.WorldMapFrame.GetWidth = origGetWidth
+    _G.WorldMapFrame.GetHeight = origGetHeight
+    if _G.QuestMapFrame then _G.QuestMapFrame.DetailsFrame = origDetailsFrame end
+    mockQuestLog = savedLog4M
+end)()
+
+-- [Phase 4N] Expanded MetaQuests, KEY/BAG/FDJ/OpenWorld Guides & ItemDependencies Tests
+print("\n[TEST] Phase 4N: Expanded MetaQuests, Guides & ItemDependencies Coverage...")
+;(function()
+    local Data = addonTable.Data
+
+    -- 1. Representative FDJ Q3 Rare & Newly Covered Zone MetaQuests
+    local metaChecks = {
+        { 96395, "BIS", "Hall of Thanes", "B" },
+        { 5724,  "BIS", "Ragefire Chasm", "H" },
+        { 95250, "BIS", "Ruins of Lordaeron", "A" },
+        { 1806,  "BIS", "The Deadmines", "A", "PALADIN" },
+        { 7461,  "BIS", "Dire Maul", "B" },
+        { 5243,  "BIS", "Stratholme", "B" },
+        { 92070, "BIS", "Blackmaw Hold", "B" },
+        { 95775, "BIS", "The Drowned City", "H" },
+        { 93609, "BIS", "Shen'dralas", "B" },
+        { 14,    "BIS", "Westfall", "A" },
+        { 256,   "BIS", "Loch Modan", "A" },
+        { 249,   "BIS", "Redridge Mountains", "A" },
+        { 656,   "BIS", "Arathi Highlands", "B" },
+        { 3062,  "BIS", "Feralas", "H" },
+        { 3463,  "BIS", "Searing Gorge", "B" },
+        { 7741,  "BIS", "Felwood", "B" },
+        { 84211, "BIS", "Burning Steppes", "B" },
+    }
+    for _, spec in ipairs(metaChecks) do
+        local info = Data.GetMetaQuestInfo and Data.GetMetaQuestInfo(spec[1])
+        assert_not_nil(info, string.format("GetMetaQuestInfo(%d) resolves newly added Meta quest", spec[1]))
+        if info then
+            assert_eq(info.tag, spec[2], string.format("Meta %d tag == %s", spec[1], spec[2]))
+            assert_eq(info.zone, spec[3], string.format("Meta %d zone == %s", spec[1], spec[3]))
+            assert_eq(info.side, spec[4], string.format("Meta %d side == %s", spec[1], spec[4]))
+            if spec[5] then
+                assert_eq(info.reqClass, spec[5], string.format("Meta %d reqClass == %s", spec[1], spec[5]))
+            end
+        end
+    end
+
+    -- Verify newly populated zones return >= 1 eligible Meta quest in GetZoneMetaQuests
+    local drownedH = Data.GetZoneMetaQuests("The Drowned City", "Horde", "WARRIOR")
+    assert_true(drownedH and drownedH.total >= 4, "The Drowned City Horde resolves >= 4 Meta quests")
+    local shendralasA = Data.GetZoneMetaQuests("Shen'dralas", "Alliance", "MAGE")
+    assert_true(shendralasA and shendralasA.total >= 2, "Shen'dralas Alliance resolves >= 2 Meta quests")
+    local searingB = Data.GetZoneMetaQuests("Searing Gorge", "Alliance", "WARRIOR")
+    assert_true(searingB and searingB.total >= 2, "Searing Gorge resolves >= 2 Meta quests")
+
+    -- 2. 100% KEY & BAG guide coverage in Data.MetaQuests
+    local keyCount, keyWithGuide = 0, 0
+    local bagCount, bagWithGuide = 0, 0
+    for qid, m in pairs(Data.MetaQuests or {}) do
+        if m[1] == "KEY" then
+            keyCount = keyCount + 1
+            if Data.QuestGuides[qid] then keyWithGuide = keyWithGuide + 1 end
+        elseif m[1] == "BAG" then
+            bagCount = bagCount + 1
+            if Data.QuestGuides[qid] then bagWithGuide = bagWithGuide + 1 end
+        end
+    end
+    assert_true(keyCount >= 19, "Data.MetaQuests has >= 19 KEY entries (" .. keyCount .. ")")
+    assert_eq(keyWithGuide, keyCount, string.format("100%% of KEY MetaQuests have QuestGuides (%d/%d)", keyWithGuide, keyCount))
+    assert_true(bagCount >= 10, "Data.MetaQuests has >= 10 BAG entries (" .. bagCount .. ")")
+    assert_eq(bagWithGuide, bagCount, string.format("100%% of BAG MetaQuests have QuestGuides (%d/%d)", bagWithGuide, bagCount))
+
+    -- 3. Multi-step guide lookups across KEY, BAG, CLASS, BIS & FDJ
+    local guideIDs = { 5505, 7487, 9121, 626, 2359, 5061, 778, 5944, 96395, 2951 }
+    for _, qid in ipairs(guideIDs) do
+        local g = Data.GetQuestGuide and Data.GetQuestGuide(qid)
+        assert_not_nil(g, string.format("GetQuestGuide(%d) resolves cleanly", qid))
+        if g then
+            assert_true(g.summary ~= nil and g.summary ~= "", string.format("Guide %d has non-empty summary", qid))
+            assert_true(type(g.steps) == "table" and #g.steps >= 1, string.format("Guide %d has >= 1 step", qid))
+        end
+    end
+
+    -- 4. Reverse item dependency lookups
+    local revItems = { "Defias Tower Key", "Torch of Retribution", "Core Fragment", "Grime-Encrusted Object" }
+    for _, itemName in ipairs(revItems) do
+        local usage = Data.GetItemQuestUsage and Data.GetItemQuestUsage(nil, itemName)
+        assert_not_nil(usage, "GetItemQuestUsage resolves precursor/quest usage for " .. itemName)
+    end
 end)()
 
 -- ============================================================================

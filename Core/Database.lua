@@ -17,6 +17,8 @@ local DEFAULT_SETTINGS = {
     showInWorldMap = true,
     showZoneAdvisor = true,
     showMetaIndicator = true,
+    showDependencyPins = true,
+    showQuestDetailsGuide = true,
     zoneAdvisorFilter = "ALL",
     completedDungeons = {},
     completedDungeonsByChar = {},
@@ -53,7 +55,7 @@ local function SanitizeSettings(db)
     local boolKeys = {
         "enabled", "debug", "showInTooltip", "showBreakdown",
         "showInQuestLog", "showInTracker", "showInWorldMap", "showZoneAdvisor",
-        "showMetaIndicator"
+        "showMetaIndicator", "showDependencyPins", "showQuestDetailsGuide"
     }
     for _, k in ipairs(boolKeys) do
         if type(db[k]) ~= "boolean" then

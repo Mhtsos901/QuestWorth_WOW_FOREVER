@@ -63,6 +63,16 @@ local enUS = {
     ["META_ALL_DONE"] = "All Done",
     ["META_NONE_REMAINING"] = "None left in this zone",
     ["HELP_META"] = "  |cffffcc00/qw meta [zone|toggle]|r - Show Meta Quests left or toggle star badges",
+    ["GUIDE_HEADER"] = "Quest Steps & Prerequisites:",
+    ["GUIDE_NEED_FIRST"] = "Need First:",
+    ["GUIDE_PIN_BUTTON"] = "Pin Steps",
+    ["GUIDE_CLEAR_PIN"] = "Clear Pin",
+    ["GUIDE_IN_BAGS"] = "[In Bags]",
+    ["GUIDE_ITEM_USED_FOR"] = "Quest Prerequisite / Dependency:",
+    ["GUIDE_USED_BY"] = "Used For:",
+    ["GUIDE_HOW_TO_GET"] = "Before / How:",
+    ["GUIDE_PIN_HINT"] = "Left-Click: Track & Details  |  Right-Click: Hide Pin",
+    ["HELP_PINS"] = "  |cffffcc00/qw pins [clear|toggle]|r - Toggle or clear dependency guide pins on World Map",
 }
 
 -- Greek translations (elGR)
@@ -119,6 +129,16 @@ local elGR = {
     ["META_ALL_DONE"] = "Ολοκληρώθηκαν Όλες",
     ["META_NONE_REMAINING"] = "Καμία εναπομείνασα Meta σε αυτή τη ζώνη",
     ["HELP_META"] = "  |cffffcc00/qw meta [zone|toggle]|r - Εμφάνιση Meta αποστολών ζώνης ή εναλλαγή εικονιδίου",
+    ["GUIDE_HEADER"] = "Βήματα & Προαπαιτούμενα Quest:",
+    ["GUIDE_NEED_FIRST"] = "Χρειάζεσαι Πρώτα:",
+    ["GUIDE_PIN_BUTTON"] = "Pin στον Χάρτη",
+    ["GUIDE_CLEAR_PIN"] = "Καθαρισμός",
+    ["GUIDE_IN_BAGS"] = "[Στην Τσάντα]",
+    ["GUIDE_ITEM_USED_FOR"] = "Προαπαιτούμενο / Υλικό Quest:",
+    ["GUIDE_USED_BY"] = "Χρησιμοποιείται για:",
+    ["GUIDE_HOW_TO_GET"] = "Τι Χρειάζεται Πριν:",
+    ["GUIDE_PIN_HINT"] = "Αριστερό Κλικ: Track & Λεπτομέρειες  |  Δεξί Κλικ: Απόκρυψη",
+    ["HELP_PINS"] = "  |cffffcc00/qw pins [clear|toggle]|r - Εναλλαγή ή καθαρισμός guide pins στον χάρτη",
 }
 
 for k, v in pairs(enUS) do

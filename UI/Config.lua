@@ -25,6 +25,7 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_QUESTLOG"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_TRACKER"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_META"])
+    DEFAULT_CHAT_FRAME:AddMessage(L["HELP_PINS"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_TEST"])
     DEFAULT_CHAT_FRAME:AddMessage(L["HELP_RESET"])
 end
@@ -36,7 +37,8 @@ local function CreateCheckbox(parent, label, point, relativeTo, relativePoint, x
     local text = cb.Text or _G[name .. "Text"]
     if text then
         text:SetText(label)
-        text:SetFontObject("GameFontNormal")
+        text:SetFontObject("GameFontHighlightSmall")
+        if text.SetTextColor then text:SetTextColor(0.94, 0.89, 0.78, 1) end
     end
     cb:SetChecked(getVal())
     cb:SetScript("OnClick", function(self)
@@ -63,6 +65,8 @@ local function RefreshAllUI()
             addon.UI.UpdateZoneAdvisor()
         end
         if addon.UI.UpdateQuestOfferDialog then addon.UI.UpdateQuestOfferDialog() end
+        if addon.UI.UpdateDependencyPins then addon.UI.UpdateDependencyPins() end
+        if addon.UI.UpdateQuestDetailsGuide then addon.UI.UpdateQuestDetailsGuide() end
     end
 end
 
@@ -120,36 +124,88 @@ local function CreateWeightSlider(parent, label, point, relativeTo, relativePoin
     return slider
 end
 
+local function CreateSectionCard(parent, titleText, width, height, anchorPoint, relTo, relPoint, xOff, yOff)
+    local Theme = addon.UI and addon.UI.Theme
+    local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    card:SetSize(width, height)
+    card:SetPoint(anchorPoint, relTo, relPoint, xOff, yOff)
+    if Theme and Theme.DressInset then
+        Theme.DressInset(card, { parchmentAlpha = 0.05 })
+    elseif card.SetBackdrop then
+        card:SetBackdrop({
+            bgFile = "Interface\\FrameGeneral\\UI-Background-Rock",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        card:SetBackdropColor(0.05, 0.04, 0.03, 0.90)
+        card:SetBackdropBorderColor(0.55, 0.42, 0.22, 0.85)
+    end
+
+    local hdr = card:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    hdr:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -10)
+    hdr:SetText(titleText)
+
+    if Theme and Theme.CreateHeaderRule then
+        Theme.CreateHeaderRule(card, 10, -26)
+    end
+    return card, hdr
+end
+
 local function CreateOptionsPanel()
     if configPanel then return configPanel end
 
+    local Theme = addon.UI and addon.UI.Theme
     local panel = CreateFrame("Frame", "WorthItOptionsPanel", UIParent)
     panel.name = "WorthIt"
 
+    -- Ornamental Warcraft Header with framed tome emblem & embossed bronze rule
+    local headerIcon
+    if Theme and Theme.CreateFramedIcon then
+        headerIcon = Theme.CreateFramedIcon(panel, "Interface\\Icons\\INV_Misc_Book_09", 32)
+        headerIcon:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -14)
+    end
+
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("|cff00ccffWorthIt|r |cffffffff(QuestWorth)|r - Settings")
+    if headerIcon then
+        title:SetPoint("TOPLEFT", headerIcon, "TOPRIGHT", 10, -1)
+    else
+        title:SetPoint("TOPLEFT", 16, -16)
+    end
+    title:SetText("|cffffd100QuestWorth|r |cffc8b896(WorthIt)|r |cfff5ebd6- Settings|r")
 
     local subTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    subTitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-    subTitle:SetText("Configure weighted scoring criteria and visual elements for WoW Forever.")
+    subTitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    subTitle:SetText("|cffcbb890Configure weighted scoring criteria and visual elements for WoW Forever.|r")
 
-    local cbEnable = CreateCheckbox(panel, "Enable Addon", "TOPLEFT", subTitle, "BOTTOMLEFT", 0, -16,
+    if Theme and Theme.CreateHeaderRule then
+        local hdrRule = Theme.CreateHeaderRule(panel, 16, -54)
+        if hdrRule and hdrRule.ClearAllPoints then
+            hdrRule:ClearAllPoints()
+            hdrRule:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -54)
+            hdrRule:SetWidth(596)
+        end
+    end
+
+    -- Left Recessed Card: Display & Interface
+    local leftCard = CreateSectionCard(panel, "|cffffd100Display & Interface|r", 290, 334, "TOPLEFT", panel, "TOPLEFT", 16, -66)
+
+    local cbEnable = CreateCheckbox(leftCard, "Enable Addon", "TOPLEFT", leftCard, "TOPLEFT", 10, -34,
         function() return addon.db and addon.db.enabled end,
         function(v)
             addon.db.enabled = v
             RefreshAllUI()
         end)
 
-    local cbTooltip = CreateCheckbox(panel, "Show Worth in Tooltip", "TOPLEFT", cbEnable, "BOTTOMLEFT", 0, -6,
+    local cbTooltip = CreateCheckbox(leftCard, "Show Worth in Tooltip", "TOPLEFT", cbEnable, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showInTooltip end,
         function(v) addon.db.showInTooltip = v end)
 
-    local cbBreakdown = CreateCheckbox(panel, "Show Detailed 5-Score Breakdown in Tooltip", "TOPLEFT", cbTooltip, "BOTTOMLEFT", 0, -6,
+    local cbBreakdown = CreateCheckbox(leftCard, "Show Detailed 5-Score Breakdown", "TOPLEFT", cbTooltip, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showBreakdown end,
         function(v) addon.db.showBreakdown = v end)
 
-    local cbQuestLog = CreateCheckbox(panel, "Show Worth Tag in Quest Log (Window)", "TOPLEFT", cbBreakdown, "BOTTOMLEFT", 0, -6,
+    local cbQuestLog = CreateCheckbox(leftCard, "Show Worth Tag in Quest Log", "TOPLEFT", cbBreakdown, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showInQuestLog end,
         function(v)
             addon.db.showInQuestLog = v
@@ -158,7 +214,7 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbTracker = CreateCheckbox(panel, "Show Worth Tag in Objective Tracker (Right)", "TOPLEFT", cbQuestLog, "BOTTOMLEFT", 0, -6,
+    local cbTracker = CreateCheckbox(leftCard, "Show Worth Tag in Objective Tracker", "TOPLEFT", cbQuestLog, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showInTracker end,
         function(v)
             addon.db.showInTracker = v
@@ -167,7 +223,7 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbWorldMap = CreateCheckbox(panel, "Show Zone Worth Banner on World Map", "TOPLEFT", cbTracker, "BOTTOMLEFT", 0, -6,
+    local cbWorldMap = CreateCheckbox(leftCard, "Show Zone Worth Banner on World Map", "TOPLEFT", cbTracker, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showInWorldMap end,
         function(v)
             addon.db.showInWorldMap = v
@@ -176,7 +232,7 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbZoneAdvisor = CreateCheckbox(panel, "Show Zone Advisor Sidebar on World Map", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -6,
+    local cbZoneAdvisor = CreateCheckbox(leftCard, "Show Zone Advisor Sidebar", "TOPLEFT", cbWorldMap, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showZoneAdvisor end,
         function(v)
             addon.db.showZoneAdvisor = v
@@ -185,41 +241,65 @@ local function CreateOptionsPanel()
             end
         end)
 
-    local cbMetaIndicator = CreateCheckbox(panel, (Utils.META_ICON or "") .. " Show Meta Quest Star Indicators", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -6,
+    local cbMetaIndicator = CreateCheckbox(leftCard, (Utils.META_ICON or "") .. " Show Meta Quest Star Indicators", "TOPLEFT", cbZoneAdvisor, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.showMetaIndicator ~= false end,
         function(v)
             addon.db.showMetaIndicator = v
             RefreshAllUI()
         end)
 
-    local cbDebug = CreateCheckbox(panel, "Debug Mode (verbose console logs)", "TOPLEFT", cbMetaIndicator, "BOTTOMLEFT", 0, -6,
+    local cbDebug = CreateCheckbox(leftCard, "Debug Mode (verbose console logs)", "TOPLEFT", cbMetaIndicator, "BOTTOMLEFT", 0, -4,
         function() return addon.db and addon.db.debug end,
         function(v) addon.db.debug = v end)
 
-    -- Right column: Scoring Weights (keeps full layout well above bottom action buttons)
-    local weightHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    weightHeader:SetPoint("TOPLEFT", subTitle, "BOTTOMLEFT", 330, -16)
-    weightHeader:SetText("|cffffff00Scoring Weights (Auto-normalized)|r")
+    -- Top-Right Recessed Card: Scoring Weights
+    local weightsCard = CreateSectionCard(panel, "|cffffd100Scoring Weights (Auto-normalized)|r", 294, 230, "TOPLEFT", leftCard, "TOPRIGHT", 12, 0)
 
-    local sR = CreateWeightSlider(panel, L["REWARD"], "TOPLEFT", weightHeader, "BOTTOMLEFT", 10, -24,
+    local sR = CreateWeightSlider(weightsCard, L["REWARD"], "TOPLEFT", weightsCard, "TOPLEFT", 28, -46,
         function() return addon.db and addon.db.weights and addon.db.weights.reward or 0.40 end,
         function(v) addon.db.weights.reward = v end)
+    sR:SetWidth(232)
 
-    local sF = CreateWeightSlider(panel, L["CLASS_FIT"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -28,
+    local sF = CreateWeightSlider(weightsCard, L["CLASS_FIT"], "TOPLEFT", sR, "BOTTOMLEFT", 0, -24,
         function() return addon.db and addon.db.weights and addon.db.weights.classFit or 0.25 end,
         function(v) addon.db.weights.classFit = v end)
+    sF:SetWidth(232)
 
-    local sC = CreateWeightSlider(panel, L["CHAIN"], "TOPLEFT", sF, "BOTTOMLEFT", 0, -28,
+    local sC = CreateWeightSlider(weightsCard, L["CHAIN"], "TOPLEFT", sF, "BOTTOMLEFT", 0, -24,
         function() return addon.db and addon.db.weights and addon.db.weights.chain or 0.25 end,
         function(v) addon.db.weights.chain = v end)
+    sC:SetWidth(232)
 
-    local sH = CreateWeightSlider(panel, L["DENSITY"] or "Hub Density", "TOPLEFT", sC, "BOTTOMLEFT", 0, -28,
+    local sH = CreateWeightSlider(weightsCard, L["DENSITY"] or "Hub Density", "TOPLEFT", sC, "BOTTOMLEFT", 0, -24,
         function() return addon.db and addon.db.weights and addon.db.weights.density or 0.10 end,
         function(v) addon.db.weights.density = v end)
+    sH:SetWidth(232)
 
-    local sD = CreateWeightSlider(panel, L["DIFFICULTY"], "TOPLEFT", sH, "BOTTOMLEFT", 0, -28,
+    local sD = CreateWeightSlider(weightsCard, L["DIFFICULTY"], "TOPLEFT", sH, "BOTTOMLEFT", 0, -24,
         function() return addon.db and addon.db.weights and addon.db.weights.difficulty or 0.00 end,
         function(v) addon.db.weights.difficulty = v end)
+    sD:SetWidth(232)
+
+    -- Bottom-Right Recessed Card: Quest Guides & Map Pins
+    local guidesCard = CreateSectionCard(panel, "|cffffd100Quest Guides & Map Pins|r", 294, 94, "TOPLEFT", weightsCard, "BOTTOMLEFT", 0, -10)
+
+    local cbDetailsGuide = CreateCheckbox(guidesCard, "Show Prerequisite Steps in Details", "TOPLEFT", guidesCard, "TOPLEFT", 10, -34,
+        function() return addon.db and addon.db.showQuestDetailsGuide ~= false end,
+        function(v)
+            addon.db.showQuestDetailsGuide = v
+            if addon.UI and addon.UI.UpdateQuestDetailsGuide then
+                addon.UI.UpdateQuestDetailsGuide()
+            end
+        end)
+
+    local cbDepPins = CreateCheckbox(guidesCard, "Show Focused Dependency Pins on World Map", "TOPLEFT", cbDetailsGuide, "BOTTOMLEFT", 0, -4,
+        function() return addon.db and addon.db.showDependencyPins ~= false end,
+        function(v)
+            addon.db.showDependencyPins = v
+            if addon.UI and addon.UI.UpdateDependencyPins then
+                addon.UI.UpdateDependencyPins()
+            end
+        end)
 
     local function SyncPanelControls()
         if not addon.db then return end
@@ -232,6 +312,8 @@ local function CreateOptionsPanel()
         cbZoneAdvisor:SetChecked(addon.db.showZoneAdvisor ~= false)
         cbMetaIndicator:SetChecked(addon.db.showMetaIndicator ~= false)
         cbDebug:SetChecked(addon.db.debug)
+        cbDetailsGuide:SetChecked(addon.db.showQuestDetailsGuide ~= false)
+        cbDepPins:SetChecked(addon.db.showDependencyPins ~= false)
         sR:SyncValue()
         sF:SyncValue()
         sC:SyncValue()
@@ -242,8 +324,18 @@ local function CreateOptionsPanel()
     panel:SetScript("OnShow", SyncPanelControls)
     panel:SetScript("OnHide", RefreshAllUI)
 
+    -- Footer Bar: Bronze divider + Reset / Diag buttons + slash command hint
+    if Theme and Theme.CreateHeaderRule then
+        local footRule = Theme.CreateHeaderRule(panel, 16, -10, leftCard)
+        if footRule and footRule.ClearAllPoints then
+            footRule:ClearAllPoints()
+            footRule:SetPoint("TOPLEFT", leftCard, "BOTTOMLEFT", 0, -10)
+            footRule:SetWidth(596)
+        end
+    end
+
     local btnReset = CreateFrame("Button", GetUniqueName("BtnReset"), panel, "UIPanelButtonTemplate")
-    btnReset:SetPoint("BOTTOMLEFT", 16, 16)
+    btnReset:SetPoint("TOPLEFT", leftCard, "BOTTOMLEFT", 0, -20)
     btnReset:SetSize(140, 24)
     btnReset:SetText("Reset Defaults")
     btnReset:SetScript("OnClick", function()
@@ -260,6 +352,10 @@ local function CreateOptionsPanel()
     btnDiag:SetScript("OnClick", function()
         addon.Engine.RunDiagnostics()
     end)
+
+    local slashHint = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    slashHint:SetPoint("RIGHT", guidesCard, "BOTTOMRIGHT", 0, -32)
+    slashHint:SetText("|cffb8a47e/qw help • /qw meta • /qw pins|r")
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
@@ -363,6 +459,29 @@ local function HandleSlashCmd(msg)
             addon.UI.ToggleZoneAdvisor(addon.db.showZoneAdvisor)
         end
         addon.Print("Zone Advisor Sidebar: %s", addon.db.showZoneAdvisor and "|cff00ff00ON|r" or "|cffff0000OFF|r")
+    elseif cmd == "pins" or cmd == "pin" or cmd == "guide" then
+        local sub = args[2] and string.lower(args[2]) or "toggle"
+        if sub == "clear" or sub == "reset" then
+            if addon.UI and addon.UI.ClearManualGuidePin then
+                addon.UI.ClearManualGuidePin(true)
+            end
+            if addon.UI and addon.UI.UpdateQuestDetailsGuide then
+                addon.UI.UpdateQuestDetailsGuide()
+            end
+            addon.Print("Dependency Guide Pins cleared.")
+        else
+            if sub == "on" then
+                addon.db.showDependencyPins = true
+            elseif sub == "off" then
+                addon.db.showDependencyPins = false
+            else
+                addon.db.showDependencyPins = (addon.db.showDependencyPins == false)
+            end
+            if addon.UI and addon.UI.UpdateDependencyPins then
+                addon.UI.UpdateDependencyPins()
+            end
+            addon.Print("Dependency Guide Pins: %s", addon.db.showDependencyPins and "|cff00ff00ON|r" or "|cffff0000OFF|r")
+        end
     elseif cmd == "meta" then
         local sub = args[2] and string.lower(args[2]) or nil
         if sub == "toggle" or sub == "on" or sub == "off" then
